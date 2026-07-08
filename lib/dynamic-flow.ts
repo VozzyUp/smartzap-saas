@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { generateFlowJsonFromFormSpec, normalizeFlowFormSpec } from '@/lib/flow-form'
+import { isProduction } from '@/lib/app-env'
 
 // ============================================================================
 // ZOD SCHEMAS - Validação de dados do Flow Dinâmico
@@ -401,7 +402,7 @@ function normalizeAction(input: unknown): DynamicFlowActionV1 | undefined {
 function normalizeServices(input: unknown): BookingServiceOption[] {
   if (!Array.isArray(input)) {
     // Silencia warning durante build (SSG) - input undefined é esperado
-    if (typeof window !== 'undefined' || process.env.VERCEL_ENV) {
+    if (typeof window !== 'undefined' || isProduction()) {
       console.warn('[normalizeServices] Input não é array, usando serviços padrão')
     }
     return DEFAULT_BOOKING_CONFIG.services

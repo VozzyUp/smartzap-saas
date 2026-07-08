@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 export const dynamic = 'force-dynamic' // Prevent caching of verification requests
 export const runtime = 'nodejs'
+import { getAppUrl } from '@/lib/app-url'
 import { getSupabaseAdmin, supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
@@ -1009,27 +1010,17 @@ export async function POST(request: NextRequest) {
               await ensureWorkflowRecord(supabaseAdmin, targetWorkflowId, companyId)
 
               // Usa QStash Client para ter assinatura válida (evita SignatureError)
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-                || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-                || (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
-                || request.nextUrl.origin
+              const baseUrl = getAppUrl(request.nextUrl.origin)
 
               const workflowClient = new WorkflowClient({ token: process.env.QSTASH_TOKEN! })
 
-              // Headers para bypass de proteção Vercel se necessário
-              const headers: Record<string, string> = {}
-              const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-              if (bypassSecret) {
-                headers['x-vercel-protection-bypass'] = bypassSecret
-              }
-
+              // Self-hosted: sem Deployment Protection da Vercel, sem header de bypass.
               await workflowClient.trigger({
                 url: `${baseUrl}/api/builder/workflow/${targetWorkflowId}/execute`,
                 body: {
                   workflowId: targetWorkflowId,
                   input: { from, to: from, message: text },
                 },
-                headers: Object.keys(headers).length > 0 ? headers : undefined,
               })
             } catch (e) {
               console.error('[Webhook] Failed to trigger builder workflow:', e)

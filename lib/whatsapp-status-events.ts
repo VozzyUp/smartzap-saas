@@ -1,5 +1,6 @@
 import { Client } from '@upstash/qstash'
 import { supabase } from '@/lib/supabase'
+import { getAppUrl } from '@/lib/app-url'
 
 export type WhatsAppStatus = 'sent' | 'delivered' | 'read' | 'failed'
 
@@ -40,11 +41,7 @@ export function buildStatusEventDedupeKey(input: {
 }
 
 function getBaseUrl(): string | null {
-  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
-  if (explicit) return explicit
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
-  if (process.env.VERCEL_URL?.trim()) return `https://${process.env.VERCEL_URL.trim()}`
-  return null
+  return process.env.NEXT_PUBLIC_APP_URL ? getAppUrl() : null
 }
 
 function getReconcileSecret(): string | null {

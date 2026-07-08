@@ -246,7 +246,8 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ usage, isLoading, onRefr
       </div>
 
       <div className="grid gap-4">
-        {/* Vercel - Expanded view with 3 metrics */}
+        {/* Vercel - Expanded view with 3 metrics (não aplicável em self-hosted) */}
+        {process.env.NEXT_PUBLIC_ENABLE_VERCEL_OPS === 'true' && (
         <div className={`p-4 rounded-xl border transition-all ${usage.vercel.status === 'critical'
           ? 'bg-red-500/5 border-red-500/20'
           : usage.vercel.status === 'warning'
@@ -337,6 +338,7 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ usage, isLoading, onRefr
             </a>
           )}
         </div>
+        )}
 
         {/* QStash */}
         {usage.qstash && (

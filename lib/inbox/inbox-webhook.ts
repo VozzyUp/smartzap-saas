@@ -17,6 +17,7 @@ import { cancelDebounce } from '@/lib/ai/agents/chat-agent'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { Client } from '@upstash/qstash'
 import { redis } from '@/lib/redis'
+import { getAppUrl } from '@/lib/app-url'
 import type {
   InboxConversation,
   InboxMessage,
@@ -337,14 +338,8 @@ async function dispatchToQStash(
   const qstash = getQStashClient()
   if (!qstash) return false
 
-  // URL do endpoint - prioridade para variáveis de produção da Vercel
-  // VERCEL_PROJECT_PRODUCTION_URL sempre retorna o domínio customizado em produção
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL &&
-      `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`) ||
-    (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
-    'http://localhost:3000'
+  // URL do endpoint
+  const baseUrl = getAppUrl()
 
   const aiRespondUrl = `${baseUrl}/api/ai/respond`
 
@@ -362,12 +357,7 @@ async function dispatchToQStash(
       headers['Authorization'] = `Bearer ${apiKey}`
     }
 
-    // Se tiver bypass secret configurado, adiciona o header
-    // Isso permite que QStash passe pelo Deployment Protection da Vercel
-    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-    if (bypassSecret) {
-      headers['x-vercel-protection-bypass'] = bypassSecret
-    }
+    // Self-hosted: sem Deployment Protection da Vercel, header de bypass removido.
 
     await qstash.publishJSON({
       url: aiRespondUrl,

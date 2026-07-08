@@ -8,6 +8,7 @@ import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { createHash } from 'crypto'
+import { getAppUrl } from '@/lib/app-url'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -642,10 +643,7 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     // 7) Enfileirar workflow com apenas os válidos
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim())
-      || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}` : null)
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : null)
-      || 'http://localhost:3000'
+    const baseUrl = getAppUrl()
 
     const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')
 

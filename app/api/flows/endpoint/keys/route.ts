@@ -15,6 +15,7 @@ import {
 } from '@/lib/whatsapp/flow-endpoint-crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { metaSetEncryptionPublicKey } from '@/lib/meta-flows-api'
+import { getAppUrl } from '@/lib/app-url'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -53,13 +54,7 @@ export async function GET(request: Request) {
 
     const hasPrivateKey = !!privateKey && isValidPrivateKey(privateKey)
     const hasPublicKey = !!publicKey
-    const envEndpointUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/flows/endpoint`
-      : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}/api/flows/endpoint`
-        : process.env.NEXT_PUBLIC_APP_URL
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/api/flows/endpoint`
-          : null
+    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL ? `${getAppUrl()}/api/flows/endpoint` : null
     const headerEndpointUrl = resolveEndpointUrlFromRequest(request)
     const safeStoredEndpointUrl =
       storedEndpointUrl && !isLocalhostUrl(headerEndpointUrl) && isLocalhostUrl(storedEndpointUrl)

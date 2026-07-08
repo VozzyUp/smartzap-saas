@@ -6,6 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { isProduction } from '@/lib/app-env'
 
 function getSupabasePublishableKey(): string | undefined {
     // O Supabase pode gerar esse nome no snippet do dashboard.
@@ -49,7 +50,7 @@ export function getSupabaseAdmin(): SupabaseClient | null {
     const key = getSupabaseServiceRoleKey()
 
     // Silencia warnings durante build (SSG) - env vars não disponíveis é esperado
-    const isBuildTime = typeof window === 'undefined' && !process.env.VERCEL_ENV
+    const isBuildTime = typeof window === 'undefined' && !isProduction()
 
     if (!key) {
         if (!isBuildTime) {

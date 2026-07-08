@@ -1,5 +1,6 @@
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getAppUrl } from '@/lib/app-url'
 
 const SETTINGS_KEYS = {
   tokens: 'google_calendar_tokens',
@@ -63,17 +64,7 @@ export type GoogleCalendarCredentialsPublic = {
 }
 
 function getBaseUrl(): string {
-  const vercelEnv = process.env.VERCEL_ENV || null
-  if (vercelEnv === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.trim()}`
-  }
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.trim()
-  }
-  return 'http://localhost:3000'
+  return getAppUrl()
 }
 
 export function getGoogleCalendarRedirectUri(): string {

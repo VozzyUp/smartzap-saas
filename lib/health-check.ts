@@ -1,5 +1,6 @@
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { getAppEnv } from '@/lib/app-env'
 
 // Types for health check response
 export interface HealthStatus {
@@ -40,28 +41,10 @@ interface HealthCheckOptions {
     checkPing?: boolean     // If true, pings DB. If false, just checks config.
 }
 
-// Build Vercel dashboard URL dynamically from environment
+// Self-hosted: não há dashboard da Vercel para linkar. Mantido como stub
+// (retorna sempre null) para não quebrar os consumidores de HealthStatus.vercel.
 function getVercelDashboardUrl(): string | null {
-    const vercelUrl = process.env.VERCEL_URL
-    if (!vercelUrl) return null
-
-    const cleanUrl = vercelUrl.replace('.vercel.app', '')
-    const scopeMatch = cleanUrl.match(/-([a-z0-9]+-projects)$/) || cleanUrl.match(/-([a-z0-9-]+)$/)
-    if (!scopeMatch) return null
-
-    const scope = scopeMatch[1]
-    const beforeScope = cleanUrl.replace(`-${scope}`, '')
-    const lastHyphen = beforeScope.lastIndexOf('-')
-    if (lastHyphen === -1) return null
-
-    const possibleHash = beforeScope.substring(lastHyphen + 1)
-    const projectName = beforeScope.substring(0, lastHyphen)
-
-    if (!/^[a-z0-9]{7,12}$/.test(possibleHash)) {
-        return null
-    }
-
-    return `https://vercel.com/${scope}/${projectName}`
+    return null
 }
 
 export async function getHealthStatus(options: HealthCheckOptions = { checkExternal: true, checkPing: true }): Promise<HealthStatus> {
@@ -78,7 +61,7 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
         vercel: {
             dashboardUrl,
             storesUrl: dashboardUrl ? `${dashboardUrl}/stores` : null,
-            env: process.env.VERCEL_ENV || 'development',
+            env: getAppEnv(),
         },
         timestamp: new Date().toISOString(),
     }

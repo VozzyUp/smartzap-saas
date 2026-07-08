@@ -2579,26 +2579,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
     })
   },
   {
-    // IMPORTANT:
-    // Em preview/dev, NUNCA aponte baseUrl para o domínio de produção.
-    // O baseUrl é usado pelo Upstash Workflow para chamar os próximos passos.
-    // Se ele apontar para produção, o workflow começa no preview mas continua
-    // executando passos em outro deployment (clássico: "turbo não muda nada" e
-    // métricas não aparecem no lugar esperado).
-    baseUrl: (() => {
-      const vercelEnv = (process.env.VERCEL_ENV || '').trim() // 'production' | 'preview' | 'development'
-      const deploymentUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : undefined
-      const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
-        : undefined
-      const explicitAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || undefined
-
-      if (vercelEnv && vercelEnv !== 'production') {
-        return deploymentUrl
-      }
-
-      return explicitAppUrl || productionUrl || deploymentUrl
-    })(),
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || undefined,
   }
 )
 

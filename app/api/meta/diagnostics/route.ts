@@ -5,6 +5,8 @@ import { getVerifyToken } from '@/lib/verify-token'
 import { supabase } from '@/lib/supabase'
 import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getAppUrl } from '@/lib/app-url'
+import { getAppEnv } from '@/lib/app-env'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -282,18 +284,8 @@ function buildSupportPacketText(params: {
 }
 
 function computeWebhookUrl(): { webhookUrl: string; vercelEnv: string | null } {
-	let webhookUrl: string
-	const vercelEnv = process.env.VERCEL_ENV || null
-
-	if (vercelEnv === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-		webhookUrl = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}/api/webhook`
-	} else if (process.env.VERCEL_URL) {
-		webhookUrl = `https://${process.env.VERCEL_URL.trim()}/api/webhook`
-	} else if (process.env.NEXT_PUBLIC_APP_URL) {
-		webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL.trim()}/api/webhook`
-	} else {
-		webhookUrl = 'http://localhost:3000/api/webhook'
-	}
+	const vercelEnv = getAppEnv()
+	const webhookUrl = `${getAppUrl()}/api/webhook`
 
 	return { webhookUrl, vercelEnv }
 }
@@ -747,8 +739,7 @@ export async function GET() {
 				checks,
 				env: {
 					vercelEnv,
-					vercelUrl: process.env.VERCEL_URL || null,
-					vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL || null,
+					appUrl: getAppUrl(),
 				},
 				webhook: {
 					expectedUrl: webhookUrl,
@@ -1450,9 +1441,7 @@ export async function GET() {
 		ts,
 		env: {
 			vercelEnv,
-			vercelUrl: process.env.VERCEL_URL || null,
-			vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL || null,
-			appUrl: process.env.NEXT_PUBLIC_APP_URL || null,
+			appUrl: getAppUrl(),
 			gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
 			gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || null,
 			deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,

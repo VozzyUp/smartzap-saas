@@ -2,6 +2,7 @@ import "server-only";
 
 import { Client as QStashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getAppUrl } from "@/lib/app-url";
 
 type ScheduleConfig = {
   workflowId: string;
@@ -37,10 +38,7 @@ export async function syncWorkflowSchedule(config: ScheduleConfig) {
   }
 
   // Para dev local, configure NEXT_PUBLIC_APP_URL com sua URL de túnel (ex: Cloudflare Tunnel)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-    || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-    || (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
-    || "http://localhost:3000";
+  const baseUrl = getAppUrl();
   const schedule = await qstash.publishJSON({
     url: `${baseUrl}/api/builder/workflow/${config.workflowId}/execute`,
     body: {

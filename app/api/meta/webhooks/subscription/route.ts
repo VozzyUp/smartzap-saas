@@ -3,6 +3,7 @@ import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { normalizeSubscribedFields, type MetaSubscribedApp } from '@/lib/meta-webhook-subscription'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getVerifyToken } from '@/lib/verify-token'
+import { getAppUrl } from '@/lib/app-url'
 
 const META_API_VERSION = 'v24.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -11,16 +12,7 @@ const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
  * Computa a URL do webhook do SmartZap baseado no ambiente
  */
 function computeWebhookUrl(): string {
-  const vercelEnv = process.env.VERCEL_ENV || null
-
-  if (vercelEnv === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}/api/webhook`
-  } else if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.trim()}/api/webhook`
-  } else if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${process.env.NEXT_PUBLIC_APP_URL.trim()}/api/webhook`
-  }
-  return 'http://localhost:3000/api/webhook'
+  return `${getAppUrl()}/api/webhook`
 }
 
 /**

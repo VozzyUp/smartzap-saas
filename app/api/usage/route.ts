@@ -258,65 +258,9 @@ export async function GET() {
     console.error('Failed to get WhatsApp usage:', e)
   }
 
-  // 4. Vercel Usage
-  try {
-    if (process.env.VERCEL_API_TOKEN) {
-      const teamId = process.env.VERCEL_TEAM_ID || ''
-      const now = new Date()
-      const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-      const to = now.toISOString()
-
-      const baseUrl = `https://api.vercel.com/v2/usage?teamId=${teamId}&from=${from}&to=${to}`
-
-      const [requestsResponse, buildsResponse] = await Promise.all([
-        fetchWithTimeout(`${baseUrl}&type=requests`, {
-          headers: { 'Authorization': `Bearer ${process.env.VERCEL_API_TOKEN}` },
-          timeoutMs: 3500,
-        }),
-        fetchWithTimeout(`${baseUrl}&type=builds`, {
-          headers: { 'Authorization': `Bearer ${process.env.VERCEL_API_TOKEN}` },
-          timeoutMs: 3500,
-        }),
-      ])
-
-      if (requestsResponse.ok) {
-        const data = await requestsResponse.json()
-        if (data.data && Array.isArray(data.data)) {
-          for (const day of data.data) {
-            usage.vercel.functionInvocations += (day.function_invocation_successful_count || 0)
-            usage.vercel.functionInvocations += (day.function_invocation_error_count || 0)
-            usage.vercel.functionInvocations += (day.function_invocation_throttle_count || 0)
-            usage.vercel.functionInvocations += (day.function_invocation_timeout_count || 0)
-            usage.vercel.edgeRequests += (day.request_hit_count || 0)
-            usage.vercel.edgeRequests += (day.request_miss_count || 0)
-          }
-        }
-      }
-
-      if (buildsResponse.ok) {
-        const data = await buildsResponse.json()
-        if (data.data && Array.isArray(data.data)) {
-          for (const day of data.data) {
-            usage.vercel.buildMinutes += (day.build_build_seconds || 0)
-          }
-        }
-        usage.vercel.buildMinutes = Math.round(usage.vercel.buildMinutes / 60)
-      }
-
-      usage.vercel.functionPercentage = Math.round((usage.vercel.functionInvocations / usage.vercel.functionLimit) * 100 * 10) / 10
-      usage.vercel.edgePercentage = Math.round((usage.vercel.edgeRequests / usage.vercel.edgeLimit) * 100 * 10) / 10
-      usage.vercel.buildPercentage = Math.round((usage.vercel.buildMinutes / usage.vercel.buildLimit) * 100 * 10) / 10
-      usage.vercel.percentage = Math.max(
-        usage.vercel.functionPercentage,
-        usage.vercel.edgePercentage,
-        usage.vercel.buildPercentage
-      )
-    }
-
-    usage.vercel.status = getStatus(usage.vercel.percentage)
-  } catch (e) {
-    console.error('Failed to get Vercel usage:', e)
-  }
+  // 4. Vercel Usage — não aplicável em instalação self-hosted.
+  // Nenhuma chamada à API da Vercel é feita; os campos permanecem zerados/ok.
+  // (métricas de database/qstash/whatsapp acima seguem vindo do Supabase/providers normalmente)
 
   return NextResponse.json(
     {

@@ -2,11 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ok, err } from '@/lib/mcp/helpers'
+import { getAppUrl } from '@/lib/app-url'
 
 const getDb = () => getSupabaseAdmin()!
-const baseUrl = () =>
-  process.env.NEXT_PUBLIC_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+const baseUrl = () => getAppUrl()
 
 export function registerCampaignsTools(server: McpServer) {
   // ─── sz.campaigns.list ───────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import { generateFlowJsonFromFormSpec, normalizeFlowFormSpec, validateFlowFormSp
 import { generateBookingDynamicFlowJson, generateDynamicFlowJson, normalizeDynamicFlowSpec } from '@/lib/dynamic-flow'
 import { validateMetaFlowJson } from '@/lib/meta-flow-json-validator'
 import { settingsDb } from '@/lib/supabase-db'
+import { getAppUrl } from '@/lib/app-url'
 
 /**
  * Detecta se o Flow JSON e dinamico (usa data_exchange)
@@ -53,7 +54,7 @@ const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 
 /**
  * Retorna a URL do endpoint se configurado
- * Prioridade: NEXT_PUBLIC_APP_URL > Vercel env vars > stored URL
+ * Prioridade: NEXT_PUBLIC_APP_URL (via getAppUrl) > stored URL
  *
  * Para dev local, configure NEXT_PUBLIC_APP_URL com sua URL de túnel (ex: Cloudflare Tunnel)
  */
@@ -63,20 +64,13 @@ async function getFlowEndpointUrl(): Promise<string | null> {
 
   // 1. NEXT_PUBLIC_APP_URL (pode ser URL de túnel em dev)
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${process.env.NEXT_PUBLIC_APP_URL}/api/flows/endpoint`
+    return `${getAppUrl()}/api/flows/endpoint`
   }
 
-  // 2. Env vars (producao/preview Vercel)
-  const envEndpointUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/flows/endpoint`
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}/api/flows/endpoint`
-      : null
-
-  // 3. Fallback: URL salva no banco
+  // 2. Fallback: URL salva no banco
   const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
-  const resolved = envEndpointUrl || storedEndpointUrl || null
-  console.log('[publish] 📍 Endpoint URL resolvida:', resolved, '(env:', envEndpointUrl, ', stored:', storedEndpointUrl, ')')
+  const resolved = storedEndpointUrl || null
+  console.log('[publish] 📍 Endpoint URL resolvida:', resolved, '(stored:', storedEndpointUrl, ')')
   return resolved
 }
 

@@ -268,12 +268,7 @@ async function fetchTestContact(): Promise<TestContactData> {
 async function fetchDomains(): Promise<DomainsData> {
   const domains: Array<{ value: string; label: string; isPrimary: boolean }> = []
 
-  // 1. VERCEL_URL (preview/branch deployments)
-  if (process.env.VERCEL_URL) {
-    domains.push({ value: `https://${process.env.VERCEL_URL}`, label: process.env.VERCEL_URL, isPrimary: false })
-  }
-
-  // 2. Custom production domain
+  // 1. Custom production domain
   const customDomain = process.env.NEXT_PUBLIC_APP_URL || process.env.PRODUCTION_URL
   if (customDomain) {
     const url = customDomain.startsWith('http') ? customDomain : `https://${customDomain}`

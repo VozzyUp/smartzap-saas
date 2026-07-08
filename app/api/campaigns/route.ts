@@ -3,6 +3,7 @@ import { campaignDb, campaignContactDb } from '@/lib/supabase-db'
 import { CreateCampaignSchema, validateBodyOrError } from '@/lib/api-validation'
 import { Client as QStashClient } from '@upstash/qstash'
 import { fetchWithTimeout, safeText } from '@/lib/server-http'
+import { getAppUrl } from '@/lib/app-url'
 
 // Force dynamic - NO caching at all
 export const dynamic = 'force-dynamic'
@@ -143,12 +144,6 @@ export async function POST(request: Request) {
       const scheduledMs = new Date(data.scheduledAt).getTime()
       const nowMs = Date.now()
 
-      const explicitAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || null
-      const vercelEnv = (process.env.VERCEL_ENV || '').trim()
-      const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
-        : null
-      const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : null
       const requestOrigin = (() => {
         const proto = request.headers.get('x-forwarded-proto') || 'https'
         const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
@@ -156,10 +151,7 @@ export async function POST(request: Request) {
         return `${proto}://${host}`
       })()
 
-      // Preview/dev: prefer origin to avoid cross-deploy scheduling.
-      const baseUrl = (vercelEnv === 'production')
-        ? (explicitAppUrl || productionUrl || vercelUrl || requestOrigin || 'http://localhost:3000')
-        : (requestOrigin || vercelUrl || explicitAppUrl || productionUrl || 'http://localhost:3000')
+      const baseUrl = getAppUrl(requestOrigin)
 
       const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')
 

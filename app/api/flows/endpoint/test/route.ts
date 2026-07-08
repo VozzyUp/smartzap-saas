@@ -1,21 +1,13 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
+import { getAppUrl } from '@/lib/app-url'
 
 const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 
 function buildEndpointUrl(): string | null {
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/flows/endpoint`
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/api/flows/endpoint`
-  }
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${process.env.NEXT_PUBLIC_APP_URL}/api/flows/endpoint`
-  }
-  return null
+  return `${getAppUrl()}/api/flows/endpoint`
 }
 
 export async function GET() {

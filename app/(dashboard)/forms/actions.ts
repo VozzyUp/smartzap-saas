@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
+import { getAppUrl } from '@/lib/app-url'
 import type { LeadForm } from '@/types'
 
 export interface FormsInitialData {
@@ -37,9 +38,7 @@ export async function getFormsInitialData(): Promise<FormsInitialData> {
   })
 
   // URL base para formulários públicos
-  const publicBaseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.VERCEL_URL ||
-    'http://localhost:3000'
+  const publicBaseUrl = getAppUrl()
 
   return {
     forms: (formsResult.data || []) as LeadForm[],

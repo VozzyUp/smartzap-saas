@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { ok, err } from '@/lib/mcp/helpers'
+import { getAppUrl } from '@/lib/app-url'
 
-const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+const baseUrl = () => getAppUrl()
 const adminKey = () => process.env.SMARTZAP_ADMIN_KEY ?? ''
 const apiKey = () => process.env.SMARTZAP_API_KEY ?? ''
 
@@ -238,7 +239,7 @@ export function registerSettingsTools(server: McpServer) {
           .url()
           .optional()
           .describe(
-            'URL pública do webhook (opcional — se omitida, usa a URL auto-detectada do SmartZap via VERCEL_PROJECT_PRODUCTION_URL ou NEXT_PUBLIC_APP_URL)'
+            'URL pública do webhook (opcional — se omitida, usa a URL auto-detectada do SmartZap via NEXT_PUBLIC_APP_URL)'
           ),
       },
     },

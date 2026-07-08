@@ -3,9 +3,10 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getMcpContext } from '@/lib/mcp/context'
 import { ok, err } from '@/lib/mcp/helpers'
+import { getAppUrl } from '@/lib/app-url'
 
 const getDb = () => getSupabaseAdmin()!
-const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+const baseUrl = () => getAppUrl()
 const apiKey = () => process.env.SMARTZAP_API_KEY ?? ''
 
 export function registerSystemTools(server: McpServer) {

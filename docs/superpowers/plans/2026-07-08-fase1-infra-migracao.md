@@ -387,6 +387,7 @@ Endpoints de ops passam a degradar graciosamente (HTTP 501 + mensagem) e a UI qu
 **Files:**
 - Modify: `app/api/vercel/redeploy/route.ts`, `app/api/vercel/info/route.ts`, `app/api/vercel/deploy-status/route.ts`, `app/api/usage/route.ts` (trecho Vercel), `app/api/settings/domains/route.ts`
 - Modify (no-op do bypass): `lib/inbox/inbox-webhook.ts:367`, `app/api/webhook/route.ts:1021`, `app/api/campaign/dispatch/route.ts:1039`
+- Modify (URLs de ops Vercel deferidas da Task 2): `lib/health-check.ts` (`getVercelDashboardUrl()` usa `VERCEL_URL` para link do dashboard Vercel → retornar `null`/remover), `lib/builder/auth.ts:45` (`VERCEL_URL` no redirect OAuth do AI Gateway → neutralizar junto com o painel oculto)
 - Modify (UI): `components/features/settings/AIGatewayPanel.tsx` e componente que renderiza o botão de redeploy/uso (localizar no Step 1)
 
 **Interfaces:**

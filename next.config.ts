@@ -58,10 +58,7 @@ const nextConfig: NextConfig = {
   // Environment variables exposed to client
   env: {
     NEXT_PUBLIC_APP_NAME: 'SmartZap',
-    NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7) || '1.0.0',
-    // Vercel Git vars — auto-injetados em build time; usados pelo link BYOK do AI Gateway
-    NEXT_PUBLIC_VERCEL_TEAM: process.env.VERCEL_GIT_REPO_OWNER ?? '',
-    NEXT_PUBLIC_VERCEL_PROJECT: process.env.VERCEL_GIT_REPO_SLUG ?? '',
+    NEXT_PUBLIC_APP_VERSION: process.env.APP_VERSION?.substring(0, 7) || '1.0.0',
   },
 
   // React Compiler for automatic memoization (moved from experimental in Next.js 16)

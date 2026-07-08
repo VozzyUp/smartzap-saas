@@ -1015,17 +1015,10 @@ export async function POST(request: NextRequest) {
       // PROD: Use QStash for reliable async execution
       const workflowClient = new Client({ token: process.env.QSTASH_TOKEN })
       try {
-        // Headers para bypass de Vercel Deployment Protection
-        const headers: Record<string, string> = {}
-        const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-        if (bypassSecret) {
-          headers['x-vercel-protection-bypass'] = bypassSecret
-        }
-
+        // Self-hosted: sem Deployment Protection da Vercel, sem header de bypass.
         await workflowClient.trigger({
           url: `${baseUrl}/api/campaign/workflow`,
           body: workflowPayload,
-          headers: Object.keys(headers).length > 0 ? headers : undefined,
           retries: 3,
         })
       } catch (err) {

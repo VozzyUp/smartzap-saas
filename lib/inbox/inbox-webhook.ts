@@ -357,12 +357,7 @@ async function dispatchToQStash(
       headers['Authorization'] = `Bearer ${apiKey}`
     }
 
-    // Se tiver bypass secret configurado, adiciona o header
-    // Isso permite que QStash passe pelo Deployment Protection da Vercel
-    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-    if (bypassSecret) {
-      headers['x-vercel-protection-bypass'] = bypassSecret
-    }
+    // Self-hosted: sem Deployment Protection da Vercel, header de bypass removido.
 
     await qstash.publishJSON({
       url: aiRespondUrl,

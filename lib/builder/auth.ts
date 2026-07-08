@@ -41,12 +41,8 @@ function getBaseURL() {
     return process.env.NEXT_PUBLIC_APP_URL;
   }
 
-  // Priority 3: Check if we're on Vercel (for preview deployments)
-  if (process.env.VERCEL_URL) {
-    // VERCEL_URL doesn't include protocol, so add it
-    // Use https for Vercel deployments (both production and preview)
-    return `https://${process.env.VERCEL_URL}`;
-  }
+  // Self-hosted: sem Vercel Preview Deployments, então o fallback de
+  // VERCEL_URL foi removido (o AI Gateway OAuth via Vercel está desativado/oculto).
 
   // Fallback: Local development
   return "http://localhost:3000";

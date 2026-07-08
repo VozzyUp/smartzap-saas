@@ -89,25 +89,10 @@ function getStatus(percentage: number): 'ok' | 'warning' | 'critical' {
   return 'ok'
 }
 
+// Self-hosted: não há dashboard da Vercel para linkar. Mantido como stub
+// (retorna sempre null) para não quebrar os consumidores de SystemResponse.vercel.
 function buildVercelDashboardUrl(): string | null {
-  const vercelUrl = process.env.VERCEL_URL
-  if (!vercelUrl) return null
-
-  const cleanUrl = vercelUrl.replace('.vercel.app', '')
-  const scopeMatch = cleanUrl.match(/-([a-z0-9]+-projects)$/) || cleanUrl.match(/-([a-z0-9-]+)$/)
-  if (!scopeMatch) return null
-
-  const scope = scopeMatch[1]
-  const beforeScope = cleanUrl.replace(`-${scope}`, '')
-  const lastHyphen = beforeScope.lastIndexOf('-')
-  if (lastHyphen === -1) return null
-
-  const possibleHash = beforeScope.substring(lastHyphen + 1)
-  const projectName = beforeScope.substring(0, lastHyphen)
-
-  if (!/^[a-z0-9]{7,12}$/.test(possibleHash)) return null
-
-  return `https://vercel.com/${scope}/${projectName}`
+  return null
 }
 
 // === MAIN HANDLER ===
@@ -426,109 +411,9 @@ export async function GET() {
       }
     })(),
 
-    // 4. VERCEL USAGE
-    (async () => {
-      const vercelToken = process.env.VERCEL_API_TOKEN || process.env.VERCEL_TOKEN
-
-      if (vercelToken) {
-        try {
-          const teamId = process.env.VERCEL_TEAM_ID || ''
-          const now = new Date()
-          const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-          const to = now.toISOString()
-
-          const userRes = await fetchWithTimeout('https://api.vercel.com/v2/user', {
-            headers: { 'Authorization': `Bearer ${vercelToken}` },
-            timeoutMs: 3500,
-          })
-
-          if (userRes.ok) {
-            const userData = await userRes.json()
-            const defaultTeamId = userData.user?.defaultTeamId
-
-            if (defaultTeamId) {
-              try {
-                const teamRes = await fetchWithTimeout(`https://api.vercel.com/v2/teams/${defaultTeamId}`, {
-                  headers: { 'Authorization': `Bearer ${vercelToken}` },
-                  timeoutMs: 3500,
-                })
-
-                if (teamRes.ok) {
-                  const teamData = await teamRes.json()
-                  const billingPlan = teamData.billing?.plan
-
-                  if (billingPlan === 'enterprise' || billingPlan === 'ent') {
-                    response.usage.vercel.plan = 'enterprise'
-                    response.usage.vercel.functionLimit = 1000000000
-                    response.usage.vercel.edgeLimit = 1000000000
-                    response.usage.vercel.buildLimit = 24000
-                  } else if (billingPlan === 'pro') {
-                    response.usage.vercel.plan = 'pro'
-                    response.usage.vercel.functionLimit = 1000000
-                    response.usage.vercel.edgeLimit = 10000000
-                    response.usage.vercel.buildLimit = 24000
-                  } else {
-                    response.usage.vercel.plan = 'hobby'
-                    response.usage.vercel.functionLimit = 100000
-                    response.usage.vercel.edgeLimit = 1000000
-                    response.usage.vercel.buildLimit = 6000
-                  }
-                }
-              } catch (e) {
-                console.error('Failed to fetch team info:', e)
-              }
-            }
-          }
-
-          const baseUrl = `https://api.vercel.com/v2/usage?teamId=${teamId}&from=${from}&to=${to}`
-
-          const [requestsRes, buildsRes] = await Promise.all([
-            fetchWithTimeout(`${baseUrl}&type=requests`, {
-              headers: { 'Authorization': `Bearer ${vercelToken}` },
-              timeoutMs: 3500,
-            }),
-            fetchWithTimeout(`${baseUrl}&type=builds`, {
-              headers: { 'Authorization': `Bearer ${vercelToken}` },
-              timeoutMs: 3500,
-            }),
-          ])
-
-          if (requestsRes.ok) {
-            const data = await requestsRes.json()
-            if (data.data && Array.isArray(data.data)) {
-              for (const day of data.data) {
-                response.usage.vercel.functionInvocations += (day.function_invocation_successful_count || 0) +
-                  (day.function_invocation_error_count || 0) + (day.function_invocation_throttle_count || 0) +
-                  (day.function_invocation_timeout_count || 0)
-                response.usage.vercel.edgeRequests += (day.request_hit_count || 0) + (day.request_miss_count || 0)
-              }
-            }
-          }
-
-          if (buildsRes.ok) {
-            const data = await buildsRes.json()
-            if (data.data && Array.isArray(data.data)) {
-              for (const day of data.data) {
-                response.usage.vercel.buildMinutes += (day.build_build_seconds || 0)
-              }
-            }
-            response.usage.vercel.buildMinutes = Math.round(response.usage.vercel.buildMinutes / 60)
-          }
-
-          response.usage.vercel.functionPercentage = Math.round((response.usage.vercel.functionInvocations / response.usage.vercel.functionLimit) * 100 * 10) / 10
-          response.usage.vercel.edgePercentage = Math.round((response.usage.vercel.edgeRequests / response.usage.vercel.edgeLimit) * 100 * 10) / 10
-          response.usage.vercel.buildPercentage = Math.round((response.usage.vercel.buildMinutes / response.usage.vercel.buildLimit) * 100 * 10) / 10
-          response.usage.vercel.percentage = Math.max(
-            response.usage.vercel.functionPercentage,
-            response.usage.vercel.edgePercentage,
-            response.usage.vercel.buildPercentage
-          )
-          response.usage.vercel.status = getStatus(response.usage.vercel.percentage)
-        } catch (error) {
-          console.error('Failed to get Vercel usage:', error)
-        }
-      }
-    })(),
+    // 4. VERCEL USAGE — não aplicável em instalação self-hosted.
+    // Nenhuma chamada à API da Vercel é feita; os campos permanecem zerados/ok.
+    (async () => {})(),
   ])
 
   // === POST-CALCULATIONS ===

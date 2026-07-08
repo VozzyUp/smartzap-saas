@@ -1014,20 +1014,13 @@ export async function POST(request: NextRequest) {
 
               const workflowClient = new WorkflowClient({ token: process.env.QSTASH_TOKEN! })
 
-              // Headers para bypass de proteção Vercel se necessário
-              const headers: Record<string, string> = {}
-              const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-              if (bypassSecret) {
-                headers['x-vercel-protection-bypass'] = bypassSecret
-              }
-
+              // Self-hosted: sem Deployment Protection da Vercel, sem header de bypass.
               await workflowClient.trigger({
                 url: `${baseUrl}/api/builder/workflow/${targetWorkflowId}/execute`,
                 body: {
                   workflowId: targetWorkflowId,
                   input: { from, to: from, message: text },
                 },
-                headers: Object.keys(headers).length > 0 ? headers : undefined,
               })
             } catch (e) {
               console.error('[Webhook] Failed to trigger builder workflow:', e)

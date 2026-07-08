@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 export const dynamic = 'force-dynamic' // Prevent caching of verification requests
 export const runtime = 'nodejs'
+import { getAppUrl } from '@/lib/app-url'
 import { getSupabaseAdmin, supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
@@ -1009,10 +1010,7 @@ export async function POST(request: NextRequest) {
               await ensureWorkflowRecord(supabaseAdmin, targetWorkflowId, companyId)
 
               // Usa QStash Client para ter assinatura válida (evita SignatureError)
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-                || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-                || (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
-                || request.nextUrl.origin
+              const baseUrl = getAppUrl(request.nextUrl.origin)
 
               const workflowClient = new WorkflowClient({ token: process.env.QSTASH_TOKEN! })
 

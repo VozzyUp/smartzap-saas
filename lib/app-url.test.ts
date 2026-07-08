@@ -31,4 +31,8 @@ describe('getAppUrl', () => {
   it('cai para localhost quando nada está definido', () => {
     expect(getAppUrl()).toBe('http://localhost:3000')
   })
+
+  it('cai para localhost quando fallbackOrigin é apenas espaços em branco', () => {
+    expect(getAppUrl('   ')).toBe('http://localhost:3000')
+  })
 })

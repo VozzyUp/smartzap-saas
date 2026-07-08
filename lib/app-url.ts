@@ -9,6 +9,7 @@
 export function getAppUrl(fallbackOrigin?: string | null): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
   if (explicit) return explicit.replace(/\/+$/, '')
-  if (fallbackOrigin) return fallbackOrigin.trim().replace(/\/+$/, '')
+  const trimmedFallback = fallbackOrigin?.trim()
+  if (trimmedFallback) return trimmedFallback.replace(/\/+$/, '')
   return 'http://localhost:3000'
 }

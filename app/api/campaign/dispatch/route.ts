@@ -980,12 +980,10 @@ export async function POST(request: NextRequest) {
       throttleConfig,
     }
 
-    // BYPASS apenas em localhost REAL (dev local) - nunca em Vercel (preview ou prod)
-    // Vercel sempre tem VERCEL_ENV definido, então se existir, estamos na cloud
-    const isVercelCloud = Boolean(process.env.VERCEL_ENV || process.env.VERCEL)
-    const shouldBypassQstash = isLocalhost && !isVercelCloud
+    // BYPASS apenas em localhost REAL (dev local)
+    const shouldBypassQstash = isLocalhost
 
-    console.log(`[Dispatch] QStash decision: isLocalhost=${isLocalhost}, isVercelCloud=${isVercelCloud}, shouldBypass=${shouldBypassQstash}`)
+    console.log(`[Dispatch] QStash decision: isLocalhost=${isLocalhost}, shouldBypass=${shouldBypassQstash}`)
 
     if (shouldBypassQstash) {
       // DEV LOCAL: Call workflow endpoint directly (QStash can't reach localhost)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, getSupabaseAdmin } from '@/lib/supabase'
 import { fetchWithTimeout } from '@/lib/server-http'
+import { getAppEnv } from '@/lib/app-env'
 
 /**
  * GET /api/system
@@ -132,7 +133,7 @@ export async function GET() {
     vercel: {
       dashboardUrl: buildVercelDashboardUrl(),
       storesUrl: null,
-      env: process.env.VERCEL_ENV || 'development',
+      env: getAppEnv(),
     },
     timestamp: new Date().toISOString(),
   }

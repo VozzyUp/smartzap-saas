@@ -36,14 +36,16 @@ Domínio alvo: `app.vozzyup.com.br`
 
 ### 3. Variáveis de ambiente (.env)
 
-- [ ] Preencher as variáveis do `.env` (baseado no `.env.example`) no Portainer (ou carregar como secret do Docker):
-  - `NEXTAUTH_SECRET`, `NEXTAUTH_URL=https://app.vozzyup.com.br`
-  - `DATABASE_URL` (PostgreSQL da VPS)
-  - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
-  - `UPSTASH_WORKFLOW_URL`, `QSTASH_WORKFLOW_URL` (atualizado para domínio novo)
-  - `META_WEBHOOK_VERIFY_TOKEN`, `META_WEBHOOK_SECRET`
-  - `OPENAI_API_KEY`, demais credenciais de integrações
-  - `PORTAINER_WEBHOOK_URL` (se houver auto-redeploy configurado no CI)
+- [ ] Preencher as variáveis do `.env` no Portainer (ou carregar como secret do Docker) tendo o **`.env.example`** do repositório como fonte da verdade (não redigitar aqui para evitar divergência). Grupos presentes lá:
+  - App (`NEXT_PUBLIC_APP_URL`, `APP_ENV`, etc.)
+  - Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, etc.)
+  - Upstash QStash/Workflow (`QSTASH_TOKEN`, `QSTASH_WORKFLOW_URL`, `UPSTASH_WORKFLOW_URL`, etc.)
+  - Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`)
+  - Auth do produto (`MASTER_PASSWORD`, `SMARTZAP_API_KEY`, `SMARTZAP_ADMIN_KEY`)
+  - Meta/WhatsApp (`META_APP_ID`, `META_APP_SECRET`, `META_WABA_ID`, etc.)
+  - Push/PWA (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`)
+  - IA (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`)
+  - `PORTAINER_WEBHOOK_URL` (se houver auto-redeploy configurado no CI; não faz parte do `.env.example`, é secret do GitHub)
 
 ### 4. Subir o stack
 
@@ -69,21 +71,21 @@ Domínio alvo: `app.vozzyup.com.br`
 
 - [ ] No painel da Meta (Business Manager → Seu App → Messenger/WhatsApp → Configuração):
   - [ ] Atualizar Callback URL do webhook para: `https://app.vozzyup.com.br/api/webhook`
-  - [ ] Atualizar Verify Token (deve coincidir com `META_WEBHOOK_VERIFY_TOKEN` do `.env`)
+  - [ ] Atualizar Verify Token (deve coincidir com o token configurado — primariamente via setting `webhook_verify_token` no Supabase, com fallback para a env `WEBHOOK_VERIFY_TOKEN`; ver `lib/verify-token.ts`)
   - [ ] Salvar.
 
 - [ ] Revalidar webhook:
   - [ ] No painel Meta, clicar em "Testar Webhook" ou enviar mensagem de teste via WhatsApp.
   - [ ] Confirmar recebimento e assinatura HMAC no inbox/logs do app (verificar `console.log` ou DB de mensagens).
-  - [ ] Se falhar: revisar `META_WEBHOOK_SECRET` no `.env` e assinatura HMAC na rota `/api/webhook`.
+  - [ ] Se falhar: revisar `META_APP_SECRET` no `.env` (usado para calcular o HMAC `x-hub-signature-256` em `app/api/webhook/route.ts`).
 
 ---
 
 ## QStash
 
-- [ ] Confirmar URLs de workflow no `.env`:
-  - [ ] `QSTASH_WORKFLOW_URL` = `https://app.vozzyup.com.br/api/workflows/qstash`
-  - [ ] `UPSTASH_WORKFLOW_URL` = `https://app.vozzyup.com.br/api/workflows/upstash`
+- [ ] Confirmar URLs de workflow no `.env` (ver `.env.example`):
+  - [ ] `QSTASH_WORKFLOW_URL` = `https://app.vozzyup.com.br` (domínio raiz, sem path)
+  - [ ] `UPSTASH_WORKFLOW_URL` = `https://app.vozzyup.com.br` (domínio raiz, sem path)
   
 - [ ] Disparar 1 campanha de teste (apenas alguns contatos):
   - [ ] Selecionar contatos de teste no app; criar fluxo simples; agendar disparo.

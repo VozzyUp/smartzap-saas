@@ -16,7 +16,6 @@ import { createCampaignProgressBroadcaster, broadcastCampaignPhase } from '@/lib
 import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
-import { getAppUrl } from '@/lib/app-url'
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
@@ -2580,7 +2579,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
     })
   },
   {
-    baseUrl: getAppUrl(),
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || undefined,
   }
 )
 

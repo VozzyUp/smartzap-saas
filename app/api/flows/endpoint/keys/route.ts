@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
     const hasPrivateKey = !!privateKey && isValidPrivateKey(privateKey)
     const hasPublicKey = !!publicKey
-    const envEndpointUrl = `${getAppUrl()}/api/flows/endpoint`
+    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL ? `${getAppUrl()}/api/flows/endpoint` : null
     const headerEndpointUrl = resolveEndpointUrlFromRequest(request)
     const safeStoredEndpointUrl =
       storedEndpointUrl && !isLocalhostUrl(headerEndpointUrl) && isLocalhostUrl(storedEndpointUrl)

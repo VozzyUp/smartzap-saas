@@ -41,7 +41,7 @@ export function buildStatusEventDedupeKey(input: {
 }
 
 function getBaseUrl(): string | null {
-  return getAppUrl()
+  return process.env.NEXT_PUBLIC_APP_URL ? getAppUrl() : null
 }
 
 function getReconcileSecret(): string | null {

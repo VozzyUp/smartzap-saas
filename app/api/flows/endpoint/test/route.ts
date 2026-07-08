@@ -7,6 +7,7 @@ const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 
 function buildEndpointUrl(): string | null {
+  if (!process.env.NEXT_PUBLIC_APP_URL) return null
   return `${getAppUrl()}/api/flows/endpoint`
 }
 

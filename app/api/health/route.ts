@@ -3,6 +3,7 @@ import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { settingsDb } from '@/lib/supabase-db'
+import { getAppEnv } from '@/lib/app-env'
 
 // Build Vercel dashboard URL dynamically from environment
 function getVercelDashboardUrl(): string | null {
@@ -75,7 +76,7 @@ export async function GET() {
     vercel: {
       dashboardUrl,
       storesUrl: dashboardUrl ? `${dashboardUrl}/stores` : null,
-      env: process.env.VERCEL_ENV || 'development',
+      env: getAppEnv(),
     },
     timestamp: new Date().toISOString(),
   }

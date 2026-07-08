@@ -1,5 +1,6 @@
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { getAppEnv } from '@/lib/app-env'
 
 // Types for health check response
 export interface HealthStatus {
@@ -78,7 +79,7 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
         vercel: {
             dashboardUrl,
             storesUrl: dashboardUrl ? `${dashboardUrl}/stores` : null,
-            env: process.env.VERCEL_ENV || 'development',
+            env: getAppEnv(),
         },
         timestamp: new Date().toISOString(),
     }

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getAppUrl } from '@/lib/app-url'
+import { getAppEnv } from '@/lib/app-env'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -283,7 +284,7 @@ function buildSupportPacketText(params: {
 }
 
 function computeWebhookUrl(): { webhookUrl: string; vercelEnv: string | null } {
-	const vercelEnv = process.env.VERCEL_ENV || null
+	const vercelEnv = getAppEnv()
 	const webhookUrl = `${getAppUrl()}/api/webhook`
 
 	return { webhookUrl, vercelEnv }

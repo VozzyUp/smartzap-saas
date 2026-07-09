@@ -110,6 +110,9 @@ tests/
 # Testes de integração da API de agentes IA
 !tests/api/
 !tests/api/**
+# Testes de integração multi-tenant (Fase 2A)
+!tests/integration/
+!tests/integration/**
 
 # Legacy (can be removed)
 # vite.config.ts

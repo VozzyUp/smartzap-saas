@@ -345,6 +345,9 @@ export async function POST(req: Request) {
         { key: 'UPSTASH_REDIS_REST_TOKEN', value: upstash.redisRestToken, targets: envTargets },
 
         // Auth
+        // MASTER_PASSWORD: único uso restante é o gate do wizard de instalação do
+        // operador (Task 10 aposentou MASTER_PASSWORD como login de usuário do
+        // dashboard — isso agora é Supabase Auth/magic link). Não remova.
         { key: 'MASTER_PASSWORD', value: admin.passwordHash, targets: envTargets },
 
         // API Key para acesso programático

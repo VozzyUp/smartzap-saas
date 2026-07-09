@@ -1,11 +1,16 @@
 /**
  * Auth Status API
- * 
+ *
  * GET: Check current auth status (setup complete? authenticated? configured?)
+ *
+ * "Autenticado" agora significa "tem sessão Supabase válida" (magic link) —
+ * ver `proxy.ts` e `app/api/auth/{magic-link,callback}`. MASTER_PASSWORD não
+ * é mais um mecanismo de login de usuário (permanece só como gate do wizard
+ * `/install`, fora do escopo desta rota).
  */
 
 import { NextResponse } from 'next/server'
-import { getUserAuthStatus } from '@/lib/user-auth'
+import { getUserAuthStatus } from '@/lib/user-auth-status'
 
 // Este endpoint controla redirects do login.
 // No Edge, env vars/SDK podem se comportar diferente e fazer isSetup/isAuthenticated
@@ -23,30 +28,13 @@ export async function GET() {
     }
 
     log('🔍 [AUTH-STATUS] === START ===')
-    // Check if MASTER_PASSWORD is configured
-    log('🔍 [AUTH-STATUS] MASTER_PASSWORD exists:', !!process.env.MASTER_PASSWORD)
-    log('🔍 [AUTH-STATUS] VERCEL_TOKEN exists:', !!process.env.VERCEL_TOKEN)
-    log('🔍 [AUTH-STATUS] SETUP_COMPLETE exists:', !!process.env.SETUP_COMPLETE)
-    const isConfigured = !!process.env.MASTER_PASSWORD
 
-    if (!isConfigured) {
-      log('🔍 [AUTH-STATUS] Not configured, returning early')
-      return NextResponse.json({
-        isConfigured: false,
-        debug_master_password_exists: !!process.env.MASTER_PASSWORD,
-        debug_vercel_token_exists: !!process.env.VERCEL_TOKEN,
-        isSetup: false,
-        isAuthenticated: false,
-        company: null
-      })
-    }
-
-    log('🔍 [AUTH-STATUS] Calling getUserAuthStatus...')
     const status = await getUserAuthStatus()
+
     log('🔍 [AUTH-STATUS] getUserAuthStatus result:', JSON.stringify(status, null, 2))
 
     const response = {
-      isConfigured: true,
+      isConfigured: status.isConfigured,
       isSetup: status.isSetup,
       isAuthenticated: status.isAuthenticated,
       company: status.company

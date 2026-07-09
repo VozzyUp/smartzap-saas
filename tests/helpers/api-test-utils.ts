@@ -33,10 +33,11 @@ export function createApiRequest(url: string, options?: {
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+  // Sessão de usuário agora é Supabase (cookies geridos por @supabase/ssr).
+  // Testes que precisam simular um usuário autenticado devem mockar
+  // `@/lib/tenant-context` (getTenantContext) em vez de injetar um cookie aqui.
   if (cookie !== undefined) {
     defaultHeaders['cookie'] = cookie
-  } else {
-    defaultHeaders['cookie'] = 'smartzap_session=test-session'
   }
 
   return new Request(fullUrl.toString(), {

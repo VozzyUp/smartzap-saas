@@ -4,6 +4,7 @@ import { CreateCampaignSchema, validateBodyOrError } from '@/lib/api-validation'
 import { Client as QStashClient } from '@upstash/qstash'
 import { fetchWithTimeout, safeText } from '@/lib/server-http'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Force dynamic - NO caching at all
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,9 @@ const localScheduleRegistry: Map<string, NodeJS.Timeout> =
  */
 export async function GET(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const url = new URL(request.url)
     const limitParam = url.searchParams.get('limit')
     const offsetParam = url.searchParams.get('offset')
@@ -45,7 +49,7 @@ export async function GET(request: Request) {
       const limit = Math.max(1, Math.min(100, Number.isFinite(limitRaw) ? limitRaw : 20))
       const offset = Math.max(0, Number.isFinite(offsetRaw) ? offsetRaw : 0)
 
-      const result = await campaignDb.list({
+      const result = await campaignDb.list(ctx.tenantId, {
         limit,
         offset,
         search,
@@ -67,7 +71,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const campaigns = await campaignDb.getAll()
+    const campaigns = await campaignDb.getAll(ctx.tenantId)
     return NextResponse.json(campaigns, {
       headers: {
         // Disable ALL caching
@@ -104,6 +108,9 @@ interface CreateCampaignBody {
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     // Validate input
@@ -113,7 +120,7 @@ export async function POST(request: Request) {
     const data = validation.data
 
     // Create campaign with template variables
-    const campaign = await campaignDb.create({
+    const campaign = await campaignDb.create(ctx.tenantId, {
       name: data.name,
       templateName: data.templateName,
       recipients: data.recipients,
@@ -127,6 +134,7 @@ export async function POST(request: Request) {
     // If contacts were provided, add them to campaign_contacts
     if (data.contacts && data.contacts.length > 0) {
       await campaignContactDb.addContacts(
+        ctx.tenantId,
         campaign.id,
         data.contacts.map((c) => ({
           contactId: c.contactId || c.id || (c as any).contact_id,
@@ -236,7 +244,7 @@ export async function POST(request: Request) {
             deduplicationId: `schedule-${campaign.id}-${dedupeSafeIso}`,
           })
 
-          await campaignDb.updateStatus(campaign.id, {
+          await campaignDb.updateStatus(ctx.tenantId, campaign.id, {
             qstashScheduleMessageId: res.messageId,
             qstashScheduleEnqueuedAt: new Date().toISOString(),
           })

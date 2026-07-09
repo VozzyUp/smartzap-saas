@@ -3,6 +3,7 @@ import { Client as QStashClient } from '@upstash/qstash'
 import { supabase } from '@/lib/supabase'
 import { campaignDb } from '@/lib/supabase-db'
 import { CampaignStatus } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Registry in-memory (dev-only) for localhost scheduling.
 // QStash cannot reach localhost, então usamos um setTimeout em dev.
@@ -27,6 +28,9 @@ interface Params {
  */
 export async function POST(_request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
 
     const { data: row, error } = await supabase
@@ -74,7 +78,7 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     // Clear schedule fields and revert to draft
-    await campaignDb.updateStatus(id, {
+    await campaignDb.updateStatus(ctx.tenantId, id, {
       status: CampaignStatus.DRAFT,
       scheduledAt: null,
       qstashScheduleMessageId: null,
@@ -83,7 +87,7 @@ export async function POST(_request: Request, { params }: Params) {
       completedAt: null,
     })
 
-    const updated = await campaignDb.getById(id)
+    const updated = await campaignDb.getById(ctx.tenantId, id)
     return NextResponse.json({ ok: true, campaign: updated })
   } catch (error) {
     console.error('Failed to cancel schedule:', error)

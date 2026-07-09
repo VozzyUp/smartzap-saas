@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { campaignTagDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const postSchema = z.object({
   name: z.string().min(1).max(50),
@@ -13,7 +14,10 @@ const postSchema = z.object({
 
 export async function GET() {
   try {
-    const tags = await campaignTagDb.getAll()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const tags = await campaignTagDb.getAll(ctx.tenantId)
     return NextResponse.json(tags)
   } catch (error) {
     console.error('[GET /api/campaigns/tags]', error)
@@ -26,6 +30,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const parsed = postSchema.safeParse(body)
@@ -37,7 +44,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const tag = await campaignTagDb.create(parsed.data)
+    const tag = await campaignTagDb.create(ctx.tenantId, parsed.data)
 
     return NextResponse.json(tag, { status: 201 })
   } catch (error) {

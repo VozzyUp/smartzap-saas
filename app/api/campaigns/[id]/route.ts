@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { campaignDb, campaignFolderDb, campaignTagDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Force dynamic rendering (no caching)
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,11 @@ interface Params {
  */
 export async function GET(request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
-    const campaign = await campaignDb.getById(id)
+    const campaign = await campaignDb.getById(ctx.tenantId, id)
 
     if (!campaign) {
       return NextResponse.json(
@@ -41,9 +45,9 @@ export async function GET(request: Request, { params }: Params) {
     // Buscar folder e tags
     let folder = null
     if (campaign.folderId) {
-      folder = await campaignFolderDb.getById(campaign.folderId)
+      folder = await campaignFolderDb.getById(ctx.tenantId, campaign.folderId)
     }
-    const tags = await campaignTagDb.getForCampaign(id)
+    const tags = await campaignTagDb.getForCampaign(ctx.tenantId, id)
 
     // No cache for campaign data (needs real-time updates)
     return NextResponse.json(
@@ -71,6 +75,9 @@ export async function GET(request: Request, { params }: Params) {
  */
 export async function PATCH(request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const body = await request.json()
 
@@ -78,7 +85,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { tagIds, ...updateData } = body
 
     // Atualizar campanha (incluindo folderId se presente)
-    const campaign = await campaignDb.updateStatus(id, updateData)
+    const campaign = await campaignDb.updateStatus(ctx.tenantId, id, updateData)
 
     if (!campaign) {
       return NextResponse.json(
@@ -89,15 +96,15 @@ export async function PATCH(request: Request, { params }: Params) {
 
     // Se tagIds foi fornecido, atualizar as tags da campanha
     if (tagIds !== undefined && Array.isArray(tagIds)) {
-      await campaignTagDb.assignToCampaign(id, tagIds)
+      await campaignTagDb.assignToCampaign(ctx.tenantId, id, tagIds)
     }
 
     // Buscar folder e tags atualizadas
     let folder = null
     if (campaign.folderId) {
-      folder = await campaignFolderDb.getById(campaign.folderId)
+      folder = await campaignFolderDb.getById(ctx.tenantId, campaign.folderId)
     }
-    const tags = await campaignTagDb.getForCampaign(id)
+    const tags = await campaignTagDb.getForCampaign(ctx.tenantId, id)
 
     return NextResponse.json({ ...campaign, folder, tags })
   } catch (error) {
@@ -115,8 +122,11 @@ export async function PATCH(request: Request, { params }: Params) {
  */
 export async function DELETE(request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
-    await campaignDb.delete(id)
+    await campaignDb.delete(ctx.tenantId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { campaignDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Force dynamic rendering (no caching)
 export const dynamic = 'force-dynamic'
@@ -14,9 +15,12 @@ interface Params {
  */
 export async function POST(_request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
 
-    const cloned = await campaignDb.duplicate(id)
+    const cloned = await campaignDb.duplicate(ctx.tenantId, id)
     if (!cloned) {
       return NextResponse.json({ error: 'Campanha não encontrada' }, { status: 404 })
     }

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { campaignFolderDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const patchSchema = z.object({
   name: z.string().min(1).max(50).optional(),
@@ -15,8 +16,11 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
-    const folder = await campaignFolderDb.getById(id)
+    const folder = await campaignFolderDb.getById(ctx.tenantId, id)
 
     if (!folder) {
       return NextResponse.json(
@@ -37,6 +41,9 @@ export async function GET(request: NextRequest, { params }: Params) {
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const body = await request.json()
 
@@ -50,7 +57,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     // Verifica se a pasta existe
-    const existing = await campaignFolderDb.getById(id)
+    const existing = await campaignFolderDb.getById(ctx.tenantId, id)
     if (!existing) {
       return NextResponse.json(
         { error: 'Pasta não encontrada' },
@@ -58,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       )
     }
 
-    const folder = await campaignFolderDb.update(id, parsed.data)
+    const folder = await campaignFolderDb.update(ctx.tenantId, id, parsed.data)
 
     return NextResponse.json(folder)
   } catch (error) {
@@ -81,10 +88,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
 
     // Verifica se a pasta existe
-    const existing = await campaignFolderDb.getById(id)
+    const existing = await campaignFolderDb.getById(ctx.tenantId, id)
     if (!existing) {
       return NextResponse.json(
         { error: 'Pasta não encontrada' },
@@ -92,7 +102,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       )
     }
 
-    await campaignFolderDb.delete(id)
+    await campaignFolderDb.delete(ctx.tenantId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

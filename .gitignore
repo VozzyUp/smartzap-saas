@@ -127,8 +127,12 @@ PRD-campaigns-new.md
 
 # Docs (dev-only, kept locally) - /docs/ ignora apenas na raiz
 # Exceção: docs de planejamento do SaaS são versionados (docs/superpowers/**)
+# (negações específicas p/ vencer a regra genérica `specs/` acima)
 /docs/*
 !/docs/superpowers/
+!/docs/superpowers/specs/
+!/docs/superpowers/plans/
+!/docs/superpowers/runbooks/
 .env*.local
 
 # Audit reports e arquivos de teste local

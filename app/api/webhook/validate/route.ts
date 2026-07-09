@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * GET /api/webhook/validate
@@ -13,6 +14,10 @@ import { settingsDb } from '@/lib/supabase-db'
  */
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     // Estratégia 1: Verificar se existem eventos recentes na tabela whatsapp_status_events
     let lastEventAt: string | null = null
     let hasRecentEvents = false
@@ -21,6 +26,7 @@ export async function GET() {
       const { data: events, error } = await supabase
         .from('whatsapp_status_events')
         .select('last_received_at')
+        .eq('tenant_id', tenantId)
         .order('last_received_at', { ascending: false })
         .limit(1)
 
@@ -46,6 +52,7 @@ export async function GET() {
         const { data: deliveries, error } = await supabase
           .from('campaign_contacts')
           .select('delivered_at, read_at')
+          .eq('tenant_id', tenantId)
           .or('delivered_at.not.is.null,read_at.not.is.null')
           .order('delivered_at', { ascending: false })
           .limit(1)
@@ -73,7 +80,7 @@ export async function GET() {
     // Estratégia 3: Verificar se existe token de webhook configurado (mínimo necessário)
     let hasWebhookToken = false
     try {
-      const token = await settingsDb.get('webhook_verify_token')
+      const token = await settingsDb.get(tenantId, 'webhook_verify_token')
       hasWebhookToken = Boolean(token)
     } catch {
       // ignore

@@ -19,6 +19,11 @@
 - Testes: Vitest com `globals:true`, alias `@`. Comandos: `npm run test`, `npm run build`, `npm run lint`. Suite atual = 3412 testes; alvo = 3412 + novos, nenhuma regressão.
 - Branch: `saas/fase-2-multitenancy`. Commits pequenos, um por passo de commit.
 - Spec: `docs/superpowers/specs/2026-07-08-fase2a-multitenancy-foundation-design.md`.
+- **Regras Supabase (obrigatórias em todas as tasks SQL):**
+  - Toda `SECURITY DEFINER` function em `public` deve terminar com `revoke execute on function public.X from public; grant execute on function public.X to authenticated, service_role;` — sem isso, o Postgres concede EXECUTE ao role `PUBLIC` (calável por `anon`).
+  - Toda policy RLS usa `to authenticated` (ou o role específico) — nunca omitir. `auth.role()` está deprecado.
+  - Policies `for update` levam `USING` **e** `WITH CHECK` idênticos (previne re-atribuição de `tenant_id`).
+  - Aplicação de migrações se dá via **Supabase MCP** (`mcp__supabase__apply_migration`/`execute_sql`) — o `scripts/apply-migration-pg.mjs` e `scripts/schema-parity-check.ts` referenciados no CLAUDE.md original **não existem** neste repo; substituir por chamadas MCP.
 
 ---
 
@@ -128,6 +133,9 @@ as $$
   select exists(select 1 from public.platform_admins where user_id = uid);
 $$;
 
+-- Fecha o EXECUTE default para PUBLIC (evita callable por anon) e concede só aos roles pretendidos
+revoke execute on function public.current_tenant_id() from public;
+revoke execute on function public.is_platform_admin(uuid) from public;
 grant execute on function public.current_tenant_id() to authenticated, service_role;
 grant execute on function public.is_platform_admin(uuid) to authenticated, service_role;
 
@@ -137,22 +145,24 @@ alter table public.tenant_members enable row level security;
 alter table public.platform_admins enable row level security;
 alter table public.platform_settings enable row level security;
 
--- Um usuário vê seu tenant; platform_admin vê tudo
+-- Um usuário vê seu tenant; platform_admin vê tudo. TO authenticated é obrigatório.
 create policy "tenant_members self read" on public.tenant_members
-  for select using ( user_id = auth.uid() or public.is_platform_admin(auth.uid()) );
+  for select to authenticated
+  using ( user_id = (select auth.uid()) or public.is_platform_admin((select auth.uid())) );
 
 create policy "tenants self read" on public.tenants
-  for select using (
-    id = public.current_tenant_id() or public.is_platform_admin(auth.uid())
-  );
+  for select to authenticated
+  using ( id = public.current_tenant_id() or public.is_platform_admin((select auth.uid())) );
 
 -- platform_admins e platform_settings: só platform_admin lê/escreve; service_role bypassa
 create policy "platform_admins self read" on public.platform_admins
-  for select using ( user_id = auth.uid() or public.is_platform_admin(auth.uid()) );
+  for select to authenticated
+  using ( user_id = (select auth.uid()) or public.is_platform_admin((select auth.uid())) );
 
 create policy "platform_settings admin only" on public.platform_settings
-  for all using ( public.is_platform_admin(auth.uid()) )
-  with check ( public.is_platform_admin(auth.uid()) );
+  for all to authenticated
+  using ( public.is_platform_admin((select auth.uid())) )
+  with check ( public.is_platform_admin((select auth.uid())) );
 
 commit;
 ```
@@ -349,8 +359,8 @@ begin
       as permissive
       for all
       to authenticated
-      using ( tenant_id = public.current_tenant_id() or public.is_platform_admin(auth.uid()) )
-      with check ( tenant_id = public.current_tenant_id() or public.is_platform_admin(auth.uid()) );
+      using ( tenant_id = public.current_tenant_id() or public.is_platform_admin((select auth.uid())) )
+      with check ( tenant_id = public.current_tenant_id() or public.is_platform_admin((select auth.uid())) );
     $f$, t);
   end loop;
 end$$;

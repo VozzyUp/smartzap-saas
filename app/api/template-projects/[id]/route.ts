@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { templateProjectDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +10,11 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const { id } = await params
-        const project = await templateProjectDb.getById(id)
+        const project = await templateProjectDb.getById(ctx.tenantId, id)
         return NextResponse.json(project)
     } catch (error) {
         console.error('Failed to fetch template project details:', error)
@@ -26,16 +30,20 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+        const tenantId = ctx.tenantId
+
         const { id } = await params
         const url = new URL(request.url)
         const deleteMetaTemplates = url.searchParams.get('deleteMetaTemplates') === 'true'
 
         // Se pediu para deletar templates da Meta, fazer isso primeiro
         if (deleteMetaTemplates) {
-            const credentials = await getWhatsAppCredentials()
+            const credentials = await getWhatsAppCredentials(tenantId)
             if (credentials) {
                 // Buscar o projeto com seus items para saber quais templates deletar
-                const project = await templateProjectDb.getById(id)
+                const project = await templateProjectDb.getById(tenantId, id)
                 const approvedItems = project.items?.filter(
                     (item: { meta_status?: string; name?: string }) =>
                         item.meta_status === 'APPROVED' && item.name
@@ -67,7 +75,7 @@ export async function DELETE(
         }
 
         // Deletar o projeto (cascade deleta os items)
-        await templateProjectDb.delete(id)
+        await templateProjectDb.delete(tenantId, id)
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error('Failed to delete template project:', error)
@@ -83,10 +91,13 @@ export async function PATCH(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const { id } = await params
         const body = await request.json()
 
-        const updated = await templateProjectDb.update(id, {
+        const updated = await templateProjectDb.update(ctx.tenantId, id, {
             title: body.title
         })
 

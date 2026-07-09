@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { templateProjectDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +12,17 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+        const tenantId = ctx.tenantId
+
         const { id } = await params
-        const project = await templateProjectDb.getById(id)
+        const project = await templateProjectDb.getById(tenantId, id)
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 })
         }
 
-        const credentials = await getWhatsAppCredentials()
+        const credentials = await getWhatsAppCredentials(tenantId)
         if (!credentials) {
             return NextResponse.json({ error: 'WhatsApp credentials not found' }, { status: 400 })
         }
@@ -57,7 +62,7 @@ export async function POST(
 
                 // Update DB if we found data
                 if (metaData) {
-                    await templateProjectDb.updateItem(item.id, {
+                    await templateProjectDb.updateItem(tenantId, item.id, {
                         meta_id: metaData.id,
                         meta_status: metaData.status
                     })
@@ -65,7 +70,7 @@ export async function POST(
                     results.push({ id: item.id, status: 'updated', meta: metaData })
                 } else {
                     // Not found in Meta -> Reset to Draft so user can try again
-                    await templateProjectDb.updateItem(item.id, {
+                    await templateProjectDb.updateItem(tenantId, item.id, {
                         meta_id: undefined,
                         meta_status: undefined
                     })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * Converte os components do formato Meta API para o formato spec do editor manual.
@@ -98,7 +99,7 @@ function metaComponentsToSpec(components: any[], parameterFormat: 'positional' |
 /**
  * Gera um nome único para o clone, adicionando sufixo _copia ou _copia_N
  */
-async function generateUniqueName(baseName: string): Promise<string> {
+async function generateUniqueName(tenantId: string, baseName: string): Promise<string> {
   const cleanBase = baseName.replace(/_copia(_\d+)?$/, '')
   let candidate = `${cleanBase}_copia`
 
@@ -106,6 +107,7 @@ async function generateUniqueName(baseName: string): Promise<string> {
   const { data: existing } = await supabase
     .from('templates')
     .select('name')
+    .eq('tenant_id', tenantId)
     .like('name', `${cleanBase}_copia%`)
 
   if (!existing || existing.length === 0) {
@@ -137,7 +139,10 @@ export async function POST(
 ) {
   try {
     const { name } = await params
-    const credentials = await getWhatsAppCredentials()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+    const credentials = await getWhatsAppCredentials(tenantId)
 
     if (!credentials?.businessAccountId || !credentials?.accessToken) {
       return NextResponse.json(
@@ -179,7 +184,7 @@ export async function POST(
     const spec = metaComponentsToSpec(template.components || [], parameterFormat)
 
     // 3. Gerar nome único
-    const newName = await generateUniqueName(template.name)
+    const newName = await generateUniqueName(tenantId, template.name)
 
     // 4. Criar spec completo
     const fullSpec = {
@@ -199,6 +204,7 @@ export async function POST(
       .from('templates')
       .insert({
         id,
+        tenant_id: tenantId,
         name: newName,
         language: fullSpec.language,
         category: fullSpec.category,
@@ -227,6 +233,7 @@ export async function POST(
         .from('templates')
         .insert({
           id,
+          tenant_id: tenantId,
           name: newName,
           language: fullSpec.language,
           category: fullSpec.category,

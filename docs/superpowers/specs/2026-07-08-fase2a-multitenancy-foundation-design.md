@@ -150,7 +150,7 @@ Request → proxy.ts (middleware)
 
 - **Migração SQL nova** (`supabase/migrations/…`): cria `tenants`/`tenant_members`/`platform_admins`, funções auxiliares, adiciona `tenant_id` + índices em todas as tabelas de domínio, converte `settings` para per-tenant (+ `platform_settings`), habilita RLS com policies.
 - **Sem backfill** (SaaS net-new). A migração assume tabelas vazias de dados de produção SaaS.
-- **Ordem de corte:** como não há dados legados, `tenant_id NOT NULL` direto é aceitável. (Se o banco de dev tiver dados de teste, limpar antes ou criar um tenant de dev e backfillar — decisão do plano.)
+- **Ordem de corte:** como não há dados legados, `tenant_id NOT NULL` direto é aceitável. **Dados de dev no banco atual serão limpos** antes de aplicar a migração (decisão travada). O plano incluirá o script de limpeza (TRUNCATE das tabelas de domínio, preservando estruturas e migrações do Supabase).
 - **`schema-parity`/baseline:** o projeto tem scripts de paridade de schema (`scripts/schema-parity-check.ts`); a migração deve manter a baseline consistente.
 
 ---
@@ -171,8 +171,8 @@ Request → proxy.ts (middleware)
 ## Pendências / premissas a confirmar na implementação
 
 - Provedor de email do Supabase (magic link) configurado no projeto (setup de infra/operador).
-- Decisão `platform_settings` separada vs `tenant_id` reservado para plataforma (preferência: separada).
-- Estratégia exata para dados de dev existentes no banco (limpar vs tenant de dev + backfill).
+- ~~Decisão `platform_settings` separada vs `tenant_id` reservado para plataforma~~ → **`platform_settings` separada (decidido).**
+- ~~Estratégia exata para dados de dev existentes no banco~~ → **limpar (TRUNCATE) antes da migração (decidido).**
 - Lista completa das ~40 tabelas que recebem `tenant_id` (extraída do `init.sql` no plano).
 - Ajuste dos ~scripts/functions SQL existentes (RPCs com `GRANT ... TO service_role`) para respeitar/receber `tenant_id`.
 

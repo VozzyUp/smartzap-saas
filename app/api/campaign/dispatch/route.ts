@@ -14,7 +14,6 @@ import { CampaignStatus, ContactStatus } from '@/types'
 import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
-import { resolveWebhookTenantId } from '@/lib/tenant-context'
 
 interface DispatchContact {
   contactId?: string
@@ -189,12 +188,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Rota disparada por QStash (schedule) e também por chamadas diretas do app
-  // (sessão/API key) para iniciar o disparo manual. Até a Fase 2B não há
-  // resolução de tenant a partir do payload/assinatura — falha alto de
-  // propósito. Ver lib/tenant-context.ts.
-  const tenantId = await resolveWebhookTenantId()
-
   const body = bodyText ? JSON.parse(bodyText) : {}
   const { campaignId, templateName, whatsappCredentials, templateVariables, flowId } = body
   const trigger: 'schedule' | 'manual' | string | undefined = body?.trigger
@@ -206,28 +199,24 @@ export async function POST(request: NextRequest) {
   // - O workflow reutiliza este mesmo traceId.
   const traceId = `cmp_${campaignId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 
-  // Carrega campanha E template em paralelo para:
-  // - validar gatilho de agendamento (evitar job "fantasma" após cancelamento)
-  // - obter template_variables quando necessário
-  // - evitar queries duplicadas (template_spec_hash)
-  // PERFORMANCE: Parallelized - these are independent queries
-  const [campaignResult, initialTemplate] = await Promise.all([
-    supabase
-      .from('campaigns')
-      .select('status, scheduled_date, template_variables, template_spec_hash')
-      .eq('id', campaignId)
-      .single(),
-    templateDb.getByName(tenantId, templateName),
-  ])
+  // O tenant do disparo é o dono da campanha, não do chamador: QStash não tem
+  // sessão, e a rota já é gate-keeped acima por signature/session/API key.
+  // Deriva de campaigns.tenant_id em vez de resolveWebhookTenantId() para não
+  // bloquear o disparo manual (fluxo mais usado do produto) até a Fase 2B.
+  const { data: campaignRow, error: campaignError } = await supabase
+    .from('campaigns')
+    .select('tenant_id, status, scheduled_date, template_variables, template_spec_hash')
+    .eq('id', campaignId)
+    .single()
 
-  const { data: campaignRow, error: campaignError } = campaignResult
-
-  if (campaignError || !campaignRow) {
-    console.error('[Dispatch] Campaign not found:', campaignError)
+  if (campaignError || !campaignRow?.tenant_id) {
     return NextResponse.json({ error: 'Campanha não encontrada' }, { status: 404 })
   }
+  const tenantId: string = campaignRow.tenant_id
 
-  // Validar template (fetched em paralelo acima)
+  const initialTemplate = await templateDb.getByName(tenantId, templateName)
+
+  // Validar template
   if (!initialTemplate) {
     return NextResponse.json(
       { error: 'Template não encontrado no banco local. Sincronize Templates antes de disparar.' },

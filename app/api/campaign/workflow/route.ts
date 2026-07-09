@@ -16,7 +16,6 @@ import { createCampaignProgressBroadcaster, broadcastCampaignPhase } from '@/lib
 import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
-import { resolveWebhookTenantId } from '@/lib/tenant-context'
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
@@ -512,12 +511,23 @@ async function updateContactStatus(
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 const workflowHandler = serve<CampaignWorkflowInput>(
   async (context) => {
-    // Rota executada por worker QStash (sem sessão de usuário). Até a Fase 2B
-    // não há resolução de tenant a partir do payload/assinatura — falha alto
-    // de propósito. Ver lib/tenant-context.ts.
-    const tenantId = await resolveWebhookTenantId()
-
     const { campaignId, templateName, contacts, templateVariables, phoneNumberId, accessToken, templateSnapshot, traceId: incomingTraceId, throttleConfig: payloadThrottleConfig } = context.requestPayload
+
+    // Worker QStash, sem sessão de usuário: o tenant do disparo é o dono da
+    // campanha, derivado de campaigns.tenant_id (não do chamador — QStash não
+    // carrega identidade de tenant). Consulta em context.run(): código não
+    // determinístico deve ficar dentro de um step (replay-safe).
+    const tenantId: string = await context.run('resolve-tenant', async () => {
+      const { data: tenantRow, error: tenantLookupError } = await supabase
+        .from('campaigns')
+        .select('tenant_id')
+        .eq('id', campaignId)
+        .single()
+      if (tenantLookupError || !tenantRow?.tenant_id) {
+        throw new Error(`[Workflow] Campanha ${campaignId} não encontrada ou sem tenant_id`)
+      }
+      return tenantRow.tenant_id as string
+    })
 
     const traceId = (incomingTraceId && String(incomingTraceId).trim().length > 0)
       ? String(incomingTraceId).trim()

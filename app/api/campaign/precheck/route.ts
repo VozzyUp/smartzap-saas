@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { templateDb } from '@/lib/supabase-db'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,6 +31,9 @@ interface PrecheckContact {
  */
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
     const templateName = String(body?.templateName || '').trim()
     const contacts = (body?.contacts || []) as PrecheckContact[]
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'contacts é obrigatório' }, { status: 400 })
     }
 
-    const template = await templateDb.getByName(templateName)
+    const template = await templateDb.getByName(ctx.tenantId, templateName)
     if (!template) {
       return NextResponse.json(
         { error: 'Template não encontrado no banco local. Sincronize Templates antes de validar.' },

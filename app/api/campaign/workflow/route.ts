@@ -16,6 +16,7 @@ import { createCampaignProgressBroadcaster, broadcastCampaignPhase } from '@/lib
 import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { resolveWebhookTenantId } from '@/lib/tenant-context'
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
@@ -511,6 +512,11 @@ async function updateContactStatus(
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 const workflowHandler = serve<CampaignWorkflowInput>(
   async (context) => {
+    // Rota executada por worker QStash (sem sessão de usuário). Até a Fase 2B
+    // não há resolução de tenant a partir do payload/assinatura — falha alto
+    // de propósito. Ver lib/tenant-context.ts.
+    const tenantId = await resolveWebhookTenantId()
+
     const { campaignId, templateName, contacts, templateVariables, phoneNumberId, accessToken, templateSnapshot, traceId: incomingTraceId, throttleConfig: payloadThrottleConfig } = context.requestPayload
 
     const traceId = (incomingTraceId && String(incomingTraceId).trim().length > 0)
@@ -550,7 +556,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
       })
 
       const nowIso = new Date().toISOString()
-      const existing = await campaignDb.getById(campaignId)
+      const existing = await campaignDb.getById(tenantId, campaignId)
 
       // Verifica se campanha foi cancelada antes de iniciar
       if (existing?.status === CampaignStatus.CANCELLED) {
@@ -568,7 +574,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
       const startedAt = (existing as any)?.startedAt || nowIso
 
-      await campaignDb.updateStatus(campaignId, {
+      await campaignDb.updateStatus(tenantId, campaignId, {
         status: CampaignStatus.SENDING,
         startedAt,
         completedAt: null,
@@ -592,7 +598,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
         cfg = { config: payloadThrottleConfig, source: 'db' as const, rawPresent: true }
         console.log('[Workflow] Using throttle config from dispatch payload')
       } else {
-        cfg = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+        cfg = await getAdaptiveThrottleConfigWithSource(tenantId).catch(() => null)
         console.log(`[Workflow] Throttle config from ${cfg?.source ?? 'fallback'}`)
       }
       const rawBatchSize = Number(cfg?.config?.batchSize ?? process.env.WHATSAPP_WORKFLOW_BATCH_SIZE ?? '10')
@@ -676,7 +682,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             // best-effort
           }
 
-          const initialTemplate = await templateDb.getByName(templateName)
+          const initialTemplate = await templateDb.getByName(tenantId, templateName)
           if (!initialTemplate) throw new Error(`Template ${templateName} não encontrado no banco local. Sincronize Templates.`)
 
           // Fonte operacional do batch: preferimos snapshot da campanha quando existir.
@@ -818,7 +824,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             if (refreshPromise) return await refreshPromise
             refreshPromise = (async () => {
               try {
-                const creds = await getWhatsAppCredentials()
+                const creds = await getWhatsAppCredentials(tenantId)
                 if (!creds?.businessAccountId || !accessToken) return null
 
                 const refreshed = await fetchSingleTemplateFromMeta({
@@ -828,8 +834,8 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                 })
 
                 if (!refreshed) return null
-                await templateDb.upsert([refreshed])
-                const local = await templateDb.getByName(templateName)
+                await templateDb.upsert(tenantId, [refreshed])
+                const local = await templateDb.getByName(tenantId, templateName)
                 refreshedTemplateForBatch = local || refreshed
                 templateForBatch = refreshedTemplateForBatch
                 return refreshedTemplateForBatch
@@ -1189,7 +1195,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           }
 
           if (adaptiveEnabled) {
-            const state = await getAdaptiveThrottleState(phoneNumberId)
+            const state = await getAdaptiveThrottleState(tenantId, phoneNumberId)
             limiter = createRateLimiter(state.targetMps)
             targetMpsForBatch = state.targetMps
 
@@ -1913,7 +1919,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
               if (adaptiveEnabled && errorCode === 130429 && !sawThroughput429) {
                 // Set flag BEFORE awaiting, para evitar múltiplas reduções concorrentes no mesmo batch.
                 sawThroughput429 = true
-                const update = await recordThroughputExceeded(phoneNumberId)
+                const update = await recordThroughputExceeded(tenantId, phoneNumberId)
                 if (limiter) {
                   try {
                     limiter.updateRate(update.next.targetMps)
@@ -1978,7 +1984,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
               // Auto-supressão agressiva (cross-campaign) — best-effort
               // Importante: não deve interromper o workflow; serve para proteger qualidade da conta.
               try {
-                const result = await maybeAutoSuppressByFailure({
+                const result = await maybeAutoSuppressByFailure(tenantId, {
                   phone: contact.phone,
                   failureCode: errorCode,
                   failureTitle: metaTitle || null,
@@ -2250,7 +2256,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           // Fazemos isso no finally para não perder a chance em batches com early return.
           if (adaptiveEnabled && !sawThroughput429) {
             try {
-              const update = await recordStableBatch(phoneNumberId)
+              const update = await recordStableBatch(tenantId, phoneNumberId)
               if (update.changed) {
                 await emitWorkflowTrace({
                   traceId,
@@ -2360,7 +2366,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           { traceId, campaignId, step, batchIndex },
           async () => {
             const t0 = Date.now()
-            const campaign = await campaignDb.getById(campaignId)
+            const campaign = await campaignDb.getById(tenantId, campaignId)
             if (campaign) {
               // Importante: `campaigns.last_sent_at` também é mantido por trigger (0007)
               // baseado em `campaign_contacts.sent_at`. Como usamos bulk upsert, `sent_at`
@@ -2377,7 +2383,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                 return (b > a) ? candidate : existing
               })()
 
-              await campaignDb.updateStatus(campaignId, {
+              await campaignDb.updateStatus(tenantId, campaignId, {
                 sent: campaign.sent + sentCount,
                 failed: campaign.failed + failedCount,
                 skipped: (campaign as any).skipped + skippedCount,
@@ -2408,20 +2414,20 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
     await context.run('complete-campaign', async () => {
       // Não sobrescrever cancelamento caso tenha ocorrido entre batches e este step.
-      const current = await campaignDb.getById(campaignId)
+      const current = await campaignDb.getById(tenantId, campaignId)
       if (current?.status === CampaignStatus.CANCELLED) {
         console.log(`🛑 Campaign ${campaignId} is CANCELLED. Skipping completion update.`)
         return
       }
 
-      const campaign = await campaignDb.getById(campaignId)
+      const campaign = await campaignDb.getById(tenantId, campaignId)
 
       let finalStatus = CampaignStatus.COMPLETED
       if (campaign && (campaign.failed + (campaign as any).skipped) === campaign.recipients && campaign.recipients > 0) {
         finalStatus = CampaignStatus.FAILED
       }
 
-      await campaignDb.updateStatus(campaignId, {
+      await campaignDb.updateStatus(tenantId, campaignId, {
         status: finalStatus,
         completedAt: new Date().toISOString()
       })

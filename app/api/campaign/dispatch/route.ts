@@ -14,6 +14,7 @@ import { CampaignStatus, ContactStatus } from '@/types'
 import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
+import { resolveWebhookTenantId } from '@/lib/tenant-context'
 
 interface DispatchContact {
   contactId?: string
@@ -188,6 +189,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Rota disparada por QStash (schedule) e também por chamadas diretas do app
+  // (sessão/API key) para iniciar o disparo manual. Até a Fase 2B não há
+  // resolução de tenant a partir do payload/assinatura — falha alto de
+  // propósito. Ver lib/tenant-context.ts.
+  const tenantId = await resolveWebhookTenantId()
+
   const body = bodyText ? JSON.parse(bodyText) : {}
   const { campaignId, templateName, whatsappCredentials, templateVariables, flowId } = body
   const trigger: 'schedule' | 'manual' | string | undefined = body?.trigger
@@ -210,7 +217,7 @@ export async function POST(request: NextRequest) {
       .select('status, scheduled_date, template_variables, template_spec_hash')
       .eq('id', campaignId)
       .single(),
-    templateDb.getByName(templateName),
+    templateDb.getByName(tenantId, templateName),
   ])
 
   const { data: campaignRow, error: campaignError } = campaignResult
@@ -302,7 +309,7 @@ export async function POST(request: NextRequest) {
     const example0 = headerInfo0.example
     if (!example0 || !isHttpUrl(example0)) {
       try {
-        const creds = await getWhatsAppCredentials()
+        const creds = await getWhatsAppCredentials(tenantId)
         if (creds?.businessAccountId && creds?.accessToken) {
           const refreshed = await fetchSingleTemplateFromMeta({
             businessAccountId: creds.businessAccountId,
@@ -310,8 +317,8 @@ export async function POST(request: NextRequest) {
             templateName,
           })
           if (refreshed) {
-            await templateDb.upsert([refreshed])
-            const refreshedLocal = await templateDb.getByName(templateName)
+            await templateDb.upsert(tenantId, [refreshed])
+            const refreshedLocal = await templateDb.getByName(tenantId, templateName)
             if (refreshedLocal) template = refreshedLocal
           }
         }
@@ -868,7 +875,7 @@ export async function POST(request: NextRequest) {
 
   // Fallback to Centralized Helper (DB > Env)
   if (!phoneNumberId || !accessToken) {
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(tenantId)
     if (credentials) {
       phoneNumberId = credentials.phoneNumberId
       accessToken = credentials.accessToken
@@ -955,7 +962,7 @@ export async function POST(request: NextRequest) {
 
     // Ler config de throttle AQUI no dispatch (onde temos acesso garantido ao Supabase)
     // e passar para o workflow, evitando que o QStash precise acessar o DB
-    const throttleConfigResult = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+    const throttleConfigResult = await getAdaptiveThrottleConfigWithSource(tenantId).catch(() => null)
     const throttleConfig = throttleConfigResult?.config ?? null
     const throttleSource = throttleConfigResult?.source ?? 'fallback'
     console.log(`[Dispatch] Throttle config source: ${throttleSource}`, throttleConfig ? JSON.stringify(throttleConfig) : 'null')

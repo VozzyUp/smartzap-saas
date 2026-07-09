@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { campaignDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Force dynamic rendering (no caching)
 export const dynamic = 'force-dynamic'
@@ -20,8 +21,11 @@ export async function GET(
   const { id: campaignId } = await params
 
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Get stats directly from Supabase (source of truth)
-    const campaign = await campaignDb.getById(campaignId)
+    const campaign = await campaignDb.getById(ctx.tenantId, campaignId)
 
     if (!campaign) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })

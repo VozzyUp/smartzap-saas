@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { campaignDb } from '@/lib/supabase-db'
 import { CampaignStatus } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function POST(
   request: NextRequest,
@@ -17,8 +18,11 @@ export async function POST(
   const { id: campaignId } = await params
 
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Update campaign status in Supabase
-    const campaign = await campaignDb.updateStatus(campaignId, {
+    const campaign = await campaignDb.updateStatus(ctx.tenantId, campaignId, {
       status: CampaignStatus.PAUSED,
     })
 

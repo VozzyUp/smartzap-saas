@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface Params {
   params: Promise<{ id: string }>
@@ -15,8 +16,11 @@ export async function GET(request: Request, { params }: Params) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
-    const contact = await contactDb.getById(id)
+    const contact = await contactDb.getById(ctx.tenantId, id)
 
     if (!contact) {
       return NextResponse.json(
@@ -50,9 +54,12 @@ export async function PATCH(request: Request, { params }: Params) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const body = await request.json()
-    const contact = await contactDb.update(id, body)
+    const contact = await contactDb.update(ctx.tenantId, id, body)
 
     if (!contact) {
       return NextResponse.json(
@@ -80,8 +87,11 @@ export async function DELETE(request: Request, { params }: Params) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
-    await contactDb.delete(id)
+    await contactDb.delete(ctx.tenantId, id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to delete contact:', error)

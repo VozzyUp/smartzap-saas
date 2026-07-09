@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 import {
   generateKeyPair,
   isValidPrivateKey,

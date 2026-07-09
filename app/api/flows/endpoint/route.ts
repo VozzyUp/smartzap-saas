@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
+import { resolveWebhookTenantId } from '@/lib/tenant-context'
 import {
   decryptRequest,
   encryptResponse,
@@ -41,8 +42,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Campos obrigatorios ausentes' }, { status: 400 })
     }
 
+    const tenantId = await resolveWebhookTenantId()
+
     // Busca a chave privada (gera automaticamente se não existir)
-    let privateKey = await settingsDb.get(PRIVATE_KEY_SETTING)
+    let privateKey = await settingsDb.get(tenantId, PRIVATE_KEY_SETTING)
 
     if (!privateKey) {
       console.log('[flow-endpoint] 🔑 Chave privada não encontrada, gerando automaticamente...')
@@ -51,8 +54,8 @@ export async function POST(request: NextRequest) {
 
       // Salva as chaves
       await Promise.all([
-        settingsDb.set(PRIVATE_KEY_SETTING, newPrivateKey),
-        settingsDb.set(PUBLIC_KEY_SETTING, publicKey),
+        settingsDb.set(tenantId, PRIVATE_KEY_SETTING, newPrivateKey),
+        settingsDb.set(tenantId, PUBLIC_KEY_SETTING, publicKey),
       ])
 
       privateKey = newPrivateKey
@@ -157,7 +160,8 @@ export async function POST(request: NextRequest) {
  * GET - Health check simples (sem criptografia)
  */
 export async function GET() {
-  const privateKey = await settingsDb.get(PRIVATE_KEY_SETTING)
+  const tenantId = await resolveWebhookTenantId()
+  const privateKey = await settingsDb.get(tenantId, PRIVATE_KEY_SETTING)
   const configured = !!privateKey
 
   return NextResponse.json({

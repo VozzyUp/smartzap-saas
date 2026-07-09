@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const CONFIG_KEY = 'auto_suppression_config'
 
@@ -32,11 +33,11 @@ function defaultConfig(): AutoSuppressionConfig {
   }
 }
 
-async function getConfigFromDbOrDefault(): Promise<{ config: AutoSuppressionConfig; source: 'db' | 'default' }> {
+async function getConfigFromDbOrDefault(tenantId: string): Promise<{ config: AutoSuppressionConfig; source: 'db' | 'default' }> {
   let raw: string | null = null
   if (isSupabaseConfigured()) {
     try {
-      raw = await settingsDb.get(CONFIG_KEY)
+      raw = await settingsDb.get(tenantId, CONFIG_KEY)
     } catch {
       raw = null
     }
@@ -69,8 +70,11 @@ async function getConfigFromDbOrDefault(): Promise<{ config: AutoSuppressionConf
 }
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   try {
-    const { config, source } = await getConfigFromDbOrDefault()
+    const { config, source } = await getConfigFromDbOrDefault(ctx.tenantId)
     return NextResponse.json({ ok: true, source, config })
   } catch (error) {
     console.error('Error fetching auto-suppression config:', error)
@@ -80,13 +84,16 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ ok: false, error: 'Supabase não configurado. Complete o setup antes de salvar.' }, { status: 400 })
     }
 
     const body = await request.json().catch(() => ({}))
-    const current = await getConfigFromDbOrDefault()
+    const current = await getConfigFromDbOrDefault(ctx.tenantId)
 
     const next: AutoSuppressionConfig = {
       enabled: body.enabled !== undefined ? boolFromUnknown(body.enabled) : current.config.enabled,
@@ -126,7 +133,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'ttl3Days não pode ser menor que ttl2Days' }, { status: 400 })
     }
 
-    await settingsDb.set(CONFIG_KEY, JSON.stringify(next))
+    await settingsDb.set(ctx.tenantId, CONFIG_KEY, JSON.stringify(next))
 
     return NextResponse.json({ ok: true, config: next })
   } catch (error) {

@@ -2286,10 +2286,11 @@ export const campaignFolderDb = {
 // ============================================================================
 
 export const campaignTagDb = {
-    getAll: async (): Promise<CampaignTag[]> => {
+    getAll: async (tenantId: string): Promise<CampaignTag[]> => {
         const { data, error } = await supabase
             .from('campaign_tags')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('name', { ascending: true })
 
         if (error) throw error
@@ -2302,10 +2303,11 @@ export const campaignTagDb = {
         }))
     },
 
-    getById: async (id: string): Promise<CampaignTag | undefined> => {
+    getById: async (tenantId: string, id: string): Promise<CampaignTag | undefined> => {
         const { data, error } = await supabase
             .from('campaign_tags')
             .select('*')
+            .eq('tenant_id', tenantId)
             .eq('id', id)
             .single()
 
@@ -2319,10 +2321,11 @@ export const campaignTagDb = {
         }
     },
 
-    create: async (dto: CreateCampaignTagDTO): Promise<CampaignTag> => {
+    create: async (tenantId: string, dto: CreateCampaignTagDTO): Promise<CampaignTag> => {
         const { data, error } = await supabase
             .from('campaign_tags')
             .insert({
+                tenant_id: tenantId,
                 name: dto.name,
                 color: dto.color || '#6B7280',
             })
@@ -2339,17 +2342,18 @@ export const campaignTagDb = {
         }
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('campaign_tags')
             .delete()
+            .eq('tenant_id', tenantId)
             .eq('id', id)
 
         if (error) throw error
     },
 
     // Obtém as tags de uma campanha
-    getForCampaign: async (campaignId: string): Promise<CampaignTag[]> => {
+    getForCampaign: async (tenantId: string, campaignId: string): Promise<CampaignTag[]> => {
         const { data, error } = await supabase
             .from('campaign_tag_assignments')
             .select(`
@@ -2361,6 +2365,7 @@ export const campaignTagDb = {
                     created_at
                 )
             `)
+            .eq('tenant_id', tenantId)
             .eq('campaign_id', campaignId)
 
         if (error) throw error
@@ -2377,11 +2382,12 @@ export const campaignTagDb = {
     },
 
     // Atribui tags a uma campanha (substitui todas as tags existentes)
-    assignToCampaign: async (campaignId: string, tagIds: string[]): Promise<void> => {
+    assignToCampaign: async (tenantId: string, campaignId: string, tagIds: string[]): Promise<void> => {
         // Primeiro, remove todas as tags existentes
         const { error: deleteError } = await supabase
             .from('campaign_tag_assignments')
             .delete()
+            .eq('tenant_id', tenantId)
             .eq('campaign_id', campaignId)
 
         if (deleteError) throw deleteError
@@ -2389,6 +2395,7 @@ export const campaignTagDb = {
         // Depois, insere as novas tags
         if (tagIds.length > 0) {
             const rows = tagIds.map(tagId => ({
+                tenant_id: tenantId,
                 campaign_id: campaignId,
                 tag_id: tagId,
             }))
@@ -2402,10 +2409,11 @@ export const campaignTagDb = {
     },
 
     // Adiciona uma tag a uma campanha
-    addToCampaign: async (campaignId: string, tagId: string): Promise<void> => {
+    addToCampaign: async (tenantId: string, campaignId: string, tagId: string): Promise<void> => {
         const { error } = await supabase
             .from('campaign_tag_assignments')
             .upsert({
+                tenant_id: tenantId,
                 campaign_id: campaignId,
                 tag_id: tagId,
             }, { onConflict: 'campaign_id,tag_id' })
@@ -2414,10 +2422,11 @@ export const campaignTagDb = {
     },
 
     // Remove uma tag de uma campanha
-    removeFromCampaign: async (campaignId: string, tagId: string): Promise<void> => {
+    removeFromCampaign: async (tenantId: string, campaignId: string, tagId: string): Promise<void> => {
         const { error } = await supabase
             .from('campaign_tag_assignments')
             .delete()
+            .eq('tenant_id', tenantId)
             .eq('campaign_id', campaignId)
             .eq('tag_id', tagId)
 

@@ -79,6 +79,8 @@ metadata.json
 # exceções pontuais. Por isso usamos scripts/* e liberamos explicitamente o arquivo.
 scripts/*
 !scripts/meta-audit.mjs
+!scripts/purge-dev-data.ts
+!scripts/seed-platform-admin.ts
 
 # OS
 .DS_Store

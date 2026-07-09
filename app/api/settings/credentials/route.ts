@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -12,6 +13,9 @@ export const revalidate = 0
 // GET - Fetch credentials from DB only
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
         isConnected: false,
@@ -28,7 +32,7 @@ export async function GET() {
     }
 
     try {
-      dbSettings = await settingsDb.getAll()
+      dbSettings = await settingsDb.getAll(ctx.tenantId)
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       console.error('Error fetching settings from DB:', errorMsg)
@@ -90,6 +94,9 @@ export async function GET() {
 // POST - Validate AND Save credentials to DB
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => null)
     if (!body) {
       return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
@@ -128,7 +135,7 @@ export async function POST(request: NextRequest) {
     const phoneData = await safeJson<any>(testResponse)
 
     // Save to Database (Persist across refreshes)
-    await settingsDb.saveAll({
+    await settingsDb.saveAll(ctx.tenantId, {
       phoneNumberId,
       businessAccountId,
       accessToken,
@@ -156,8 +163,11 @@ export async function POST(request: NextRequest) {
 // DELETE - Clear credentials from DB
 export async function DELETE() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Remove credenciais principais
-    await settingsDb.saveAll({
+    await settingsDb.saveAll(ctx.tenantId, {
       phoneNumberId: '',
       businessAccountId: '',
       accessToken: '',
@@ -166,8 +176,8 @@ export async function DELETE() {
 
     // Remove também o Meta App ID/Secret
     await Promise.all([
-      settingsDb.set('metaAppId', ''),
-      settingsDb.set('metaAppSecret', ''),
+      settingsDb.set(ctx.tenantId, 'metaAppId', ''),
+      settingsDb.set(ctx.tenantId, 'metaAppSecret', ''),
     ])
 
     return NextResponse.json({

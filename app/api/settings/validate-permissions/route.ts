@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -177,6 +178,9 @@ function buildMissingScopesSteps(missing: string[]): string[] {
  */
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
 
     // Buscar credenciais - prioriza body, depois banco
@@ -187,7 +191,7 @@ export async function POST(request: NextRequest) {
     // Se não veio no body OU é o placeholder mascarado, busca do banco
     const isPlaceholder = !accessToken || accessToken === '***configured***'
     if (isPlaceholder) {
-      const whatsappCreds = await getWhatsAppCredentials()
+      const whatsappCreds = await getWhatsAppCredentials(ctx.tenantId)
       accessToken = whatsappCreds?.accessToken
     }
 
@@ -195,7 +199,7 @@ export async function POST(request: NextRequest) {
     const appIdMissing = !appId
     const appSecretMissing = !appSecret || appSecret === '***configured***'
     if (appIdMissing || appSecretMissing) {
-      const metaAppCreds = await getMetaAppCredentials()
+      const metaAppCreds = await getMetaAppCredentials(ctx.tenantId)
       if (metaAppCreds) {
         if (appIdMissing) appId = metaAppCreds.appId
         if (appSecretMissing) appSecret = metaAppCreds.appSecret

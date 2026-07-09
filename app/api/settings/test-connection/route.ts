@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 type GraphApiError = {
   message?: string
@@ -186,6 +187,9 @@ function isMaskedToken(token: unknown): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
     const phoneNumberIdInput = (body as any)?.phoneNumberId as string | undefined
     const businessAccountIdInput = (body as any)?.businessAccountId as string | undefined
@@ -199,7 +203,7 @@ export async function POST(request: NextRequest) {
     const shouldUseStoredCreds = !phoneNumberId || isMaskedToken(accessToken)
 
     if (shouldUseStoredCreds) {
-      const creds = await getWhatsAppCredentials()
+      const creds = await getWhatsAppCredentials(ctx.tenantId)
       if (!creds) {
         return NextResponse.json(
           { ok: false, error: 'Credenciais do WhatsApp não configuradas' },
@@ -315,7 +319,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Tentativa best-effort: /debug_token (precisa META_APP_ID + META_APP_SECRET)
-      const appCreds = await getMetaAppCredentials()
+      const appCreds = await getMetaAppCredentials(ctx.tenantId)
       if (appCreds?.appId && appCreds?.appSecret) {
         wabaInference = { attempted: true, method: 'debug_token' }
         const appAccessToken = `${appCreds.appId}|${appCreds.appSecret}`

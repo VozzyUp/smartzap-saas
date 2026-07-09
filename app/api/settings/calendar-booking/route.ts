@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const CONFIG_KEY = 'calendar_booking_config'
 
@@ -125,11 +126,11 @@ function normalizeConfig(input?: Partial<CalendarBookingConfig>): CalendarBookin
   }
 }
 
-async function getConfigFromDbOrDefault(): Promise<{ config: CalendarBookingConfig; source: 'db' | 'default' }> {
+async function getConfigFromDbOrDefault(tenantId: string): Promise<{ config: CalendarBookingConfig; source: 'db' | 'default' }> {
   let raw: string | null = null
   if (isSupabaseConfigured()) {
     try {
-      raw = await settingsDb.get(CONFIG_KEY)
+      raw = await settingsDb.get(tenantId, CONFIG_KEY)
     } catch {
       raw = null
     }
@@ -149,7 +150,10 @@ async function getConfigFromDbOrDefault(): Promise<{ config: CalendarBookingConf
 
 export async function GET() {
   try {
-    const { config, source } = await getConfigFromDbOrDefault()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const { config, source } = await getConfigFromDbOrDefault(ctx.tenantId)
     return NextResponse.json({ ok: true, source, config })
   } catch (error) {
     console.error('Error fetching calendar booking config:', error)
@@ -159,12 +163,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ ok: false, error: 'Supabase nao configurado. Complete o setup antes de salvar.' }, { status: 400 })
     }
 
     const body = await request.json().catch(() => ({}))
-    const current = await getConfigFromDbOrDefault()
+    const current = await getConfigFromDbOrDefault(ctx.tenantId)
 
     const next = normalizeConfig({
       ...current.config,
@@ -172,7 +179,7 @@ export async function POST(request: NextRequest) {
       workingHours: Array.isArray(body.workingHours) ? body.workingHours : current.config.workingHours,
     })
 
-    await settingsDb.set(CONFIG_KEY, JSON.stringify(next))
+    await settingsDb.set(ctx.tenantId, CONFIG_KEY, JSON.stringify(next))
 
     return NextResponse.json({ ok: true, config: next })
   } catch (error) {

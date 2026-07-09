@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -14,12 +15,15 @@ export const revalidate = 0
 // GET - Buscar credenciais (mascaradas)
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ configured: false })
     }
 
-    const email = await settingsDb.get('upstashEmail')
-    const apiKey = await settingsDb.get('upstashApiKey')
+    const email = await settingsDb.get(ctx.tenantId, 'upstashEmail')
+    const apiKey = await settingsDb.get(ctx.tenantId, 'upstashApiKey')
 
     return NextResponse.json({
       configured: Boolean(email && apiKey),
@@ -35,6 +39,9 @@ export async function GET() {
 // POST - Salvar e validar credenciais
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => null)
     if (!body) {
       return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
@@ -65,8 +72,8 @@ export async function POST(request: NextRequest) {
 
     // Salvar no banco
     await Promise.all([
-      settingsDb.set('upstashEmail', email),
-      settingsDb.set('upstashApiKey', apiKey),
+      settingsDb.set(ctx.tenantId, 'upstashEmail', email),
+      settingsDb.set(ctx.tenantId, 'upstashApiKey', apiKey),
     ])
 
     return NextResponse.json({
@@ -85,9 +92,12 @@ export async function POST(request: NextRequest) {
 // DELETE - Remover credenciais
 export async function DELETE() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     await Promise.all([
-      settingsDb.set('upstashEmail', ''),
-      settingsDb.set('upstashApiKey', ''),
+      settingsDb.set(ctx.tenantId, 'upstashEmail', ''),
+      settingsDb.set(ctx.tenantId, 'upstashApiKey', ''),
     ])
 
     return NextResponse.json({

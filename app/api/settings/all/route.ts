@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 import { fetchWithTimeout } from '@/lib/server-http'
 import { DEFAULT_AI_PROMPTS, DEFAULT_AI_ROUTES } from '@/lib/ai/ai-center-defaults'
 import {
@@ -130,7 +131,7 @@ function parseJsonSetting<T>(value: string | null, fallback: T): T {
 
 // === FETCHERS (same logic as individual routes) ===
 
-async function fetchCredentials(): Promise<CredentialsData> {
+async function fetchCredentials(tenantId: string): Promise<CredentialsData> {
   if (!isSupabaseConfigured()) {
     return { isConnected: false, warning: 'Supabase não configurado' }
   }
@@ -138,7 +139,7 @@ async function fetchCredentials(): Promise<CredentialsData> {
   let dbSettings = { phoneNumberId: '', businessAccountId: '', accessToken: '', isConnected: false }
 
   try {
-    dbSettings = await settingsDb.getAll()
+    dbSettings = await settingsDb.getAll(tenantId)
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err)
     return { isConnected: false, warning: `Falha ao ler credenciais do DB: ${errorMsg}` }
@@ -360,9 +361,12 @@ export async function GET() {
   const startTime = Date.now()
 
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Fetch all settings in parallel
     const [credentials, ai, metaApp, testContact, domains, calendarBooking, workflowExecution, upstashConfig] = await Promise.all([
-      fetchCredentials().catch((e) => ({ source: 'none' as const, isConnected: false, warning: e.message })),
+      fetchCredentials(ctx.tenantId).catch((e) => ({ source: 'none' as const, isConnected: false, warning: e.message })),
       fetchAISettings().catch(() => ({
         provider: 'google', model: '', providers: {}, isConfigured: false, source: 'none',
         tokenPreview: null, routes: DEFAULT_AI_ROUTES, prompts: DEFAULT_AI_PROMPTS,

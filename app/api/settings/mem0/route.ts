@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,9 @@ const SETTINGS_KEYS = {
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
         ok: false,
@@ -35,8 +39,8 @@ export async function GET() {
     }
 
     const [enabledRaw, apiKey] = await Promise.all([
-      settingsDb.get(SETTINGS_KEYS.enabled),
-      settingsDb.get(SETTINGS_KEYS.apiKey),
+      settingsDb.get(ctx.tenantId, SETTINGS_KEYS.enabled),
+      settingsDb.get(ctx.tenantId, SETTINGS_KEYS.apiKey),
     ])
 
     const enabled = enabledRaw === 'true'
@@ -66,6 +70,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
         ok: false,
@@ -87,7 +94,7 @@ export async function POST(request: NextRequest) {
     // Se habilitando, precisa ter API key
     if (enabled && !apiKey) {
       // Verifica se já tem uma key salva
-      const existingKey = await settingsDb.get(SETTINGS_KEYS.apiKey)
+      const existingKey = await settingsDb.get(ctx.tenantId, SETTINGS_KEYS.apiKey)
       if (!existingKey) {
         return NextResponse.json({
           ok: false,
@@ -100,7 +107,7 @@ export async function POST(request: NextRequest) {
     if (typeof apiKey === 'string') {
       if (apiKey.trim() === '') {
         // String vazia = remover a chave
-        await settingsDb.set(SETTINGS_KEYS.apiKey, '')
+        await settingsDb.set(ctx.tenantId, SETTINGS_KEYS.apiKey, '')
       } else if (!apiKey.startsWith('m0-')) {
         return NextResponse.json({
           ok: false,
@@ -108,15 +115,15 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       } else {
         // Salva a nova key
-        await settingsDb.set(SETTINGS_KEYS.apiKey, apiKey.trim())
+        await settingsDb.set(ctx.tenantId, SETTINGS_KEYS.apiKey, apiKey.trim())
       }
     }
 
     // Salva o status
-    await settingsDb.set(SETTINGS_KEYS.enabled, enabled ? 'true' : 'false')
+    await settingsDb.set(ctx.tenantId, SETTINGS_KEYS.enabled, enabled ? 'true' : 'false')
 
     // Busca config atualizada para retornar
-    const updatedKey = await settingsDb.get(SETTINGS_KEYS.apiKey)
+    const updatedKey = await settingsDb.get(ctx.tenantId, SETTINGS_KEYS.apiKey)
     const hasApiKey = Boolean(updatedKey && updatedKey.length > 0)
 
     return NextResponse.json({

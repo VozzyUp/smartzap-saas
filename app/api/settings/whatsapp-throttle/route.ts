@@ -4,6 +4,7 @@ import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getAdaptiveThrottleState, setAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const CONFIG_KEY = 'whatsapp_adaptive_throttle_config'
 
@@ -33,11 +34,11 @@ function configFromEnv(): WhatsAppAdaptiveThrottleConfig {
   }
 }
 
-async function getConfigFromDbOrEnv(): Promise<{ config: WhatsAppAdaptiveThrottleConfig; source: 'db' | 'env' }> {
+async function getConfigFromDbOrEnv(tenantId: string): Promise<{ config: WhatsAppAdaptiveThrottleConfig; source: 'db' | 'env' }> {
   let raw: string | null = null
   if (isSupabaseConfigured()) {
     try {
-      raw = await settingsDb.get(CONFIG_KEY)
+      raw = await settingsDb.get(tenantId, CONFIG_KEY)
     } catch {
       raw = null
     }
@@ -68,14 +69,17 @@ async function getConfigFromDbOrEnv(): Promise<{ config: WhatsAppAdaptiveThrottl
 
 export async function GET() {
   try {
-    const credentials = await getWhatsAppCredentials()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     const phoneNumberId = credentials?.phoneNumberId || null
 
-    const { config, source } = await getConfigFromDbOrEnv()
+    const { config, source } = await getConfigFromDbOrEnv(ctx.tenantId)
 
     let state = null
     if (phoneNumberId) {
-      state = await getAdaptiveThrottleState(phoneNumberId)
+      state = await getAdaptiveThrottleState(ctx.tenantId, phoneNumberId)
     }
 
     return NextResponse.json({
@@ -94,13 +98,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ ok: false, error: 'Supabase não configurado. Complete o setup antes de salvar.' }, { status: 400 })
     }
 
     const body = await request.json().catch(() => ({}))
 
-    const current = await getConfigFromDbOrEnv()
+    const current = await getConfigFromDbOrEnv(ctx.tenantId)
 
     const next: WhatsAppAdaptiveThrottleConfig = {
       enabled: body.enabled !== undefined ? boolFromUnknown(body.enabled) : current.config.enabled,
@@ -122,14 +129,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'startMps deve estar entre minMps e maxMps' }, { status: 400 })
     }
 
-    await settingsDb.set(CONFIG_KEY, JSON.stringify(next))
+    await settingsDb.set(ctx.tenantId, CONFIG_KEY, JSON.stringify(next))
 
     // Optional: reset learning state for current phone number
     if (body.resetState === true) {
-      const credentials = await getWhatsAppCredentials()
+      const credentials = await getWhatsAppCredentials(ctx.tenantId)
       const phoneNumberId = credentials?.phoneNumberId
       if (phoneNumberId) {
-        await setAdaptiveThrottleState(phoneNumberId, {
+        await setAdaptiveThrottleState(ctx.tenantId, phoneNumberId, {
           targetMps: next.startMps,
           cooldownUntil: null,
           lastIncreaseAt: null,

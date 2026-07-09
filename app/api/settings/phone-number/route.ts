@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { getTenantContext } from '@/lib/tenant-context'
 
 function isMaskedToken(token: unknown): boolean {
   if (typeof token !== 'string') return false
@@ -9,13 +10,16 @@ function isMaskedToken(token: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   const body = await request.json()
   let phoneNumberId = (body.phoneNumberId || '').trim()
   let accessToken = (body.accessToken || '').trim()
 
   // Se o token está mascarado, usa o token salvo no banco
   if (isMaskedToken(accessToken)) {
-    const creds = await getWhatsAppCredentials()
+    const creds = await getWhatsAppCredentials(ctx.tenantId)
     if (!creds?.accessToken) {
       return NextResponse.json({ error: 'Token não configurado' }, { status: 400 })
     }

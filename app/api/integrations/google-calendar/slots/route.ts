@@ -5,6 +5,7 @@ import { getCalendarConfig, listBusyTimes } from '@/lib/google-calendar'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
+import { getTenantContext } from '@/lib/tenant-context'
 
 type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -148,9 +149,9 @@ function overlapsBusy(startMs: number, endMs: number, busy: Array<{ startMs: num
   return false
 }
 
-async function getCalendarBookingConfig(): Promise<CalendarBookingConfig> {
+async function getCalendarBookingConfig(tenantId: string): Promise<CalendarBookingConfig> {
   if (!isSupabaseConfigured()) return DEFAULT_CONFIG
-  const raw = await settingsDb.get('calendar_booking_config')
+  const raw = await settingsDb.get(tenantId, 'calendar_booking_config')
   if (!raw) return DEFAULT_CONFIG
   try {
     return normalizeConfig(JSON.parse(raw))
@@ -165,13 +166,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const params = request.nextUrl.searchParams
     const limit = clampInt(params.get('limit'), 1, 500, 200)
 
     // Buscar configs em paralelo para reduzir latência
     const [storedConfig, bookingConfig] = await Promise.all([
-      getCalendarConfig(),
-      getCalendarBookingConfig(),
+      getCalendarConfig(tenantId),
+      getCalendarBookingConfig(tenantId),
     ])
 
     const calendarId = params.get('calendarId') || storedConfig?.calendarId
@@ -192,7 +197,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Intervalo invalido' }, { status: 400 })
     }
 
-    const busyItems = await listBusyTimes({
+    const busyItems = await listBusyTimes(tenantId, {
       calendarId,
       timeMin: start.toISOString(),
       timeMax: end.toISOString(),

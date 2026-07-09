@@ -7,12 +7,17 @@ import {
   saveCalendarConfig,
   ensureCalendarChannel,
 } from '@/lib/google-calendar'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const STATE_COOKIE = 'gc_oauth_state'
 const RETURN_COOKIE = 'gc_oauth_return'
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const url = request.nextUrl
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
@@ -26,14 +31,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Estado OAuth invalido' }, { status: 400 })
     }
 
-    const tokens = await exchangeCodeForTokens(code)
-    await saveTokens(tokens)
+    const tokens = await exchangeCodeForTokens(tenantId, code)
+    await saveTokens(tenantId, tokens)
 
     const accountEmail = await fetchGoogleAccountEmail(tokens.accessToken)
-    const config = await buildDefaultCalendarConfig(accountEmail)
-    await saveCalendarConfig(config)
+    const config = await buildDefaultCalendarConfig(tenantId, accountEmail)
+    await saveCalendarConfig(tenantId, config)
 
-    await ensureCalendarChannel(config.calendarId)
+    await ensureCalendarChannel(tenantId, config.calendarId)
 
     // Forçar path local — nunca permitir URLs absolutas (previne open redirect)
     const safePath = returnTo.startsWith('/') ? returnTo : '/settings'

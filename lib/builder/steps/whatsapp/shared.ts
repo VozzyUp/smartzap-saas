@@ -41,8 +41,8 @@ export function resolveRecipient(input: ResolveRecipientInput): {
   return { ok: true, to: normalized };
 }
 
-export async function getCredentials(): Promise<WhatsAppCredentials | null> {
-  const credentials = await getWhatsAppCredentials();
+export async function getCredentials(tenantId: string): Promise<WhatsAppCredentials | null> {
+  const credentials = await getWhatsAppCredentials(tenantId);
   if (!credentials?.accessToken || !credentials?.phoneNumberId) {
     return null;
   }

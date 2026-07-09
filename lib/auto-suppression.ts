@@ -30,7 +30,8 @@ export type AutoSuppressionConfig = {
 
 const CONFIG_KEY = 'auto_suppression_config'
 const CACHE_TTL_MS = 30_000
-let _cache: { value: AutoSuppressionConfig; at: number } | null = null
+// Cache por tenant (evita vazar config de um tenant para outro em memória compartilhada).
+const _cacheByTenant = new Map<string, { value: AutoSuppressionConfig; at: number }>()
 
 function clampInt(n: unknown, min: number, max: number): number {
   const v = Number(n)
@@ -60,15 +61,16 @@ function defaultConfig(): AutoSuppressionConfig {
   }
 }
 
-export async function getAutoSuppressionConfig(): Promise<AutoSuppressionConfig> {
+export async function getAutoSuppressionConfig(tenantId: string): Promise<AutoSuppressionConfig> {
   const now = Date.now()
-  if (_cache && now - _cache.at < CACHE_TTL_MS) return _cache.value
+  const cached = _cacheByTenant.get(tenantId)
+  if (cached && now - cached.at < CACHE_TTL_MS) return cached.value
 
   const def = defaultConfig()
   try {
-    const raw = await settingsDb.get(CONFIG_KEY)
+    const raw = await settingsDb.get(tenantId, CONFIG_KEY)
     if (!raw) {
-      _cache = { value: def, at: now }
+      _cacheByTenant.set(tenantId, { value: def, at: now })
       return def
     }
     const parsed = JSON.parse(raw)
@@ -86,10 +88,10 @@ export async function getAutoSuppressionConfig(): Promise<AutoSuppressionConfig>
         ttl3Days: clampInt((parsed as any)?.undeliverable131026?.ttl3Days, 1, 3650) || def.undeliverable131026.ttl3Days,
       },
     }
-    _cache = { value: cfg, at: now }
+    _cacheByTenant.set(tenantId, { value: cfg, at: now })
     return cfg
   } catch {
-    _cache = { value: def, at: now }
+    _cacheByTenant.set(tenantId, { value: def, at: now })
     return def
   }
 }
@@ -117,7 +119,7 @@ export function computeAutoSuppressionTtlDaysFromConfig(input: {
   return p.ttlBaseDays
 }
 
-export async function maybeAutoSuppressByFailure(input: AutoSuppressionInput): Promise<{
+export async function maybeAutoSuppressByFailure(tenantId: string, input: AutoSuppressionInput): Promise<{
   suppressed: boolean
   reason?: string
   expiresAt?: string
@@ -131,7 +133,7 @@ export async function maybeAutoSuppressByFailure(input: AutoSuppressionInput): P
 
   if (!shouldAutoSuppressFailureCode(failureCode)) return { suppressed: false }
 
-  const cfg = await getAutoSuppressionConfig()
+  const cfg = await getAutoSuppressionConfig(tenantId)
   if (!cfg.enabled) return { suppressed: false }
   if (failureCode === 131026 && !cfg.undeliverable131026.enabled) return { suppressed: false }
 
@@ -154,6 +156,7 @@ export async function maybeAutoSuppressByFailure(input: AutoSuppressionInput): P
   const { count, error } = await supabase
     .from('campaign_contacts')
     .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
     .eq('phone', normalizedPhone)
     .eq('status', 'failed')
     .eq('failure_code', failureCode)

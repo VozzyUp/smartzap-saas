@@ -11,13 +11,13 @@ let inMemoryToken: string | null = null
  * 
  * @param options.readonly If true, will NOT generate a new token if missing (prevents race conditions)
  */
-export async function getVerifyToken(options: VerifyTokenOptions = {}): Promise<string> {
+export async function getVerifyToken(tenantId: string, options: VerifyTokenOptions = {}): Promise<string> {
     const { readonly = false } = options
 
     try {
         // 1. Try Supabase settings (Primary - "Source of Truth")
         console.log('🔍 getVerifyToken: Checking DB...')
-        const storedToken = await settingsDb.get('webhook_verify_token')
+        const storedToken = await settingsDb.get(tenantId, 'webhook_verify_token')
         if (storedToken) {
             console.log('✅ getVerifyToken: Found in DB:', storedToken)
             return storedToken
@@ -44,13 +44,13 @@ export async function getVerifyToken(options: VerifyTokenOptions = {}): Promise<
         inMemoryToken = newToken
         console.log('🔑 getVerifyToken: Generating new:', newToken)
         try {
-            await settingsDb.set('webhook_verify_token', newToken)
+            await settingsDb.set(tenantId, 'webhook_verify_token', newToken)
         } catch (err) {
             console.warn('⚠️ getVerifyToken: Failed to persist token, using in-memory fallback.')
         }
 
         // Safety: Verify it was written (Consistency check)
-        const check = await settingsDb.get('webhook_verify_token')
+        const check = await settingsDb.get(tenantId, 'webhook_verify_token')
         if (check !== newToken) {
             console.error('💥 getVerifyToken: Write failed consistency check!')
         }

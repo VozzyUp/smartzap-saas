@@ -112,6 +112,7 @@ export async function listMessages(
  * This handles both persisting the message and sending via WhatsApp
  */
 export async function sendMessage(
+  tenantId: string,
   conversationId: string,
   content: string,
   messageType: 'text' | 'template' = 'text',
@@ -125,7 +126,7 @@ export async function sendMessage(
   }
 
   // Get WhatsApp credentials
-  const credentials = await getWhatsAppCredentials()
+  const credentials = await getWhatsAppCredentials(tenantId)
   if (!credentials) {
     throw new Error('WhatsApp credentials not configured')
   }
@@ -136,7 +137,7 @@ export async function sendMessage(
   try {
     if (messageType === 'template' && templateName) {
       // Send template message
-      whatsappResult = await sendWhatsAppMessage({
+      whatsappResult = await sendWhatsAppMessage(tenantId, {
         to: conversation.phone,
         type: 'template',
         templateName,
@@ -145,7 +146,7 @@ export async function sendMessage(
       })
     } else {
       // Send text message
-      whatsappResult = await sendWhatsAppMessage({
+      whatsappResult = await sendWhatsAppMessage(tenantId, {
         to: conversation.phone,
         type: 'text',
         text: content,

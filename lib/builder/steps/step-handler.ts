@@ -15,6 +15,7 @@ import {
 export type StepContext = {
   executionId?: string;
   workflowId?: string;
+  tenantId?: string;
   nodeId: string;
   nodeName: string;
   nodeType: string;

@@ -76,7 +76,7 @@ const DEFAULT_BOOKING_TEXT = {
  * 3. booking_flow_id is set in settings
  * 4. Calendar booking config exists (optional, has defaults)
  */
-export async function checkBookingPrerequisites(): Promise<BookingPrerequisites> {
+export async function checkBookingPrerequisites(tenantId: string): Promise<BookingPrerequisites> {
   const missing: string[] = []
   const details = {
     hasGoogleCalendar: false,
@@ -97,7 +97,7 @@ export async function checkBookingPrerequisites(): Promise<BookingPrerequisites>
 
   try {
     // 1. Check Google Calendar tokens
-    const tokensRaw = await settingsDb.get(SETTINGS_KEYS.calendarTokens)
+    const tokensRaw = await settingsDb.get(tenantId, SETTINGS_KEYS.calendarTokens)
     if (tokensRaw) {
       const tokens = JSON.parse(tokensRaw)
       details.hasGoogleCalendar = Boolean(tokens.accessToken || tokens.refreshToken)
@@ -107,7 +107,7 @@ export async function checkBookingPrerequisites(): Promise<BookingPrerequisites>
     }
 
     // 2. Check if booking_flow_id is configured
-    const bookingFlowId = await settingsDb.get(SETTINGS_KEYS.bookingFlowId)
+    const bookingFlowId = await settingsDb.get(tenantId, SETTINGS_KEYS.bookingFlowId)
     if (bookingFlowId) {
       details.bookingFlowId = bookingFlowId
       details.hasBookingFlowId = true
@@ -117,6 +117,7 @@ export async function checkBookingPrerequisites(): Promise<BookingPrerequisites>
         .from('flows')
         .select('meta_flow_id, meta_status')
         .eq('id', bookingFlowId)
+        .eq('tenant_id', tenantId)
         .single()
 
       if (flow?.meta_flow_id) {
@@ -130,7 +131,7 @@ export async function checkBookingPrerequisites(): Promise<BookingPrerequisites>
     }
 
     // 4. Check calendar booking config (optional)
-    const configRaw = await settingsDb.get(SETTINGS_KEYS.bookingConfig)
+    const configRaw = await settingsDb.get(tenantId, SETTINGS_KEYS.bookingConfig)
     details.hasCalendarConfig = Boolean(configRaw)
 
   } catch (error) {
@@ -153,8 +154,8 @@ export async function checkBookingPrerequisites(): Promise<BookingPrerequisites>
  * Get the booking configuration including the Meta Flow ID.
  * Returns null if prerequisites are not met.
  */
-export async function getBookingConfig(): Promise<BookingConfig | null> {
-  const prereqs = await checkBookingPrerequisites()
+export async function getBookingConfig(tenantId: string): Promise<BookingConfig | null> {
+  const prereqs = await checkBookingPrerequisites(tenantId)
 
   if (!prereqs.ready || !prereqs.details.metaFlowId || !prereqs.details.bookingFlowId) {
     return null
@@ -179,18 +180,18 @@ export async function getBookingConfig(): Promise<BookingConfig | null> {
  * @param phoneNumber - Recipient phone number
  * @returns Result with success status and message ID
  */
-export async function sendBookingFlow(phoneNumber: string): Promise<SendBookingFlowResult> {
-  const config = await getBookingConfig()
+export async function sendBookingFlow(tenantId: string, phoneNumber: string): Promise<SendBookingFlowResult> {
+  const config = await getBookingConfig(tenantId)
 
   if (!config) {
-    const prereqs = await checkBookingPrerequisites()
+    const prereqs = await checkBookingPrerequisites(tenantId)
     return {
       success: false,
       error: `Agendamento não disponível: ${prereqs.missing.join(', ')}`,
     }
   }
 
-  const result = await sendFlowMessage({
+  const result = await sendFlowMessage(tenantId, {
     to: phoneNumber,
     flowId: config.metaFlowId,
     bodyText: config.bodyText,

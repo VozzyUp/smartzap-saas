@@ -15,6 +15,7 @@ import {
 import { settingsDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { resolveWebhookTenantId } from '@/lib/tenant-context'
 import {
   createSuccessResponse,
   createCloseResponse,
@@ -89,9 +90,9 @@ const DEFAULT_CONFIG: CalendarBookingConfig = {
 
 // --- Helpers ---
 
-async function getCalendarBookingConfig(): Promise<CalendarBookingConfig> {
+async function getCalendarBookingConfig(tenantId: string): Promise<CalendarBookingConfig> {
   if (!isSupabaseConfigured()) return DEFAULT_CONFIG
-  const raw = await settingsDb.get('calendar_booking_config')
+  const raw = await settingsDb.get(tenantId, 'calendar_booking_config')
   if (!raw) return DEFAULT_CONFIG
   try {
     const parsed = JSON.parse(raw)
@@ -101,7 +102,7 @@ async function getCalendarBookingConfig(): Promise<CalendarBookingConfig> {
   }
 }
 
-async function getBookingServices(fallback?: ServiceType[]): Promise<ServiceType[]> {
+async function getBookingServices(tenantId: string, fallback?: ServiceType[]): Promise<ServiceType[]> {
   // #region agent log
   console.log('[getBookingServices] start', { supabaseConfigured: isSupabaseConfigured(), hasFallback: !!fallback?.length })
   // #endregion
@@ -109,7 +110,7 @@ async function getBookingServices(fallback?: ServiceType[]): Promise<ServiceType
     console.log('[getBookingServices] Supabase not configured, using defaults')
     return DEFAULT_SERVICES
   }
-  const raw = await settingsDb.get('booking_services')
+  const raw = await settingsDb.get(tenantId, 'booking_services')
   // #region agent log
   console.log('[getBookingServices] from DB:', { hasRaw: !!raw, rawLength: raw?.length, rawPreview: raw?.substring(0, 100) })
   // #endregion
@@ -150,7 +151,7 @@ function extractMetaFlowIdFromToken(flowToken?: string | null): string | null {
   return m?.[1] || null
 }
 
-async function loadFlowJsonFromToken(flowToken?: string | null): Promise<Record<string, unknown> | null> {
+async function loadFlowJsonFromToken(tenantId: string, flowToken?: string | null): Promise<Record<string, unknown> | null> {
   if (!isSupabaseConfigured()) return null
   const metaFlowId = extractMetaFlowIdFromToken(flowToken)
   if (!metaFlowId) return null
@@ -158,6 +159,7 @@ async function loadFlowJsonFromToken(flowToken?: string | null): Promise<Record<
     .from('flows')
     .select('flow_json')
     .eq('meta_flow_id', metaFlowId)
+    .eq('tenant_id', tenantId)
     .limit(1)
   if (error) return null
   const row = Array.isArray(data) ? data[0] : data
@@ -439,8 +441,8 @@ type AvailableDateOption = {
 /**
  * Dados para CalendarPicker (min/max e dias permitidos)
  */
-async function getCalendarPickerData(): Promise<CalendarPickerData> {
-  const config = await getCalendarBookingConfig()
+async function getCalendarPickerData(tenantId: string): Promise<CalendarPickerData> {
+  const config = await getCalendarBookingConfig(tenantId)
   const timeZone = config.timezone
   const maxAdvanceDays = config.maxAdvanceDays ?? 14
   
@@ -476,8 +478,8 @@ async function getCalendarPickerData(): Promise<CalendarPickerData> {
   }
 }
 
-async function getAvailableDates(): Promise<AvailableDateOption[]> {
-  const config = await getCalendarBookingConfig()
+async function getAvailableDates(tenantId: string): Promise<AvailableDateOption[]> {
+  const config = await getCalendarBookingConfig(tenantId)
   const timeZone = config.timezone
   const maxAdvanceDays = config.maxAdvanceDays ?? 14
 
@@ -511,10 +513,11 @@ async function getAvailableDates(): Promise<AvailableDateOption[]> {
  * - Buffer entre slots
  */
 async function getAvailableSlots(
+  tenantId: string,
   dateStr: string
 ): Promise<Array<{ id: string; title: string }>> {
-  const config = await getCalendarBookingConfig()
-  const calendarConfig = await getCalendarConfig()
+  const config = await getCalendarBookingConfig(tenantId)
+  const calendarConfig = await getCalendarConfig(tenantId)
   const calendarId = calendarConfig?.calendarId
 
   if (!calendarId) {
@@ -535,7 +538,7 @@ async function getAvailableSlots(
   const minAllowedTime = new Date(now.getTime() + minAdvanceHours * 60 * 60 * 1000)
 
   // Busca ocupacoes do calendario
-  const busyItems = await listBusyTimes({
+  const busyItems = await listBusyTimes(tenantId, {
     calendarId,
     timeMin: dayStart.toISOString(),
     timeMax: dayEnd.toISOString(),
@@ -608,15 +611,15 @@ async function getAvailableSlots(
 /**
  * Cria evento no Google Calendar
  */
-async function createBookingEvent(params: {
+async function createBookingEvent(tenantId: string, params: {
   slotIso: string
   service: string
   customerName: string
   customerPhone: string
   notes?: string
 }): Promise<{ eventId: string; eventLink?: string }> {
-  const config = await getCalendarBookingConfig()
-  const calendarConfig = await getCalendarConfig()
+  const config = await getCalendarBookingConfig(tenantId)
+  const calendarConfig = await getCalendarConfig(tenantId)
   const calendarId = calendarConfig?.calendarId
 
   if (!calendarId) {
@@ -626,11 +629,11 @@ async function createBookingEvent(params: {
   const slotStart = new Date(params.slotIso)
   const slotEnd = new Date(slotStart.getTime() + config.slotDurationMinutes * 60 * 1000)
 
-  const services = await getBookingServices()
+  const services = await getBookingServices(tenantId)
   const serviceInfo = services.find((s) => s.id === params.service)
   const serviceName = serviceInfo?.title || params.service
 
-  const event = await createEvent({
+  const event = await createEvent(tenantId, {
     calendarId,
     event: {
       summary: `${serviceName} - ${params.customerName}`,
@@ -681,23 +684,27 @@ export async function handleFlowAction(
     }
   }
 
+  // Rota sem contexto de sessão (webhook Meta) — resolve o tenant no ponto de
+  // entrada. Até a Fase 2B, isso lança sempre (ver resolveWebhookTenantId).
+  const tenantId = await resolveWebhookTenantId()
+
   let result: Record<string, unknown>
-  const flowJson = await loadFlowJsonFromToken(flowToken)
+  const flowJson = await loadFlowJsonFromToken(tenantId, flowToken)
   const runtime = flowJson ? extractBookingRuntime(flowJson) : null
   // #region agent log
   // #endregion
 
   switch (action) {
     case 'INIT':
-      result = await handleInit(runtime)
+      result = await handleInit(tenantId, runtime)
       break
 
     case 'data_exchange':
-      result = await handleDataExchange(screen || '', data || {}, runtime)
+      result = await handleDataExchange(tenantId, screen || '', data || {}, runtime)
       break
 
     case 'BACK':
-      result = await handleBack(screen || '', data || {})
+      result = await handleBack(tenantId, screen || '', data || {})
       break
 
     default:
@@ -713,11 +720,11 @@ export async function handleFlowAction(
  * INIT - Primeira tela do flow
  * Retorna lista de servicos e datas disponiveis
  */
-async function handleInit(runtime?: BookingRuntimeKeys | null): Promise<Record<string, unknown>> {
+async function handleInit(tenantId: string, runtime?: BookingRuntimeKeys | null): Promise<Record<string, unknown>> {
   try {
-    const calendarPicker = await getCalendarPickerData()
-    const dates = await getAvailableDates()
-    const services = await getBookingServices(runtime?.fallbackServices)
+    const calendarPicker = await getCalendarPickerData(tenantId)
+    const dates = await getAvailableDates(tenantId)
+    const services = await getBookingServices(tenantId, runtime?.fallbackServices)
     const keys = runtime?.dataKeys
 
     // #region agent log
@@ -755,6 +762,7 @@ async function handleInit(runtime?: BookingRuntimeKeys | null): Promise<Record<s
  * data_exchange - Usuario interagiu com o flow
  */
 async function handleDataExchange(
+  tenantId: string,
   screen: string,
   data: Record<string, unknown>,
   runtime?: BookingRuntimeKeys | null
@@ -782,12 +790,12 @@ async function handleDataExchange(
           return createErrorResponse('Selecione uma data')
         }
 
-        const slots = await getAvailableSlots(selectedDate)
+        const slots = await getAvailableSlots(tenantId, selectedDate)
 
         if (slots.length === 0) {
-          const calendarPicker = await getCalendarPickerData()
-          const dates = await getAvailableDates()
-          const config = await getCalendarBookingConfig()
+          const calendarPicker = await getCalendarPickerData(tenantId)
+          const dates = await getAvailableDates(tenantId)
+          const config = await getCalendarBookingConfig(tenantId)
           const formattedChip = formatDateChip(selectedDate, config.timezone)
           return createSuccessResponse(startScreenId, {
             ...data,
@@ -801,7 +809,7 @@ async function handleDataExchange(
           })
         }
 
-        const config = await getCalendarBookingConfig()
+        const config = await getCalendarBookingConfig(tenantId)
         const formattedDate = formatDateLabel(selectedDate, config.timezone)
 
         return createSuccessResponse(timeScreenId, {
@@ -851,7 +859,7 @@ async function handleDataExchange(
         }
 
         // Criar evento no calendario
-        const result = await createBookingEvent({
+        const result = await createBookingEvent(tenantId, {
           slotIso: selectedSlot,
           service: selectedService,
           customerName: customerName.trim(),
@@ -861,12 +869,12 @@ async function handleDataExchange(
 
         // Formatar horario para exibicao
         const slotDate = new Date(selectedSlot)
-        const config = await getCalendarBookingConfig()
+        const config = await getCalendarBookingConfig(tenantId)
         const formattedTime = formatInTimeZone(slotDate, config.timezone, 'HH:mm')
         const dateKey = formatInTimeZone(slotDate, config.timezone, 'yyyy-MM-dd')
         const formattedDate = formatDateLabel(dateKey, config.timezone)
 
-        const services = await getBookingServices(runtime?.fallbackServices)
+        const services = await getBookingServices(tenantId, runtime?.fallbackServices)
         const serviceInfo = services.find((s) => s.id === selectedService)
         const serviceName = serviceInfo?.title || selectedService
 
@@ -899,20 +907,21 @@ async function handleDataExchange(
  * BACK - Usuario voltou para tela anterior
  */
 async function handleBack(
+  tenantId: string,
   screen: string,
   data: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   switch (screen) {
     case 'SELECT_TIME':
       // Voltar para selecao de data
-      return handleInit()
+      return handleInit(tenantId)
 
     case 'CUSTOMER_INFO': {
       // Voltar para selecao de horario
       const selectedDate = data.selected_date as string
       if (selectedDate) {
-        const slots = await getAvailableSlots(selectedDate)
-        const config = await getCalendarBookingConfig()
+        const slots = await getAvailableSlots(tenantId, selectedDate)
+        const config = await getCalendarBookingConfig(tenantId)
         const formattedDate = formatDateLabel(selectedDate, config.timezone)
         return createSuccessResponse('SELECT_TIME', {
           ...data,
@@ -921,10 +930,10 @@ async function handleBack(
           subtitle: `Horários disponíveis para ${formattedDate}`,
         })
       }
-      return handleInit()
+      return handleInit(tenantId)
     }
 
     default:
-      return handleInit()
+      return handleInit(tenantId)
   }
 }

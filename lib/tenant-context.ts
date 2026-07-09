@@ -16,3 +16,17 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   ])
   return { tenantId: (tenantId as string) ?? null, userId: user.id, isPlatformAdmin: !!isAdmin }
 }
+
+/**
+ * Guard intencional para rotas sem contexto de sessão (webhooks Meta, workers
+ * QStash, rotas public/, cron). Até a Fase 2B essas rotas não têm uma forma
+ * definida de resolver o tenant a partir do payload/assinatura recebida, então
+ * esta função SEMPRE lança — preferimos falhar alto (erro explícito) a
+ * silenciosamente atribuir dados a um tenant errado ou a um tenant hardcoded.
+ * Quando a Fase 2B implementar a resolução real (ex.: via WABA/phone number
+ * id do payload do webhook), substituir o corpo desta função pela lógica de
+ * lookup e remover este comentário.
+ */
+export async function resolveWebhookTenantId(): Promise<string> {
+  throw new Error('rota sem contexto de tenant — cobrir na Fase 2B')
+}

@@ -66,9 +66,9 @@ const MEM0_TIMEOUT_MS = 3000 // 3 segundos de timeout
 const MEM0_API_BASE = 'https://api.mem0.ai/v1'
 const APP_ID = 'smartzap'
 
-// Cache em memória (evita bater no banco em toda requisição)
-let credentialsCache: Mem0Credentials | null = null
-let cacheTimestamp = 0
+// Cache em memória por tenant (evita bater no banco em toda requisição e evita
+// vazar credenciais de um tenant para outro em memória compartilhada).
+const credentialsCacheByTenant = new Map<string, { creds: Mem0Credentials; at: number }>()
 const CACHE_TTL_MS = 60_000 // 1 minuto
 
 // =============================================================================
@@ -91,18 +91,19 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * Busca credenciais do Mem0 (banco + env fallback)
  * Usa cache em memória para evitar queries frequentes.
  */
-async function getMem0Credentials(): Promise<Mem0Credentials> {
+async function getMem0Credentials(tenantId: string): Promise<Mem0Credentials> {
   // Verifica cache
   const now = Date.now()
-  if (credentialsCache && now - cacheTimestamp < CACHE_TTL_MS) {
-    return credentialsCache
+  const cached = credentialsCacheByTenant.get(tenantId)
+  if (cached && now - cached.at < CACHE_TTL_MS) {
+    return cached.creds
   }
 
   try {
     // Tenta buscar do Supabase
     const [enabledRaw, apiKeyFromDb] = await Promise.all([
-      settingsDb.get('mem0_enabled'),
-      settingsDb.get('mem0_api_key'),
+      settingsDb.get(tenantId, 'mem0_enabled'),
+      settingsDb.get(tenantId, 'mem0_api_key'),
     ])
 
     // settingsDb.get retorna string | null, então só precisa comparar com 'true'
@@ -111,19 +112,19 @@ async function getMem0Credentials(): Promise<Mem0Credentials> {
 
     console.log(`[mem0] Credentials loaded: enabled=${enabled} (raw: ${enabledRaw}, type: ${typeof enabledRaw}), hasApiKey=${!!apiKey}`)
 
-    credentialsCache = { apiKey, enabled }
-    cacheTimestamp = now
+    const creds: Mem0Credentials = { apiKey, enabled }
+    credentialsCacheByTenant.set(tenantId, { creds, at: now })
 
-    return credentialsCache
+    return creds
   } catch (error) {
     // Se falhar ao buscar do banco, usa env var
     console.warn('[mem0] Failed to fetch credentials from DB, using env fallback')
     const apiKey = process.env.MEM0_API_KEY || null
     // Se usando env, considera habilitado se a key existir
-    credentialsCache = { apiKey, enabled: !!apiKey }
-    cacheTimestamp = now
+    const creds: Mem0Credentials = { apiKey, enabled: !!apiKey }
+    credentialsCacheByTenant.set(tenantId, { creds, at: now })
 
-    return credentialsCache
+    return creds
   }
 }
 
@@ -157,10 +158,11 @@ Use este contexto para personalizar sua resposta quando apropriado.
  * Verifica se Mem0 está configurado e habilitado
  * Versão síncrona que usa o cache (pode estar desatualizado)
  */
-export function isMem0Enabled(): boolean {
+export function isMem0Enabled(tenantId: string): boolean {
   // Se tem cache, usa
-  if (credentialsCache) {
-    return credentialsCache.enabled && !!credentialsCache.apiKey
+  const cached = credentialsCacheByTenant.get(tenantId)
+  if (cached) {
+    return cached.creds.enabled && !!cached.creds.apiKey
   }
   // Fallback: verifica env var
   return !!process.env.MEM0_API_KEY
@@ -169,8 +171,8 @@ export function isMem0Enabled(): boolean {
 /**
  * Verifica se Mem0 está configurado e habilitado (versão async, mais precisa)
  */
-export async function isMem0EnabledAsync(): Promise<boolean> {
-  const creds = await getMem0Credentials()
+export async function isMem0EnabledAsync(tenantId: string): Promise<boolean> {
+  const creds = await getMem0Credentials(tenantId)
   return creds.enabled && !!creds.apiKey
 }
 
@@ -184,10 +186,11 @@ export async function isMem0EnabledAsync(): Promise<boolean> {
  * Em caso de erro ou timeout, retorna contexto vazio (graceful degradation).
  */
 export async function fetchRelevantMemories(
+  tenantId: string,
   query: string,
   config: Mem0Config
 ): Promise<MemoryContext> {
-  const creds = await getMem0Credentials()
+  const creds = await getMem0Credentials(tenantId)
 
   if (!creds.enabled || !creds.apiKey) {
     return { systemPromptAddition: '', memoryCount: 0 }
@@ -251,10 +254,11 @@ function toLanguageModelPrompt(
  * Não bloqueia a resposta ao usuário.
  */
 export async function saveInteractionMemory(
+  tenantId: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   config: Mem0Config
 ): Promise<boolean> {
-  const creds = await getMem0Credentials()
+  const creds = await getMem0Credentials(tenantId)
 
   if (!creds.enabled || !creds.apiKey) {
     return false
@@ -289,8 +293,8 @@ export async function saveInteractionMemory(
  *
  * Usa a API REST do Mem0 diretamente (o SDK Vercel AI não expõe essa função).
  */
-export async function getAllUserMemories(userId: string): Promise<UserMemoriesResult> {
-  const creds = await getMem0Credentials()
+export async function getAllUserMemories(tenantId: string, userId: string): Promise<UserMemoriesResult> {
+  const creds = await getMem0Credentials(tenantId)
 
   if (!creds.enabled || !creds.apiKey) {
     return { memories: [], count: 0 }
@@ -347,8 +351,8 @@ export async function getAllUserMemories(userId: string): Promise<UserMemoriesRe
 /**
  * Deleta uma memória específica por ID.
  */
-export async function deleteMemoryById(memoryId: string): Promise<boolean> {
-  const creds = await getMem0Credentials()
+export async function deleteMemoryById(tenantId: string, memoryId: string): Promise<boolean> {
+  const creds = await getMem0Credentials(tenantId)
 
   if (!creds.enabled || !creds.apiKey) {
     return false
@@ -384,8 +388,8 @@ export async function deleteMemoryById(memoryId: string): Promise<boolean> {
  *
  * Usa a API REST do Mem0 diretamente.
  */
-export async function deleteUserMemories(userId: string): Promise<{ success: boolean; deletedCount: number }> {
-  const creds = await getMem0Credentials()
+export async function deleteUserMemories(tenantId: string, userId: string): Promise<{ success: boolean; deletedCount: number }> {
+  const creds = await getMem0Credentials(tenantId)
 
   if (!creds.enabled || !creds.apiKey) {
     return { success: false, deletedCount: 0 }
@@ -423,7 +427,10 @@ export async function deleteUserMemories(userId: string): Promise<{ success: boo
  * Limpa o cache de credenciais.
  * Útil para forçar a releitura após mudanças nas configurações.
  */
-export function clearMem0Cache(): void {
-  credentialsCache = null
-  cacheTimestamp = 0
+export function clearMem0Cache(tenantId?: string): void {
+  if (tenantId) {
+    credentialsCacheByTenant.delete(tenantId)
+    return
+  }
+  credentialsCacheByTenant.clear()
 }

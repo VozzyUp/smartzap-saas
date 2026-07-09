@@ -13,9 +13,9 @@ export interface MetaAppCredentials {
  *
  * Fonte única: Supabase Settings (configurado via UI)
  */
-export async function getMetaAppId(): Promise<string | null> {
+export async function getMetaAppId(tenantId: string): Promise<string | null> {
   try {
-    const dbAppIdRaw = await settingsDb.get('metaAppId')
+    const dbAppIdRaw = await settingsDb.get(tenantId, 'metaAppId')
     const appId = String(dbAppIdRaw || '').trim()
     return appId || null
   } catch {
@@ -30,11 +30,11 @@ export async function getMetaAppId(): Promise<string | null> {
  *
  * Fonte única: Supabase Settings (configurado via UI)
  */
-export async function getMetaAppCredentials(): Promise<MetaAppCredentials | null> {
+export async function getMetaAppCredentials(tenantId: string): Promise<MetaAppCredentials | null> {
   try {
     const [dbAppId, dbSecret] = await Promise.all([
-      settingsDb.get('metaAppId'),
-      settingsDb.get('metaAppSecret'),
+      settingsDb.get(tenantId, 'metaAppId'),
+      settingsDb.get(tenantId, 'metaAppSecret'),
     ])
 
     const appId = String(dbAppId || '').trim()
@@ -51,15 +51,15 @@ export async function getMetaAppCredentials(): Promise<MetaAppCredentials | null
 /**
  * Retorna configuração pública do Meta App (sem expor secret)
  */
-export async function getMetaAppConfigPublic(): Promise<{
+export async function getMetaAppConfigPublic(tenantId: string): Promise<{
   appId: string | null
   hasAppSecret: boolean
   isConfigured: boolean
 }> {
   try {
     const [dbAppIdRaw, dbSecretRaw] = await Promise.all([
-      settingsDb.get('metaAppId'),
-      settingsDb.get('metaAppSecret'),
+      settingsDb.get(tenantId, 'metaAppId'),
+      settingsDb.get(tenantId, 'metaAppSecret'),
     ])
 
     const appId = String(dbAppIdRaw || '').trim() || null

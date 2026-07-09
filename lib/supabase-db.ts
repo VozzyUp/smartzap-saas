@@ -67,10 +67,11 @@ const generateWebhookToken = () => {
 // ============================================================================
 
 export const campaignDb = {
-    getAll: async (): Promise<Campaign[]> => {
+    getAll: async (tenantId: string): Promise<Campaign[]> => {
         const { data, error } = await supabase
             .from('campaigns')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -105,7 +106,7 @@ export const campaignDb = {
         }))
     },
 
-    list: async (params: {
+    list: async (tenantId: string, params: {
         limit: number
         offset: number
         search?: string | null
@@ -125,7 +126,7 @@ export const campaignDb = {
         if (tagIds && tagIds.length > 0) {
             const { data: campaignIds, error: tagError } = await supabase.rpc(
                 'get_campaigns_with_all_tags',
-                { p_tag_ids: tagIds }
+                { p_tag_ids: tagIds, p_tenant_id: tenantId }
             )
 
             if (tagError) {
@@ -149,6 +150,7 @@ export const campaignDb = {
                 'id,name,status,template_name,template_variables,total_recipients,sent,delivered,read,skipped,failed,created_at,scheduled_date,started_at,first_dispatch_at,last_sent_at,completed_at,folder_id,campaign_folders(id,name,color,created_at,updated_at)',
                 { count: 'exact' }
             )
+            .eq('tenant_id', tenantId)
 
         if (search) {
             const like = `%${search}%`
@@ -193,6 +195,7 @@ export const campaignDb = {
                         created_at
                     )
                 `)
+                .eq('tenant_id', tenantId)
                 .in('campaign_id', campaignIds)
 
             ;(tagAssignments || []).forEach((row: any) => {
@@ -249,11 +252,12 @@ export const campaignDb = {
         }
     },
 
-    getById: async (id: string): Promise<Campaign | undefined> => {
+    getById: async (tenantId: string, id: string): Promise<Campaign | undefined> => {
         const { data, error } = await supabase
             .from('campaigns')
             .select('*')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -288,7 +292,7 @@ export const campaignDb = {
         }
     },
 
-    create: async (campaign: {
+    create: async (tenantId: string, campaign: {
         name: string
         templateName: string
         recipients: number
@@ -311,6 +315,7 @@ export const campaignDb = {
             .from('campaigns')
             .insert({
                 id,
+                tenant_id: tenantId,
                 name: campaign.name,
                 status,
                 template_name: campaign.templateName,
@@ -355,17 +360,18 @@ export const campaignDb = {
         }
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('campaigns')
             .delete()
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
     },
 
-    duplicate: async (id: string): Promise<Campaign | undefined> => {
-        const original = await campaignDb.getById(id)
+    duplicate: async (tenantId: string, id: string): Promise<Campaign | undefined> => {
+        const original = await campaignDb.getById(tenantId, id)
         if (!original) return undefined
 
         const newId = generateId()
@@ -378,6 +384,7 @@ export const campaignDb = {
             .from('campaign_contacts')
             .select('contact_id, phone, name, email, custom_fields')
             .eq('campaign_id', id)
+            .eq('tenant_id', tenantId)
 
         if (existingContactsError) throw existingContactsError
 
@@ -387,6 +394,7 @@ export const campaignDb = {
             .from('campaigns')
             .insert({
                 id: newId,
+                tenant_id: tenantId,
                 name: `${original.name} (Cópia)`,
                 status: CampaignStatus.DRAFT,
                 template_name: original.templateName,
@@ -414,6 +422,7 @@ export const campaignDb = {
         if (existingContacts && existingContacts.length > 0) {
             const newContacts = existingContacts.map(c => ({
                 id: generateId(),
+                tenant_id: tenantId,
                 campaign_id: newId,
                 contact_id: c.contact_id,
                 phone: c.phone,
@@ -429,15 +438,15 @@ export const campaignDb = {
 
             if (insertContactsError) {
                 // Rollback best-effort: não deixar uma campanha “cópia” sem público.
-                await supabase.from('campaigns').delete().eq('id', newId)
+                await supabase.from('campaigns').delete().eq('id', newId).eq('tenant_id', tenantId)
                 throw insertContactsError
             }
         }
 
-        return campaignDb.getById(newId)
+        return campaignDb.getById(tenantId, newId)
     },
 
-    updateStatus: async (id: string, updates: Partial<Campaign>): Promise<Campaign | undefined> => {
+    updateStatus: async (tenantId: string, id: string, updates: Partial<Campaign>): Promise<Campaign | undefined> => {
         const updateData: Record<string, unknown> = {}
 
         if (updates.status !== undefined) updateData.status = updates.status
@@ -466,25 +475,26 @@ export const campaignDb = {
             .from('campaigns')
             .update(updateData)
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
-        return campaignDb.getById(id)
+        return campaignDb.getById(tenantId, id)
     },
 
-    pause: async (id: string): Promise<Campaign | undefined> => {
-        return campaignDb.updateStatus(id, { status: CampaignStatus.PAUSED })
+    pause: async (tenantId: string, id: string): Promise<Campaign | undefined> => {
+        return campaignDb.updateStatus(tenantId, id, { status: CampaignStatus.PAUSED })
     },
 
-    resume: async (id: string): Promise<Campaign | undefined> => {
-        return campaignDb.updateStatus(id, {
+    resume: async (tenantId: string, id: string): Promise<Campaign | undefined> => {
+        return campaignDb.updateStatus(tenantId, id, {
             status: CampaignStatus.SENDING,
             startedAt: new Date().toISOString()
         })
     },
 
-    start: async (id: string): Promise<Campaign | undefined> => {
-        return campaignDb.updateStatus(id, {
+    start: async (tenantId: string, id: string): Promise<Campaign | undefined> => {
+        return campaignDb.updateStatus(tenantId, id, {
             status: CampaignStatus.SENDING,
             startedAt: new Date().toISOString()
         })
@@ -496,10 +506,11 @@ export const campaignDb = {
 // ============================================================================
 
 export const contactDb = {
-    getAll: async (): Promise<Contact[]> => {
+    getAll: async (tenantId: string): Promise<Contact[]> => {
         const { data, error } = await supabase
             .from('contacts')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -520,7 +531,7 @@ export const contactDb = {
         }))
     },
 
-    list: async (params: {
+    list: async (tenantId: string, params: {
         limit: number
         offset: number
         search?: string | null
@@ -557,6 +568,7 @@ export const contactDb = {
         let query = supabase
             .from('contacts')
             .select('*', { count: 'exact' })
+            .eq('tenant_id', tenantId)
 
         if (search) {
             query = query.or(buildContactSearchOr(search))
@@ -577,6 +589,7 @@ export const contactDb = {
             const { data: suppressionRows, error: suppressionError } = await supabase
                 .from('phone_suppressions')
                 .select('phone,is_active,expires_at,reason,source')
+                .eq('tenant_id', tenantId)
                 .eq('is_active', true)
                 .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
 
@@ -633,7 +646,7 @@ export const contactDb = {
         }
     },
 
-    getIds: async (params: {
+    getIds: async (tenantId: string, params: {
         search?: string | null
         status?: string | null
         tag?: string | null
@@ -663,6 +676,7 @@ export const contactDb = {
         let query = supabase
             .from('contacts')
             .select('id')
+            .eq('tenant_id', tenantId)
 
         if (search) {
             query = query.or(buildContactSearchOr(search))
@@ -682,6 +696,7 @@ export const contactDb = {
             const { data: suppressionRows, error: suppressionError } = await supabase
                 .from('phone_suppressions')
                 .select('phone')
+                .eq('tenant_id', tenantId)
                 .eq('is_active', true)
                 .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
 
@@ -705,11 +720,12 @@ export const contactDb = {
         return (data || []).map((row: any) => String(row.id))
     },
 
-    getById: async (id: string): Promise<Contact | undefined> => {
+    getById: async (tenantId: string, id: string): Promise<Contact | undefined> => {
         const { data, error } = await supabase
             .from('contacts')
             .select('*')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -730,11 +746,12 @@ export const contactDb = {
         }
     },
 
-    getByPhone: async (phone: string): Promise<Contact | undefined> => {
+    getByPhone: async (tenantId: string, phone: string): Promise<Contact | undefined> => {
         const { data, error } = await supabase
             .from('contacts')
             .select('*')
             .eq('phone', phone)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -756,6 +773,7 @@ export const contactDb = {
     },
 
     upsertMergeTagsByPhone: async (
+        tenantId: string,
         contact: Omit<Contact, 'id' | 'lastActive'>,
         tagsToMerge: string[]
     ): Promise<Contact> => {
@@ -774,6 +792,7 @@ export const contactDb = {
             .from('contacts')
             .select('*')
             .eq('phone', contact.phone)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (existing) {
@@ -794,6 +813,7 @@ export const contactDb = {
                 .from('contacts')
                 .update(updateData)
                 .eq('id', existing.id)
+                .eq('tenant_id', tenantId)
 
             if (updateError) throw updateError
 
@@ -818,6 +838,7 @@ export const contactDb = {
             .from('contacts')
             .insert({
                 id,
+                tenant_id: tenantId,
                 name: contact.name || '',
                 phone: contact.phone,
                 email: contact.email || null,
@@ -839,12 +860,13 @@ export const contactDb = {
         }
     },
 
-    add: async (contact: Omit<Contact, 'id' | 'lastActive'>): Promise<Contact> => {
+    add: async (tenantId: string, contact: Omit<Contact, 'id' | 'lastActive'>): Promise<Contact> => {
         // Check if contact already exists by phone
         const { data: existing } = await supabase
             .from('contacts')
             .select('*')
             .eq('phone', contact.phone)
+            .eq('tenant_id', tenantId)
             .single()
 
         const now = new Date().toISOString()
@@ -865,6 +887,7 @@ export const contactDb = {
                 .from('contacts')
                 .update(updateData)
                 .eq('id', existing.id)
+                .eq('tenant_id', tenantId)
 
             if (updateError) throw updateError
 
@@ -889,6 +912,7 @@ export const contactDb = {
             .from('contacts')
             .insert({
                 id,
+                tenant_id: tenantId,
                 name: contact.name || '',
                 phone: contact.phone,
                 email: contact.email || null,
@@ -909,7 +933,7 @@ export const contactDb = {
         }
     },
 
-    update: async (id: string, data: Partial<Contact>): Promise<Contact | undefined> => {
+    update: async (tenantId: string, id: string, data: Partial<Contact>): Promise<Contact | undefined> => {
         const updateData: Record<string, unknown> = {}
 
         if (data.name !== undefined) updateData.name = data.name
@@ -925,22 +949,24 @@ export const contactDb = {
             .from('contacts')
             .update(updateData)
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
         // Se o status foi alterado para OPT_IN, desativa a supressão automática
         if (data.status === ContactStatus.OPT_IN) {
-            const contact = await contactDb.getById(id)
+            const contact = await contactDb.getById(tenantId, id)
             if (contact?.phone) {
                 await supabase
                     .from('phone_suppressions')
                     .update({ is_active: false })
                     .eq('phone', contact.phone)
+                    .eq('tenant_id', tenantId)
             }
             return contact
         }
 
-        return contactDb.getById(id)
+        return contactDb.getById(tenantId, id)
     },
 
     // Aplica um campo customizado (merge) em vários contatos.
@@ -951,6 +977,7 @@ export const contactDb = {
     // do INSERT do UPSERT antes de resolver o conflito. Então um upsert “parcial”
     // (id + custom_fields) pode falhar com erro de NOT NULL.
     bulkSetCustomField: async (
+        tenantId: string,
         ids: string[],
         key: string,
         value: string
@@ -965,6 +992,7 @@ export const contactDb = {
         const { data, error } = await supabase
             .from('contacts')
             .select('*')
+            .eq('tenant_id', tenantId)
             .in('id', contactIds)
 
         if (error) throw error
@@ -999,22 +1027,24 @@ export const contactDb = {
         return { updated: rows.length, notFound }
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('contacts')
             .delete()
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
     },
 
-    deleteMany: async (ids: string[]): Promise<number> => {
+    deleteMany: async (tenantId: string, ids: string[]): Promise<number> => {
         if (ids.length === 0) return 0
 
         const { error } = await supabase
             .from('contacts')
             .delete()
             .in('id', ids)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
@@ -1022,6 +1052,7 @@ export const contactDb = {
     },
 
     bulkUpdateTags: async (
+        tenantId: string,
         ids: string[],
         tagsToAdd: string[],
         tagsToRemove: string[]
@@ -1031,6 +1062,7 @@ export const contactDb = {
         const { data, error } = await supabase
             .from('contacts')
             .select('id, tags')
+            .eq('tenant_id', tenantId)
             .in('id', ids)
 
         if (error) throw error
@@ -1040,7 +1072,7 @@ export const contactDb = {
             const existing: string[] = Array.isArray(row.tags) ? row.tags : []
             const merged = Array.from(new Set([...existing, ...tagsToAdd]))
                 .filter((t) => !tagsToRemove.includes(t))
-            return { id: row.id, tags: merged, updated_at: now }
+            return { id: row.id, tenant_id: tenantId, tags: merged, updated_at: now }
         })
 
         if (rows.length === 0) return 0
@@ -1054,20 +1086,21 @@ export const contactDb = {
         return rows.length
     },
 
-    bulkUpdateStatus: async (ids: string[], status: string): Promise<number> => {
+    bulkUpdateStatus: async (tenantId: string, ids: string[], status: string): Promise<number> => {
         if (ids.length === 0) return 0
 
         const { error, count } = await supabase
             .from('contacts')
             .update({ status, updated_at: new Date().toISOString() })
             .in('id', ids)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
         return count ?? ids.length
     },
 
-    import: async (contacts: Omit<Contact, 'id' | 'lastActive'>[]): Promise<{ inserted: number; updated: number }> => {
+    import: async (tenantId: string, contacts: Omit<Contact, 'id' | 'lastActive'>[]): Promise<{ inserted: number; updated: number }> => {
         if (contacts.length === 0) return { inserted: 0, updated: 0 }
 
         // Tamanho máximo de cada lote para evitar estouro de URL/payload no Supabase
@@ -1096,6 +1129,7 @@ export const contactDb = {
             const { data, error } = await supabase
                 .from('contacts')
                 .select('id, phone, name, email, tags, custom_fields')
+                .eq('tenant_id', tenantId)
                 .in('phone', batch)
             if (error) throw error
             if (data) allExisting.push(...data)
@@ -1126,6 +1160,7 @@ export const contactDb = {
 
                 toUpdateMap.set(existing.id, {
                     id: existing.id,
+                    tenant_id: tenantId,
                     phone: contact.phone,
                     name: contact.name || existing.name || '',
                     email: (contact as any).email || existing.email || null,
@@ -1137,6 +1172,7 @@ export const contactDb = {
                 // Novo contato — se phone já está no Map, última linha do CSV prevalece
                 toInsertMap.set(contact.phone, {
                     id: generateId(),
+                    tenant_id: tenantId,
                     name: contact.name || '',
                     phone: contact.phone,
                     email: (contact as any).email || null,
@@ -1172,9 +1208,9 @@ export const contactDb = {
         return { inserted: insertedCount, updated: updatedCount }
     },
 
-    getTags: async (): Promise<string[]> => {
+    getTags: async (tenantId: string): Promise<string[]> => {
         // Usa RPC para extrair tags únicas diretamente no SQL (evita carregar todos contatos)
-        const { data, error } = await supabase.rpc('get_contact_tags')
+        const { data, error } = await supabase.rpc('get_contact_tags', { p_tenant_id: tenantId })
 
         if (error) {
             console.error('Failed to get contact tags:', error)
@@ -1184,9 +1220,9 @@ export const contactDb = {
         return Array.isArray(data) ? data : []
     },
 
-    getStats: async () => {
+    getStats: async (tenantId: string) => {
         // Usa RPC para contar no SQL (evita carregar todos contatos em memória)
-        const { data, error } = await supabase.rpc('get_contact_stats')
+        const { data, error } = await supabase.rpc('get_contact_stats', { p_tenant_id: tenantId })
 
         if (error) {
             console.error('Failed to get contact stats:', error)
@@ -1206,10 +1242,11 @@ export const contactDb = {
 // ============================================================================
 
 export const leadFormDb = {
-    getAll: async (): Promise<LeadForm[]> => {
+    getAll: async (tenantId: string): Promise<LeadForm[]> => {
         const { data, error } = await supabase
             .from('lead_forms')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -1229,11 +1266,12 @@ export const leadFormDb = {
         }))
     },
 
-    getById: async (id: string): Promise<LeadForm | undefined> => {
+    getById: async (tenantId: string, id: string): Promise<LeadForm | undefined> => {
         const { data, error } = await supabase
             .from('lead_forms')
             .select('*')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -1253,11 +1291,12 @@ export const leadFormDb = {
         }
     },
 
-    getBySlug: async (slug: string): Promise<LeadForm | undefined> => {
+    getBySlug: async (tenantId: string, slug: string): Promise<LeadForm | undefined> => {
         const { data, error } = await supabase
             .from('lead_forms')
             .select('*')
             .eq('slug', slug)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -1277,7 +1316,7 @@ export const leadFormDb = {
         }
     },
 
-    create: async (dto: CreateLeadFormDTO): Promise<LeadForm> => {
+    create: async (tenantId: string, dto: CreateLeadFormDTO): Promise<LeadForm> => {
         const now = new Date().toISOString()
         const id = `lf_${generateId().replace(/-/g, '')}`
         const webhookToken = generateWebhookToken()
@@ -1286,6 +1325,7 @@ export const leadFormDb = {
             .from('lead_forms')
             .insert({
                 id,
+                tenant_id: tenantId,
                 name: dto.name,
                 slug: dto.slug,
                 tag: dto.tag,
@@ -1315,7 +1355,7 @@ export const leadFormDb = {
         }
     },
 
-    update: async (id: string, dto: UpdateLeadFormDTO): Promise<LeadForm | undefined> => {
+    update: async (tenantId: string, id: string, dto: UpdateLeadFormDTO): Promise<LeadForm | undefined> => {
         const updateData: Record<string, unknown> = {}
 
         if (dto.name !== undefined) updateData.name = dto.name
@@ -1331,29 +1371,32 @@ export const leadFormDb = {
             .from('lead_forms')
             .update(updateData)
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
-        return leadFormDb.getById(id)
+        return leadFormDb.getById(tenantId, id)
     },
 
-    rotateWebhookToken: async (id: string): Promise<LeadForm | undefined> => {
+    rotateWebhookToken: async (tenantId: string, id: string): Promise<LeadForm | undefined> => {
         const token = generateWebhookToken()
 
         const { error } = await supabase
             .from('lead_forms')
             .update({ webhook_token: token, updated_at: new Date().toISOString() })
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
-        return leadFormDb.getById(id)
+        return leadFormDb.getById(tenantId, id)
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('lead_forms')
             .delete()
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
     },
@@ -1365,11 +1408,13 @@ export const leadFormDb = {
 
 export const campaignContactDb = {
     addContacts: async (
+        tenantId: string,
         campaignId: string,
         contacts: { contactId: string, phone: string, name: string, email?: string | null, custom_fields?: Record<string, unknown> }[]
     ): Promise<void> => {
         const rows = contacts.map(contact => ({
             id: generateId(),
+            tenant_id: tenantId,
             campaign_id: campaignId,
             contact_id: contact.contactId,
             phone: contact.phone,
@@ -1386,11 +1431,12 @@ export const campaignContactDb = {
         if (error) throw error
     },
 
-    getContacts: async (campaignId: string) => {
+    getContacts: async (tenantId: string, campaignId: string) => {
         const { data, error } = await supabase
             .from('campaign_contacts')
             .select('*')
             .eq('campaign_id', campaignId)
+            .eq('tenant_id', tenantId)
             .order('sent_at', { ascending: false })
 
         if (error) throw error
@@ -1411,7 +1457,7 @@ export const campaignContactDb = {
         }))
     },
 
-    updateStatus: async (campaignId: string, phone: string, status: string, messageId?: string, error?: string): Promise<void> => {
+    updateStatus: async (tenantId: string, campaignId: string, phone: string, status: string, messageId?: string, error?: string): Promise<void> => {
         const now = new Date().toISOString()
         const updateData: Record<string, unknown> = { status }
 
@@ -1426,6 +1472,7 @@ export const campaignContactDb = {
             .update(updateData)
             .eq('campaign_id', campaignId)
             .eq('phone', phone)
+            .eq('tenant_id', tenantId)
 
         if (dbError) throw dbError
     },
@@ -1532,10 +1579,11 @@ const normalizeParameterFormat = (value: unknown): 'positional' | 'named' | unde
 }
 
 export const templateDb = {
-    getAll: async (): Promise<Template[]> => {
+    getAll: async (tenantId: string): Promise<Template[]> => {
         const { data, error } = await supabase
             .from('templates')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -1576,11 +1624,12 @@ export const templateDb = {
         })
     },
 
-    getByName: async (name: string): Promise<Template | undefined> => {
+    getByName: async (tenantId: string, name: string): Promise<Template | undefined> => {
         const { data, error } = await supabase
             .from('templates')
             .select('*')
             .eq('name', name)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -1620,6 +1669,7 @@ export const templateDb = {
     },
 
     upsert: async (
+        tenantId: string,
         input:
             | Template
             | Array<{
@@ -1641,6 +1691,7 @@ export const templateDb = {
                 .from('templates')
                 .upsert(
                     input.map(r => ({
+                        tenant_id: tenantId,
                         name: r.name,
                         category: r.category,
                         language: r.language,
@@ -1664,6 +1715,7 @@ export const templateDb = {
             .from('templates')
             .upsert({
                 id: template.id,
+                tenant_id: tenantId,
                 name: template.name,
                 category: template.category,
                 language: template.language,
@@ -1687,11 +1739,12 @@ export const templateDb = {
 // ============================================================================
 
 export const customFieldDefDb = {
-    getAll: async (entityType: 'contact' | 'deal'): Promise<CustomFieldDefinition[]> => {
+    getAll: async (tenantId: string, entityType: 'contact' | 'deal'): Promise<CustomFieldDefinition[]> => {
         const { data, error } = await supabase
             .from('custom_field_definitions')
             .select('*')
             .eq('entity_type', entityType)
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -1707,19 +1760,20 @@ export const customFieldDefDb = {
         }))
     },
 
-    create: async (def: Omit<CustomFieldDefinition, 'id' | 'created_at'>): Promise<CustomFieldDefinition> => {
+    create: async (tenantId: string, def: Omit<CustomFieldDefinition, 'id' | 'created_at'>): Promise<CustomFieldDefinition> => {
         const id = generateId()
         const now = new Date().toISOString()
 
 
         // Fetch organization_id (company_id) from settings
-        const { data: orgData } = await supabase.from('settings').select('value').eq('key', 'company_id').single()
+        const { data: orgData } = await supabase.from('settings').select('value').eq('key', 'company_id').eq('tenant_id', tenantId).single()
         const organization_id = orgData?.value
 
         const { data, error } = await supabase
             .from('custom_field_definitions')
             .insert({
                 id,
+                tenant_id: tenantId,
                 key: def.key,
                 label: def.label,
                 type: def.type,
@@ -1744,11 +1798,12 @@ export const customFieldDefDb = {
         }
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error, count } = await supabase
             .from('custom_field_definitions')
             .delete({ count: 'exact' })
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         console.log('[DEBUG] Deleting custom field:', { id, count, error });
 
@@ -1774,8 +1829,8 @@ const SETTINGS_CACHE_PREFIX = 'settings:'
 const SETTINGS_CACHE_TTL = 60 // segundos
 
 export const settingsDb = {
-    get: async (key: string): Promise<string | null> => {
-        const cacheKey = `${SETTINGS_CACHE_PREFIX}${key}`
+    get: async (tenantId: string, key: string): Promise<string | null> => {
+        const cacheKey = `${SETTINGS_CACHE_PREFIX}${tenantId}:${key}`
 
         // 1. Tenta buscar do cache Redis
         if (redis) {
@@ -1795,6 +1850,7 @@ export const settingsDb = {
             .from('settings')
             .select('value')
             .eq('key', key)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return null
@@ -1812,23 +1868,24 @@ export const settingsDb = {
         return data.value
     },
 
-    set: async (key: string, value: string): Promise<void> => {
+    set: async (tenantId: string, key: string, value: string): Promise<void> => {
         const now = new Date().toISOString()
 
         const { error } = await supabase
             .from('settings')
             .upsert({
+                tenant_id: tenantId,
                 key,
                 value,
                 updated_at: now,
-            }, { onConflict: 'key' })
+            }, { onConflict: 'tenant_id,key' })
 
         if (error) throw error
 
         // Invalida cache após update
         if (redis) {
             try {
-                const cacheKey = `${SETTINGS_CACHE_PREFIX}${key}`
+                const cacheKey = `${SETTINGS_CACHE_PREFIX}${tenantId}:${key}`
                 await redis.del(cacheKey)
             } catch (e) {
                 // Ignore cache invalidation errors
@@ -1837,10 +1894,11 @@ export const settingsDb = {
         }
     },
 
-    getAll: async (): Promise<AppSettings> => {
+    getAll: async (tenantId: string): Promise<AppSettings> => {
         const { data, error } = await supabase
             .from('settings')
             .select('key, value')
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
@@ -1857,11 +1915,11 @@ export const settingsDb = {
         }
     },
 
-    saveAll: async (settings: AppSettings): Promise<void> => {
-        await settingsDb.set('phoneNumberId', settings.phoneNumberId)
-        await settingsDb.set('businessAccountId', settings.businessAccountId)
-        await settingsDb.set('accessToken', settings.accessToken)
-        await settingsDb.set('isConnected', settings.isConnected ? 'true' : 'false')
+    saveAll: async (tenantId: string, settings: AppSettings): Promise<void> => {
+        await settingsDb.set(tenantId, 'phoneNumberId', settings.phoneNumberId)
+        await settingsDb.set(tenantId, 'businessAccountId', settings.businessAccountId)
+        await settingsDb.set(tenantId, 'accessToken', settings.accessToken)
+        await settingsDb.set(tenantId, 'isConnected', settings.isConnected ? 'true' : 'false')
     },
 }
 
@@ -1870,11 +1928,12 @@ export const settingsDb = {
 // ============================================================================
 
 export const dashboardDb = {
-    getStats: async () => {
+    getStats: async (tenantId: string) => {
         // Get campaign stats with aggregation
         const { data, error } = await supabase
             .from('campaigns')
             .select('sent, delivered, read, failed, status, name, total_recipients')
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
@@ -1920,7 +1979,7 @@ export const dashboardDb = {
 // ============================================================================
 
 export const templateProjectDb = {
-    getAll: async (): Promise<TemplateProject[]> => {
+    getAll: async (tenantId: string): Promise<TemplateProject[]> => {
         // Busca projetos com contagem dinâmica de items aprovados
         const { data, error } = await supabase
             .from('template_projects')
@@ -1931,6 +1990,7 @@ export const templateProjectDb = {
                     meta_status
                 )
             `)
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -1952,12 +2012,13 @@ export const templateProjectDb = {
         });
     },
 
-    getById: async (id: string): Promise<TemplateProject & { items: TemplateProjectItem[] }> => {
+    getById: async (tenantId: string, id: string): Promise<TemplateProject & { items: TemplateProjectItem[] }> => {
         // Fetch project
         const { data: project, error: projectError } = await supabase
             .from('template_projects')
             .select('*')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .single();
 
         if (projectError) throw projectError;
@@ -1967,6 +2028,7 @@ export const templateProjectDb = {
             .from('template_project_items')
             .select('*')
             .eq('project_id', id)
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: true });
 
         if (itemsError) throw itemsError;
@@ -1974,11 +2036,12 @@ export const templateProjectDb = {
         return { ...(project as TemplateProject), items: (items as TemplateProjectItem[]) || [] };
     },
 
-    create: async (dto: CreateTemplateProjectDTO): Promise<TemplateProject> => {
+    create: async (tenantId: string, dto: CreateTemplateProjectDTO): Promise<TemplateProject> => {
         // 1. Create Project
         const { data: project, error: projectError } = await supabase
             .from('template_projects')
             .insert({
+                tenant_id: tenantId,
                 title: dto.title,
                 prompt: dto.prompt,
                 status: dto.status || 'draft',
@@ -2000,6 +2063,7 @@ export const templateProjectDb = {
         if (dto.items.length > 0) {
             const itemsToInsert = dto.items.map(item => ({
                 ...item,
+                tenant_id: tenantId,
                 project_id: project.id
             }));
 
@@ -2016,20 +2080,22 @@ export const templateProjectDb = {
         return project as TemplateProject;
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('template_projects')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('tenant_id', tenantId);
 
         if (error) throw error;
     },
 
-    updateItem: async (id: string, updates: Partial<TemplateProjectItem>): Promise<TemplateProjectItem> => {
+    updateItem: async (tenantId: string, id: string, updates: Partial<TemplateProjectItem>): Promise<TemplateProjectItem> => {
         const { data, error } = await supabase
             .from('template_project_items')
             .update(updates)
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .select()
             .single();
 
@@ -2037,16 +2103,17 @@ export const templateProjectDb = {
         return data as TemplateProjectItem;
     },
 
-    deleteItem: async (id: string): Promise<void> => {
+    deleteItem: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('template_project_items')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('tenant_id', tenantId);
 
         if (error) throw error;
     },
 
-    update: async (id: string, updates: Partial<{ title: string; status: string }>): Promise<TemplateProject> => {
+    update: async (tenantId: string, id: string, updates: Partial<{ title: string; status: string }>): Promise<TemplateProject> => {
         const { data, error } = await supabase
             .from('template_projects')
             .update({
@@ -2054,6 +2121,7 @@ export const templateProjectDb = {
                 updated_at: new Date().toISOString()
             })
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .select()
             .single();
 
@@ -2067,10 +2135,11 @@ export const templateProjectDb = {
 // ============================================================================
 
 export const campaignFolderDb = {
-    getAll: async (): Promise<CampaignFolder[]> => {
+    getAll: async (tenantId: string): Promise<CampaignFolder[]> => {
         const { data, error } = await supabase
             .from('campaign_folders')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('name', { ascending: true })
 
         if (error) throw error
@@ -2084,11 +2153,12 @@ export const campaignFolderDb = {
         }))
     },
 
-    getAllWithCounts: async (): Promise<CampaignFolder[]> => {
+    getAllWithCounts: async (tenantId: string): Promise<CampaignFolder[]> => {
         // Get folders
         const { data: folders, error: foldersError } = await supabase
             .from('campaign_folders')
             .select('*')
+            .eq('tenant_id', tenantId)
             .order('name', { ascending: true })
 
         if (foldersError) throw foldersError
@@ -2097,6 +2167,7 @@ export const campaignFolderDb = {
         const { data: campaigns, error: campaignsError } = await supabase
             .from('campaigns')
             .select('folder_id')
+            .eq('tenant_id', tenantId)
 
         if (campaignsError) throw campaignsError
 
@@ -2118,11 +2189,12 @@ export const campaignFolderDb = {
         }))
     },
 
-    getById: async (id: string): Promise<CampaignFolder | undefined> => {
+    getById: async (tenantId: string, id: string): Promise<CampaignFolder | undefined> => {
         const { data, error } = await supabase
             .from('campaign_folders')
             .select('*')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .single()
 
         if (error || !data) return undefined
@@ -2136,10 +2208,11 @@ export const campaignFolderDb = {
         }
     },
 
-    create: async (dto: CreateCampaignFolderDTO): Promise<CampaignFolder> => {
+    create: async (tenantId: string, dto: CreateCampaignFolderDTO): Promise<CampaignFolder> => {
         const { data, error } = await supabase
             .from('campaign_folders')
             .insert({
+                tenant_id: tenantId,
                 name: dto.name,
                 color: dto.color || '#6B7280',
             })
@@ -2157,7 +2230,7 @@ export const campaignFolderDb = {
         }
     },
 
-    update: async (id: string, dto: UpdateCampaignFolderDTO): Promise<CampaignFolder | undefined> => {
+    update: async (tenantId: string, id: string, dto: UpdateCampaignFolderDTO): Promise<CampaignFolder | undefined> => {
         const updateData: Record<string, unknown> = {}
 
         if (dto.name !== undefined) updateData.name = dto.name
@@ -2167,26 +2240,29 @@ export const campaignFolderDb = {
             .from('campaign_folders')
             .update(updateData)
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
 
-        return campaignFolderDb.getById(id)
+        return campaignFolderDb.getById(tenantId, id)
     },
 
-    delete: async (id: string): Promise<void> => {
+    delete: async (tenantId: string, id: string): Promise<void> => {
         const { error } = await supabase
             .from('campaign_folders')
             .delete()
             .eq('id', id)
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
     },
 
     // Contagem de campanhas sem pasta
-    getUnfiledCount: async (): Promise<number> => {
+    getUnfiledCount: async (tenantId: string): Promise<number> => {
         const { count, error } = await supabase
             .from('campaigns')
             .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
             .is('folder_id', null)
 
         if (error) throw error
@@ -2194,10 +2270,11 @@ export const campaignFolderDb = {
     },
 
     // Total de campanhas
-    getTotalCount: async (): Promise<number> => {
+    getTotalCount: async (tenantId: string): Promise<number> => {
         const { count, error } = await supabase
             .from('campaigns')
             .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
 
         if (error) throw error
         return count || 0

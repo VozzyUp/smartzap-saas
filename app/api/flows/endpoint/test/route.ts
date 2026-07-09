@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
@@ -12,10 +13,13 @@ function buildEndpointUrl(): string | null {
 }
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   const envEndpointUrl = buildEndpointUrl()
-  const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
+  const storedEndpointUrl = await settingsDb.get(ctx.tenantId, ENDPOINT_URL_SETTING)
   const endpointUrl = envEndpointUrl || storedEndpointUrl || null
-  const publicKey = await settingsDb.get(PUBLIC_KEY_SETTING)
+  const publicKey = await settingsDb.get(ctx.tenantId, PUBLIC_KEY_SETTING)
 
   // #region agent log
   // #endregion agent log

@@ -43,15 +43,18 @@ function isLocalhostUrl(value: string | null): boolean {
  */
 export async function GET(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
     const [privateKey, publicKey] = await Promise.all([
-      settingsDb.get(PRIVATE_KEY_SETTING),
-      settingsDb.get(PUBLIC_KEY_SETTING),
+      settingsDb.get(ctx.tenantId, PRIVATE_KEY_SETTING),
+      settingsDb.get(ctx.tenantId, PUBLIC_KEY_SETTING),
     ])
-    const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
+    const storedEndpointUrl = await settingsDb.get(ctx.tenantId, ENDPOINT_URL_SETTING)
 
     const hasPrivateKey = !!privateKey && isValidPrivateKey(privateKey)
     const hasPublicKey = !!publicKey
@@ -116,6 +119,9 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
@@ -144,13 +150,13 @@ export async function POST(request: Request) {
 
     // Salva as chaves localmente
     await Promise.all([
-      settingsDb.set(PRIVATE_KEY_SETTING, privateKey),
-      settingsDb.set(PUBLIC_KEY_SETTING, publicKey),
+      settingsDb.set(ctx.tenantId, PRIVATE_KEY_SETTING, privateKey),
+      settingsDb.set(ctx.tenantId, PUBLIC_KEY_SETTING, publicKey),
     ])
     const endpointUrl = resolveEndpointUrlFromRequest(request)
     const shouldStoreEndpointUrl = endpointUrl && !isLocalhostUrl(endpointUrl)
     if (shouldStoreEndpointUrl) {
-      await settingsDb.set(ENDPOINT_URL_SETTING, endpointUrl)
+      await settingsDb.set(ctx.tenantId, ENDPOINT_URL_SETTING, endpointUrl)
     }
 
     // Sincroniza automaticamente com a Meta (se credenciais disponíveis)
@@ -158,7 +164,7 @@ export async function POST(request: Request) {
     let metaSyncError: string | null = null
 
     try {
-      const credentials = await getWhatsAppCredentials()
+      const credentials = await getWhatsAppCredentials(ctx.tenantId)
 
       if (credentials?.accessToken && credentials?.phoneNumberId) {
         console.log('[flow-endpoint-keys] 🔄 Sincronizando chave pública com a Meta...')
@@ -205,13 +211,16 @@ export async function POST(request: Request) {
  */
 export async function DELETE() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
     await Promise.all([
-      settingsDb.set(PRIVATE_KEY_SETTING, ''),
-      settingsDb.set(PUBLIC_KEY_SETTING, ''),
+      settingsDb.set(ctx.tenantId, PRIVATE_KEY_SETTING, ''),
+      settingsDb.set(ctx.tenantId, PUBLIC_KEY_SETTING, ''),
     ])
 
     return NextResponse.json({

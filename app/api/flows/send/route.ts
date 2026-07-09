@@ -8,9 +8,13 @@ import { supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { buildFlowMessage } from '@/lib/whatsapp/flows'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const toRaw = String(body?.to || '')
@@ -30,7 +34,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (!credentials?.accessToken || !credentials?.phoneNumberId) {
       return NextResponse.json(
         { error: 'Credenciais do WhatsApp não configuradas' },

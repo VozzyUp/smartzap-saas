@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
       // Tenta sincronizar com a Meta automaticamente
       try {
-        const credentials = await getWhatsAppCredentials()
+        const credentials = await getWhatsAppCredentials(tenantId)
         if (credentials?.accessToken && credentials?.phoneNumberId) {
           await metaSetEncryptionPublicKey({
             accessToken: credentials.accessToken,

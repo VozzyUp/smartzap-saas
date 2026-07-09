@@ -14,6 +14,7 @@ import { CampaignStatus, ContactStatus } from '@/types'
 import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface DispatchContact {
   contactId?: string
@@ -177,8 +178,9 @@ async function fetchSingleTemplateFromMeta(params: {
 export async function POST(request: NextRequest) {
   const bodyText = await request.text()
   const signature = request.headers.get('upstash-signature')
-  const cookieHeader = request.headers.get('cookie') || ''
-  const hasSession = cookieHeader.includes('smartzap_session=')
+  // Sessão Supabase (Task 8) substituiu o cookie legado smartzap_session.
+  const sessionCtx = signature ? null : await getTenantContext()
+  const hasSession = !!sessionCtx?.tenantId
 
   // Auth: QStash requests têm signature header, requests manuais usam session ou API key
   if (!signature && !hasSession) {

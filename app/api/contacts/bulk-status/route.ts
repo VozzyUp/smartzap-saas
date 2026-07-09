@@ -4,6 +4,7 @@ import { contactDb } from '@/lib/supabase-db'
 import { ContactStatus } from '@/types'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { validateBodyOrError } from '@/lib/api-validation'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -25,6 +26,9 @@ export async function POST(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
 
     const validation = validateBodyOrError(BulkUpdateStatusSchema, body)
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     const { ids, status } = validation.data
 
-    const updated = await contactDb.bulkUpdateStatus(ids, status)
+    const updated = await contactDb.bulkUpdateStatus(ctx.tenantId, ids, status)
     return NextResponse.json({ updated })
   } catch (error) {
     console.error('Failed to bulk update status:', error)

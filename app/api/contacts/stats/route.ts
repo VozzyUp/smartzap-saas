@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * GET /api/contacts/stats
@@ -11,7 +12,10 @@ export async function GET(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
-    const stats = await contactDb.getStats()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const stats = await contactDb.getStats(ctx.tenantId)
     return NextResponse.json(stats, {
       headers: {
         'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',

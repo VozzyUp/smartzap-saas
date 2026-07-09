@@ -53,7 +53,7 @@ describe('sendWhatsAppMessage (MSW integration)', () => {
 
   describe('sucesso', () => {
     it('envia mensagem de texto e retorna messageId', async () => {
-      const result = await sendWhatsAppMessage({
+      const result = await sendWhatsAppMessage('test-tenant-id', {
         to: '+5511999999999',
         type: 'text',
         text: 'Olá, teste!',
@@ -65,7 +65,7 @@ describe('sendWhatsAppMessage (MSW integration)', () => {
     })
 
     it('envia mensagem de template e retorna messageId', async () => {
-      const result = await sendWhatsAppMessage({
+      const result = await sendWhatsAppMessage('test-tenant-id', {
         to: '+5511999999999',
         type: 'template',
         templateName: 'hello_world',
@@ -84,7 +84,7 @@ describe('sendWhatsAppMessage (MSW integration)', () => {
       // Override: substitui o handler padrão pelo handler de erro
       server.use(paymentErrorHandler)
 
-      const result = await sendWhatsAppMessage({
+      const result = await sendWhatsAppMessage('test-tenant-id', {
         to: '+5511999999999',
         type: 'text',
         text: 'Mensagem que não será entregue',
@@ -100,7 +100,7 @@ describe('sendWhatsAppMessage (MSW integration)', () => {
     it('retorna erro quando rate limit é atingido', async () => {
       server.use(rateLimitHandler)
 
-      const result = await sendWhatsAppMessage({
+      const result = await sendWhatsAppMessage('test-tenant-id', {
         to: '+5511999999999',
         type: 'text',
         text: 'Mensagem durante rate limit',

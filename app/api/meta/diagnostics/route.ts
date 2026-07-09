@@ -7,6 +7,7 @@ import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getAppUrl } from '@/lib/app-url'
 import { getAppEnv } from '@/lib/app-env'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -678,10 +679,14 @@ function summarizeHealthStatus(raw: any) {
 export async function GET() {
 	const ts = new Date().toISOString()
 
-	const { webhookUrl, vercelEnv } = computeWebhookUrl()
-	const webhookToken = await getVerifyToken().catch(() => null)
+	const ctx = await getTenantContext()
+	if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+	const tenantId = ctx.tenantId
 
-	const credentials = await getWhatsAppCredentials().catch(() => null)
+	const { webhookUrl, vercelEnv } = computeWebhookUrl()
+	const webhookToken = await getVerifyToken(tenantId).catch(() => null)
+
+	const credentials = await getWhatsAppCredentials(tenantId).catch(() => null)
 	const source = credentials ? 'db' : 'none'
 
 	const checks: DiagnosticCheck[] = []
@@ -801,7 +806,7 @@ export async function GET() {
 	let tokenExpirySummary: TokenExpirySummary | null = null
 
 	// 2a) debug_token (opcional, depende de APP_ID/APP_SECRET configurados no banco)
-	const appCreds = await getMetaAppCredentials()
+	const appCreds = await getMetaAppCredentials(tenantId)
 	const metaAppSource: 'db' | 'none' = appCreds ? 'db' : 'none'
 	const appId = (appCreds?.appId || '').trim()
 	const appSecret = (appCreds?.appSecret || '').trim()

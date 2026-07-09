@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // GET /api/debug/meta/template-analytics?name=<template_name>&start=<unix>&end=<unix>&granularity=daily
 // Retorna métricas oficiais da Meta (sent/delivered/read) para um template em um intervalo.
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const url = new URL(request.url)
     const name = url.searchParams.get('name')?.trim()
     const start = url.searchParams.get('start')?.trim()
@@ -39,7 +43,7 @@ export async function GET(request: NextRequest) {
       return 'daily'
     })()
 
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (!credentials?.businessAccountId || !credentials?.accessToken) {
       return NextResponse.json({ error: 'Credenciais não configuradas.' }, { status: 401 })
     }

@@ -23,19 +23,19 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
+  const body = await request.json().catch(() => ({}));
+  const companyId = await getCompanyId(supabase);
+  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+  const workflow = toSavedWorkflow(record);
+
   const secret =
-    (await settingsDb.get("workflow_builder_webhook_secret")) ||
+    (await settingsDb.get(record.workflow.tenant_id, "workflow_builder_webhook_secret")) ||
     process.env.WORKFLOW_BUILDER_WEBHOOK_SECRET ||
     null;
   const provided = request.headers.get("x-workflow-secret");
   if (secret && provided !== secret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const body = await request.json().catch(() => ({}));
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
-  const workflow = toSavedWorkflow(record);
 
   const executionId = nanoid();
   await supabase.from("workflow_runs").insert({
@@ -49,6 +49,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   });
 
   const execution = await executeWorkflow({
+    tenantId: record.workflow.tenant_id,
     nodes: workflow.nodes,
     edges: workflow.edges,
     triggerInput: body ?? {},

@@ -10,6 +10,7 @@ type WorkflowRow = {
   status: string;
   owner_company_id?: string | null;
   active_version_id?: string | null;
+  tenant_id: string;
   created_at: string;
   updated_at: string;
 };

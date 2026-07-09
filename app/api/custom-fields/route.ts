@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { customFieldDefDb } from '@/lib/supabase-db'
 import { validateBodyOrError } from '@/lib/api-validation'
+import { getTenantContext } from '@/lib/tenant-context'
 import { z } from 'zod'
 
 // Cache GET requests for 10 minutes - custom fields rarely change
@@ -18,10 +19,13 @@ const CreateCustomFieldSchema = z.object({
 
 export async function GET(request: Request) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const { searchParams } = new URL(request.url)
         const entityType = (searchParams.get('entityType') as 'contact' | 'deal') || 'contact'
 
-        const fields = await customFieldDefDb.getAll(entityType)
+        const fields = await customFieldDefDb.getAll(ctx.tenantId, entityType)
 
         return NextResponse.json(fields)
     } catch (error: any) {
@@ -35,13 +39,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const body = await request.json()
 
         // Validate
         const validation = validateBodyOrError(CreateCustomFieldSchema, body)
         if (!validation.success) return validation.response
 
-        const field = await customFieldDefDb.create(validation.data)
+        const field = await customFieldDefDb.create(ctx.tenantId, validation.data)
 
         return NextResponse.json(field, { status: 201 })
     } catch (error: any) {

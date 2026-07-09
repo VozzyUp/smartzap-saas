@@ -197,6 +197,7 @@ export async function POST(req: NextRequest) {
     console.log(`🧪 [AI-TEST] Calling processChatAgent...`)
 
     const result = await processChatAgent({
+      tenantId: (agent as unknown as { tenant_id: string }).tenant_id,
       agent,
       conversation: mockConversation,
       messages: mockMessages,

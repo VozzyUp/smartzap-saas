@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 
@@ -12,6 +13,9 @@ const mask = (value: string | null) => {
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabaseConfigured = isSupabaseConfigured()
     const envMem0Key = process.env.MEM0_API_KEY || null
 
@@ -26,8 +30,8 @@ export async function GET() {
     }
 
     const [enabledRaw, apiKey] = await Promise.all([
-      settingsDb.get('mem0_enabled'),
-      settingsDb.get('mem0_api_key'),
+      settingsDb.get(ctx.tenantId, 'mem0_enabled'),
+      settingsDb.get(ctx.tenantId, 'mem0_api_key'),
     ])
 
     const enabled = enabledRaw === 'true'

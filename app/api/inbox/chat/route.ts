@@ -17,6 +17,7 @@ import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { sendMessage as sendWhatsAppMessageToDB } from '@/lib/inbox/inbox-service'
 import { getConversationById } from '@/lib/inbox/inbox-db'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { AIAgent, InboxConversation } from '@/types'
 
 // Allow streaming responses up to 30 seconds
@@ -164,6 +165,15 @@ export async function POST(req: Request) {
   const startTime = Date.now()
 
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) {
+      return new Response(
+        JSON.stringify({ error: 'unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    const tenantId = ctx.tenantId
+
     const body = await req.json()
     const parsed = requestSchema.safeParse(body)
 
@@ -251,7 +261,7 @@ export async function POST(req: Request) {
 
             // Send message to WhatsApp and persist
             try {
-              await sendWhatsAppMessageToDB(conversationId, params.message)
+              await sendWhatsAppMessageToDB(tenantId, conversationId, params.message)
             } catch (err) {
               console.error('[Chat API] Failed to send WhatsApp message:', err)
               // Don't fail the whole response, the message was generated

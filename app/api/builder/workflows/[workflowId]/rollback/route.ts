@@ -3,12 +3,18 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { getCompanyId } from "@/lib/builder/workflow-db";
 import { clearWorkflowSchedule, syncWorkflowSchedule } from "@/lib/builder/workflow-schedule";
 import { settingsDb } from "@/lib/supabase-db";
+import { getTenantContext } from "@/lib/tenant-context";
 
 type RouteParams = {
   params: Promise<{ workflowId: string }>;
 };
 
 export async function POST(request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const { workflowId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -73,7 +79,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       : null;
     if (cron) {
       const secret =
-        (await settingsDb.get("workflow_builder_webhook_secret")) ||
+        (await settingsDb.get(ctx.tenantId, "workflow_builder_webhook_secret")) ||
         process.env.WORKFLOW_BUILDER_WEBHOOK_SECRET ||
         null;
       await syncWorkflowSchedule({

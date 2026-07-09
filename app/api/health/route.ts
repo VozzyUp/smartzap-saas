@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-import { fetchWithTimeout, safeJson } from '@/lib/server-http'
-import { settingsDb } from '@/lib/supabase-db'
 import { getAppEnv } from '@/lib/app-env'
 
 // Self-hosted: não há dashboard da Vercel para linkar. Mantido como stub
@@ -112,48 +109,15 @@ export async function GET() {
   }
 
   // 3. Check WhatsApp credentials
-  try {
-    const credentials = await getWhatsAppCredentials()
-
-    if (credentials) {
-      // Test connection to Meta API
-      const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number`
-      const response = await fetchWithTimeout(testUrl, {
-        headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
-        timeoutMs: 8000,
-      })
-
-      if (response.ok) {
-        const data = await safeJson<any>(response)
-        result.services.whatsapp = {
-          status: 'ok',
-          source: 'db',
-          phoneNumber: data?.display_phone_number,
-          message: data?.display_phone_number ? `Connected: ${data.display_phone_number}` : 'Connected',
-        }
-      } else {
-        const error = await safeJson<any>(response)
-        result.services.whatsapp = {
-          status: 'error',
-          source: 'db',
-          message: error?.error?.message || 'Token invalid or expired',
-        }
-        result.overall = 'degraded'
-      }
-    } else {
-      result.services.whatsapp = {
-        status: 'not_configured',
-        source: 'none',
-        message: 'WhatsApp credentials not configured',
-      }
-      result.overall = 'unhealthy'
-    }
-  } catch (error) {
-    result.services.whatsapp = {
-      status: 'error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    }
-    result.overall = 'degraded'
+  // Este é um health check público/infra (sem sessão), e credenciais WhatsApp
+  // agora são por tenant (Fase 2A). Sem um tenant específico para checar,
+  // não há como probar credenciais sem hardcodar um tenantId (proibido pelas
+  // convenções de multi-tenancy). Reportamos como não-aplicável até a Fase 2B
+  // trazer um checkup por tenant.
+  result.services.whatsapp = {
+    status: 'not_configured',
+    source: 'none',
+    message: 'Verificação por tenant não disponível neste health check multi-tenant (Fase 2B)',
   }
 
   // 4. Check Webhook status (only if database is configured)
@@ -213,12 +177,9 @@ export async function GET() {
       }
 
       // Estratégia 3: Verificar se existe token de webhook configurado
-      try {
-        const token = await settingsDb.get('webhook_verify_token')
-        hasWebhookToken = Boolean(token)
-      } catch {
-        // ignore
-      }
+      // (settings agora é por tenant — sem tenant específico neste health check
+      // público, não há como probar sem hardcodar um tenantId. Pulamos esta
+      // estratégia até a Fase 2B trazer um checkup por tenant.)
 
       // Decidir resultado do webhook
       if (hasRecentEvents && lastEventAt) {

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { listMessages, sendMessage } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Regex para ISO 8601 datetime com precisão variável (Supabase pode retornar 1-6 dígitos)
 const ISO_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/
@@ -65,6 +66,9 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const body = await request.json()
 
@@ -88,6 +92,7 @@ export async function POST(
     }
 
     const message = await sendMessage(
+      ctx.tenantId,
       id,
       content,
       message_type,

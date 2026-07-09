@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeText } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Tier limits mapping
 const TIER_LIMITS: Record<string, number> = {
@@ -79,8 +80,10 @@ async function fetchLimitsFromMeta(phoneNumberId: string, accessToken: string) {
 
 // GET /api/account/limits - Fetch limits usando credenciais salvas (Supabase/env)
 export async function GET() {
-  const credentials = await getWhatsAppCredentials()
-  
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const credentials = await getWhatsAppCredentials(ctx.tenantId)
+
   if (!credentials?.phoneNumberId || !credentials?.accessToken) {
     return NextResponse.json({ 
       error: 'NO_CREDENTIALS',
@@ -103,6 +106,9 @@ export async function GET() {
 
 // POST /api/account/limits - Fetch limits (body opcional; fallback para Supabase/env)
 export async function POST(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   let phoneNumberId: string | undefined
   let accessToken: string | undefined
 
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
 
   // Fallback para credenciais salvas (Supabase/env)
   if (!phoneNumberId || !accessToken) {
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (credentials) {
       phoneNumberId = credentials.phoneNumberId
       accessToken = credentials.accessToken

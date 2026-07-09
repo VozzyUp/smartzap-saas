@@ -111,6 +111,7 @@ export const { POST } = serve<BuilderWorkflowInput>(async (context) => {
 
   const execution = await context.run(`execute-workflow-${workflowId}`, () =>
     executeWorkflow({
+      tenantId: record.workflow.tenant_id,
       nodes: workflow.nodes,
       edges: workflow.edges,
       triggerInput: input ?? {},

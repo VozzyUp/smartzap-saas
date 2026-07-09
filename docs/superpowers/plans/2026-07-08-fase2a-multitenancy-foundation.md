@@ -23,7 +23,10 @@
   - Toda `SECURITY DEFINER` function em `public` deve terminar com `revoke execute on function public.X from public; grant execute on function public.X to authenticated, service_role;` — sem isso, o Postgres concede EXECUTE ao role `PUBLIC` (calável por `anon`).
   - Toda policy RLS usa `to authenticated` (ou o role específico) — nunca omitir. `auth.role()` está deprecado.
   - Policies `for update` levam `USING` **e** `WITH CHECK` idênticos (previne re-atribuição de `tenant_id`).
-  - Aplicação de migrações se dá via **Supabase MCP** (`mcp__supabase__apply_migration`/`execute_sql`) — o `scripts/apply-migration-pg.mjs` e `scripts/schema-parity-check.ts` referenciados no CLAUDE.md original **não existem** neste repo; substituir por chamadas MCP.
+  - **Aplicação de SQL via Supabase MCP:** durante o desenvolvimento/iteração use **`mcp__supabase__execute_sql`** (não deixa entrada no histórico de migrações). Só quando o SQL final estiver validado, salvar o arquivo em `supabase/migrations/` (criado no repo) — e opcionalmente reproduzir via `mcp__supabase__apply_migration` para gravar histórico. Motivo: `apply_migration` grava histórico a cada chamada, impedindo iteração limpa (`supabase db diff`/`pull` param de funcionar bem).
+  - **NÃO existem** neste repo os scripts `apply-migration-pg.mjs` e `schema-parity-check.ts` (referenciados no CLAUDE.md do produto original). Substituir por chamadas MCP.
+  - **Verificação obrigatória após aplicar SQL:** `mcp__supabase__get_advisors` (security + performance) — corrigir qualquer finding antes de commitar a migração.
+  - **Criação de arquivos de migração:** usar `supabase migration new <nome>` (CLI) quando disponível, ou nomear no padrão `YYYYMMDDHHMMSS_<slug>.sql`. Nunca inventar nome.
 
 ---
 

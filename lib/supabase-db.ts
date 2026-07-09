@@ -1316,6 +1316,38 @@ export const leadFormDb = {
         }
     },
 
+    /**
+     * Lookup público por slug (sem tenantId), para rotas de submissão de
+     * formulário por visitante anônimo (app/api/public/lead-forms/**).
+     * `slug` tem UNIQUE constraint global (lead_forms_slug_key), então essa
+     * busca é segura. Retorna também o tenantId do formulário encontrado,
+     * para que o call-site derive o tenant do recurso em vez de exigir sessão.
+     */
+    getBySlugPublic: async (slug: string): Promise<(LeadForm & { tenantId: string }) | undefined> => {
+        const { data, error } = await supabase
+            .from('lead_forms')
+            .select('*')
+            .eq('slug', slug)
+            .single()
+
+        if (error || !data) return undefined
+
+        return {
+            id: data.id,
+            name: data.name,
+            slug: data.slug,
+            tag: data.tag,
+            isActive: !!(data as any).is_active,
+            collectEmail: (data as any).collect_email ?? true,
+            successMessage: (data as any).success_message ?? null,
+            webhookToken: (data as any).webhook_token ?? null,
+            fields: Array.isArray((data as any).fields) ? (data as any).fields : [],
+            createdAt: (data as any).created_at,
+            updatedAt: (data as any).updated_at ?? null,
+            tenantId: (data as any).tenant_id,
+        }
+    },
+
     create: async (tenantId: string, dto: CreateLeadFormDTO): Promise<LeadForm> => {
         const now = new Date().toISOString()
         const id = `lf_${generateId().replace(/-/g, '')}`

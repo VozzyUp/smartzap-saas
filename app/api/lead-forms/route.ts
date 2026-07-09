@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { leadFormDb } from '@/lib/supabase-db'
 import { CreateLeadFormSchema, validateBodyOrError } from '@/lib/api-validation'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -11,7 +12,10 @@ export const revalidate = 0
  */
 export async function GET() {
   try {
-    const forms = await leadFormDb.getAll()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const forms = await leadFormDb.getAll(ctx.tenantId)
     return NextResponse.json(forms, {
       headers: {
         'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
@@ -31,12 +35,15 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const validation = validateBodyOrError(CreateLeadFormSchema, body)
     if (!validation.success) return validation.response
 
-    const created = await leadFormDb.create(validation.data)
+    const created = await leadFormDb.create(ctx.tenantId, validation.data)
     return NextResponse.json(created, { status: 201 })
   } catch (error: any) {
     console.error('Failed to create lead form:', error)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase, getSupabaseAdmin } from '@/lib/supabase'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface UsageData {
   vercel: {
@@ -49,6 +50,10 @@ function getStatus(percentage: number): 'ok' | 'warning' | 'critical' {
 }
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const tenantId = ctx.tenantId
+
   const usage: UsageData = {
     vercel: {
       functionInvocations: 0,
@@ -191,6 +196,7 @@ export async function GET() {
       const { data: rows, error: rowsError } = await supabase
         .from('campaign_contacts')
         .select('contact_id,phone')
+        .eq('tenant_id', tenantId)
         .gte('sent_at', cutoffIso)
         .not('sent_at', 'is', null)
         .range(offset, offset + pageSize - 1)
@@ -208,7 +214,7 @@ export async function GET() {
 
     usage.whatsapp.messagesSent = uniqueRecipients.size
 
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(tenantId)
     if (credentials) {
       try {
         const [tierResponse, qualityResponse] = await Promise.all([

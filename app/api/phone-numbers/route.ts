@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export async function POST(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   let businessAccountId: string | undefined
   let accessToken: string | undefined
 
@@ -20,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   // Fallback para credenciais salvas (Supabase/env)
   if (!businessAccountId || !accessToken) {
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (credentials) {
       businessAccountId = credentials.businessAccountId
       accessToken = credentials.accessToken
@@ -58,8 +62,11 @@ export async function POST(request: NextRequest) {
 
 // Also support GET for simpler access
 export async function GET() {
-  const credentials = await getWhatsAppCredentials()
-  
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const credentials = await getWhatsAppCredentials(ctx.tenantId)
+
   if (!credentials) {
     return NextResponse.json(
       { error: 'Credenciais não configuradas. Configure em Ajustes.' }, 

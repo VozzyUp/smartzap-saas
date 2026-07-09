@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -39,6 +40,9 @@ function pickHeaders(headers: Headers, keys: string[]) {
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { phoneNumberId } = await context.params
 
     // Tenta obter credenciais do body primeiro; fallback para credenciais salvas (Supabase/env)
@@ -64,7 +68,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Se ainda não temos token válido, usar credenciais salvas
     if (!accessToken) {
-      const credentials = await getWhatsAppCredentials();
+      const credentials = await getWhatsAppCredentials(ctx.tenantId);
       if (credentials?.accessToken) {
         accessToken = credentials.accessToken
       }
@@ -85,7 +89,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Get verify token from Supabase (ensures consistency with webhook endpoint)
-    const verifyToken = await getVerifyToken()
+    const verifyToken = await getVerifyToken(ctx.tenantId)
 
     // Preflight: antes de pedir para a Meta verificar, simulamos o GET de verificação.
     // Isso ajuda a detectar casos comuns (ex.: Preview protegido na Vercel retornando 401).
@@ -270,6 +274,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { phoneNumberId } = await context.params;
 
     // Tenta obter credenciais do body primeiro; fallback para credenciais salvas (Supabase/env)
@@ -287,7 +294,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     // Se ainda não temos token válido, usar credenciais salvas
     if (!accessToken) {
-      const credentials = await getWhatsAppCredentials();
+      const credentials = await getWhatsAppCredentials(ctx.tenantId);
       if (credentials?.accessToken) {
         accessToken = credentials.accessToken;
       }

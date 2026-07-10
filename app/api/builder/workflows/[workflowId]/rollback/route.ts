@@ -37,6 +37,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     .from("workflow_versions")
     .select("id, workflow_id")
     .eq("id", versionId)
+    .eq("tenant_id", ctx.tenantId)
     .maybeSingle<{ id: string; workflow_id: string }>();
 
   if (!selectedVersion || selectedVersion.workflow_id !== workflowId) {
@@ -51,23 +52,26 @@ export async function POST(request: Request, { params }: RouteParams) {
     active_version_id: versionId,
     status: "published",
     updated_at: now,
-  }).eq("id", workflowId);
+  }).eq("id", workflowId).eq("tenant_id", ctx.tenantId);
 
   await supabase
     .from("workflow_versions")
     .update({ status: "archived", updated_at: now })
     .eq("workflow_id", workflowId)
+    .eq("tenant_id", ctx.tenantId)
     .neq("id", versionId);
 
   await supabase
     .from("workflow_versions")
     .update({ status: "published", updated_at: now })
-    .eq("id", versionId);
+    .eq("id", versionId)
+    .eq("tenant_id", ctx.tenantId);
 
   const { data: versionData } = await supabase
     .from("workflow_versions")
     .select("nodes")
     .eq("id", versionId)
+    .eq("tenant_id", ctx.tenantId)
     .maybeSingle<{ nodes: Array<{ data?: { type?: string; config?: Record<string, unknown> } }> }>();
 
   const triggerNode = versionData?.nodes.find((node) => node.data?.type === "trigger");
@@ -93,7 +97,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     await clearWorkflowSchedule(workflowId);
   }
 
-  const companyId = await getCompanyId(supabase);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
 
   return NextResponse.json({ success: true, versionId, companyId });
 }

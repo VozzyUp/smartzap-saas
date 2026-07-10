@@ -23,13 +23,26 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
+  // Rota disparada por webhook externo (secret no header, sem sessão de
+  // usuário) — deriva o tenant do próprio recurso, mesmo padrão do fix de
+  // campaign/dispatch na Fase 2A.
+  const { data: workflowRow } = await supabase
+    .from("workflows")
+    .select("tenant_id")
+    .eq("id", workflowId)
+    .maybeSingle<{ tenant_id: string }>();
+  if (!workflowRow?.tenant_id) {
+    return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  }
+  const tenantId = workflowRow.tenant_id;
+
   const body = await request.json().catch(() => ({}));
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+  const companyId = await getCompanyId(supabase, tenantId);
+  const record = await ensureWorkflowRecord(supabase, tenantId, workflowId, companyId);
   const workflow = toSavedWorkflow(record);
 
   const secret =
-    (await settingsDb.get(record.workflow.tenant_id, "workflow_builder_webhook_secret")) ||
+    (await settingsDb.get(tenantId, "workflow_builder_webhook_secret")) ||
     process.env.WORKFLOW_BUILDER_WEBHOOK_SECRET ||
     null;
   const provided = request.headers.get("x-workflow-secret");
@@ -40,6 +53,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const executionId = nanoid();
   await supabase.from("workflow_runs").insert({
     id: executionId,
+    tenant_id: tenantId,
     workflow_id: workflowId,
     version_id: record.workflow.active_version_id,
     status: "running",
@@ -49,7 +63,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   });
 
   const execution = await executeWorkflow({
-    tenantId: record.workflow.tenant_id,
+    tenantId,
     nodes: workflow.nodes,
     edges: workflow.edges,
     triggerInput: body ?? {},

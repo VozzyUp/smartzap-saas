@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant-context";
 import {
   ensureWorkflowRecord,
   getCompanyId,
@@ -21,6 +22,9 @@ type RouteParams = {
 };
 
 export async function GET(_request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { workflowId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -29,12 +33,15 @@ export async function GET(_request: Request, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
+  const record = await ensureWorkflowRecord(supabase, ctx.tenantId, workflowId, companyId);
   return NextResponse.json(toSavedWorkflow(record));
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { workflowId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -52,19 +59,22 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  await updateWorkflowRecord(supabase, workflowId, {
+  await updateWorkflowRecord(supabase, ctx.tenantId, workflowId, {
     name: normalized?.name,
     description: normalized?.description,
     nodes: normalized?.nodes,
     edges: normalized?.edges,
     visibility: normalized?.visibility,
   });
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
+  const record = await ensureWorkflowRecord(supabase, ctx.tenantId, workflowId, companyId);
   return NextResponse.json(toSavedWorkflow(record));
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { workflowId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -73,7 +83,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  await supabase.from("workflows").delete().eq("id", workflowId);
+  await supabase.from("workflows").delete().eq("id", workflowId).eq("tenant_id", ctx.tenantId);
   return NextResponse.json({ success: true });
 }
 

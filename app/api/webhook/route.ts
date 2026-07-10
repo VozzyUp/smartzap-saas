@@ -1037,8 +1037,8 @@ export async function POST(request: NextRequest) {
 
           if (targetWorkflowId && text && from) {
             try {
-              const companyId = await getCompanyId(supabaseAdmin)
-              await ensureWorkflowRecord(supabaseAdmin, targetWorkflowId, companyId)
+              const companyId = await getCompanyId(supabaseAdmin, tenantId)
+              await ensureWorkflowRecord(supabaseAdmin, tenantId, targetWorkflowId, companyId)
 
               // Usa QStash Client para ter assinatura válida (evita SignatureError)
               const baseUrl = getAppUrl(request.nextUrl.origin)

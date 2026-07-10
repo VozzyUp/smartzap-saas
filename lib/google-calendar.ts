@@ -1,5 +1,5 @@
 import { settingsDb } from '@/lib/supabase-db'
-import { isSupabaseConfigured } from '@/lib/supabase'
+import { isSupabaseConfigured, getSupabaseAdmin } from '@/lib/supabase'
 import { getAppUrl } from '@/lib/app-url'
 
 const SETTINGS_KEYS = {
@@ -355,9 +355,37 @@ export async function saveCalendarChannel(tenantId: string, channel: GoogleCalen
   }
   if (!channel) {
     await settingsDb.set(tenantId, SETTINGS_KEYS.channel, '')
+    await getSupabaseAdmin()!
+      .from('google_calendar_channels')
+      .delete()
+      .eq('tenant_id', tenantId)
     return
   }
   await settingsDb.set(tenantId, SETTINGS_KEYS.channel, JSON.stringify(channel))
+  const { error } = await getSupabaseAdmin()!
+    .from('google_calendar_channels')
+    .upsert(
+      {
+        channel_token: channel.token,
+        tenant_id: tenantId,
+        channel_id: channel.id,
+        resource_id: channel.resourceId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'channel_token' }
+    )
+  if (error) throw error
+}
+
+export async function resolveTenantByChannelToken(channelToken: string): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+  const { data } = await db
+    .from('google_calendar_channels')
+    .select('tenant_id')
+    .eq('channel_token', channelToken)
+    .maybeSingle()
+  return data?.tenant_id ?? null
 }
 
 export async function ensureAccessToken(tenantId: string): Promise<GoogleCalendarTokens> {

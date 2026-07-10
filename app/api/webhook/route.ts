@@ -505,13 +505,10 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
-  // Handshake de verificação da Meta: chega sem sessão e sem qualquer recurso
-  // identificável (só hub.mode/hub.verify_token/hub.challenge — o mesmo endpoint
-  // /api/webhook é compartilhado por todos os tenants). Guard intencional até
-  // Fase 2B (resolução por phone_number_id/WABA).
-  const tenantId = await resolveWebhookTenantId()
-
-  const MY_VERIFY_TOKEN = await getVerifyToken(tenantId, { readonly: true })
+  // Handshake de verificação da Meta: uma única URL compartilhada por todos
+  // os tenants, validada uma vez na configuração do App — webhook_verify_token
+  // é configuração de plataforma (platform_settings), não por tenant.
+  const MY_VERIFY_TOKEN = await getVerifyToken({ readonly: true })
 
   console.log('🔍 Webhook Verification Request:')
   console.log(`- Mode: ${mode}`)

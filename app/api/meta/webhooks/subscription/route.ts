@@ -211,7 +211,7 @@ export async function POST(request: Request) {
   }
 
   // Obter verify token
-  const verifyToken = await getVerifyToken(ctx.tenantId)
+  const verifyToken = await getVerifyToken()
 
   // Configura o override no WABA via subscribed_apps
   const form = new URLSearchParams()

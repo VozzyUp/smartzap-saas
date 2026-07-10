@@ -684,7 +684,7 @@ export async function GET() {
 	const tenantId = ctx.tenantId
 
 	const { webhookUrl, vercelEnv } = computeWebhookUrl()
-	const webhookToken = await getVerifyToken(tenantId).catch(() => null)
+	const webhookToken = await getVerifyToken().catch(() => null)
 
 	const credentials = await getWhatsAppCredentials(tenantId).catch(() => null)
 	const source = credentials ? 'db' : 'none'

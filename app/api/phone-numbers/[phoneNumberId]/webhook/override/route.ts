@@ -89,7 +89,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Get verify token from Supabase (ensures consistency with webhook endpoint)
-    const verifyToken = await getVerifyToken(ctx.tenantId)
+    const verifyToken = await getVerifyToken()
 
     // Preflight: antes de pedir para a Meta verificar, simulamos o GET de verificação.
     // Isso ajuda a detectar casos comuns (ex.: Preview protegido na Vercel retornando 401).

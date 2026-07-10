@@ -11,7 +11,7 @@ export async function GET() {
 
   const webhookUrl = `${getAppUrl()}/api/webhook`
 
-  const webhookToken = await getVerifyToken(ctx.tenantId)
+  const webhookToken = await getVerifyToken()
 
   // Stats are now tracked in Supabase (campaign_contacts table)
   // (Sem stats via cache)

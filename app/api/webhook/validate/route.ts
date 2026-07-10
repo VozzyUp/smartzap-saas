@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { settingsDb } from '@/lib/supabase-db'
+import { platformSettingsDb } from '@/lib/platform-settings'
 import { getTenantContext } from '@/lib/tenant-context'
 
 /**
@@ -80,7 +80,7 @@ export async function GET() {
     // Estratégia 3: Verificar se existe token de webhook configurado (mínimo necessário)
     let hasWebhookToken = false
     try {
-      const token = await settingsDb.get(tenantId, 'webhook_verify_token')
+      const token = await platformSettingsDb.get<string>('webhook_verify_token')
       hasWebhookToken = Boolean(token)
     } catch {
       // ignore

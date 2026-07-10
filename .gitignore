@@ -5,6 +5,9 @@ node_modules
 .next/
 out/
 
+# graphify (mapa de conhecimento gerado localmente, não é artefato do produto)
+graphify-out/
+
 # Production
 build/
 dist/

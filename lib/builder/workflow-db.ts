@@ -79,12 +79,14 @@ export function buildDefaultGraph(): {
 }
 
 export async function getCompanyId(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  tenantId: string
 ): Promise<string | null> {
   const { data } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "company_id")
+    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (!data?.value) {
@@ -114,12 +116,14 @@ export function toSavedWorkflow(
 
 export async function fetchWorkflowRecord(
   supabase: SupabaseClient,
+  tenantId: string,
   workflowId: string
 ): Promise<WorkflowRecord | null> {
   const { data: workflow } = await supabase
     .from("workflows")
     .select("*")
     .eq("id", workflowId)
+    .eq("tenant_id", tenantId)
     .maybeSingle<WorkflowRow>();
 
   if (!workflow) {
@@ -135,6 +139,7 @@ export async function fetchWorkflowRecord(
     .from("workflow_versions")
     .select("*")
     .eq("id", versionId)
+    .eq("tenant_id", tenantId)
     .maybeSingle<WorkflowVersionRow>();
 
   if (!version) {
@@ -146,10 +151,11 @@ export async function fetchWorkflowRecord(
 
 export async function ensureWorkflowRecord(
   supabase: SupabaseClient,
+  tenantId: string,
   workflowId: string,
   ownerCompanyId?: string | null
 ): Promise<WorkflowRecord> {
-  const existing = await fetchWorkflowRecord(supabase, workflowId);
+  const existing = await fetchWorkflowRecord(supabase, tenantId, workflowId);
   if (existing) return existing;
 
   const graph = buildDefaultGraph();
@@ -158,6 +164,7 @@ export async function ensureWorkflowRecord(
 
   const { error: workflowError } = await supabase.from("workflows").insert({
     id: workflowId,
+    tenant_id: tenantId,
     name: DEFAULT_WORKFLOW_NAME,
     description: null,
     status: "draft",
@@ -172,6 +179,7 @@ export async function ensureWorkflowRecord(
 
   const { error: versionError } = await supabase.from("workflow_versions").insert({
     id: versionId,
+    tenant_id: tenantId,
     workflow_id: workflowId,
     version: 1,
     status: "draft",
@@ -187,12 +195,12 @@ export async function ensureWorkflowRecord(
   const { error: linkError } = await supabase.from("workflows").update({
     active_version_id: versionId,
     updated_at: now,
-  }).eq("id", workflowId);
+  }).eq("id", workflowId).eq("tenant_id", tenantId);
   if (linkError) {
     throw new Error(`Failed to link workflow version: ${linkError.message}`);
   }
 
-  const created = await fetchWorkflowRecord(supabase, workflowId);
+  const created = await fetchWorkflowRecord(supabase, tenantId, workflowId);
   if (!created) {
     throw new Error("Failed to create workflow");
   }
@@ -201,6 +209,7 @@ export async function ensureWorkflowRecord(
 
 export async function createWorkflowRecord(
   supabase: SupabaseClient,
+  tenantId: string,
   input: WorkflowData,
   ownerCompanyId?: string | null
 ): Promise<WorkflowRecord> {
@@ -210,6 +219,7 @@ export async function createWorkflowRecord(
 
   const { error: workflowError } = await supabase.from("workflows").insert({
     id: workflowId,
+    tenant_id: tenantId,
     name: input.name ?? DEFAULT_WORKFLOW_NAME,
     description: input.description ?? null,
     status: "draft",
@@ -224,6 +234,7 @@ export async function createWorkflowRecord(
 
   const { error: versionError } = await supabase.from("workflow_versions").insert({
     id: versionId,
+    tenant_id: tenantId,
     workflow_id: workflowId,
     version: 1,
     status: "draft",
@@ -239,12 +250,12 @@ export async function createWorkflowRecord(
   const { error: linkError } = await supabase.from("workflows").update({
     active_version_id: versionId,
     updated_at: now,
-  }).eq("id", workflowId);
+  }).eq("id", workflowId).eq("tenant_id", tenantId);
   if (linkError) {
     throw new Error(`Failed to link workflow version: ${linkError.message}`);
   }
 
-  const created = await fetchWorkflowRecord(supabase, workflowId);
+  const created = await fetchWorkflowRecord(supabase, tenantId, workflowId);
   if (!created) {
     throw new Error("Failed to create workflow");
   }
@@ -253,10 +264,11 @@ export async function createWorkflowRecord(
 
 export async function updateWorkflowRecord(
   supabase: SupabaseClient,
+  tenantId: string,
   workflowId: string,
   patch: Partial<WorkflowData>
 ): Promise<WorkflowRecord> {
-  const existing = await ensureWorkflowRecord(supabase, workflowId);
+  const existing = await ensureWorkflowRecord(supabase, tenantId, workflowId);
   const now = new Date().toISOString();
 
   await supabase.from("workflows").update({
@@ -266,7 +278,7 @@ export async function updateWorkflowRecord(
         ? existing.workflow.description
         : patch.description,
     updated_at: now,
-  }).eq("id", workflowId);
+  }).eq("id", workflowId).eq("tenant_id", tenantId);
 
   const versionId = existing.workflow.active_version_id;
   if (!versionId) {
@@ -277,9 +289,9 @@ export async function updateWorkflowRecord(
     nodes: patch.nodes ?? existing.version.nodes,
     edges: patch.edges ?? existing.version.edges,
     updated_at: now,
-  }).eq("id", versionId);
+  }).eq("id", versionId).eq("tenant_id", tenantId);
 
-  const updated = await fetchWorkflowRecord(supabase, workflowId);
+  const updated = await fetchWorkflowRecord(supabase, tenantId, workflowId);
   if (!updated) {
     throw new Error("Failed to update workflow");
   }
@@ -288,9 +300,10 @@ export async function updateWorkflowRecord(
 
 export async function listWorkflowRecords(
   supabase: SupabaseClient,
+  tenantId: string,
   ownerCompanyId?: string | null
 ): Promise<WorkflowRecord[]> {
-  let query = supabase.from("workflows").select("*").order("updated_at", {
+  let query = supabase.from("workflows").select("*").eq("tenant_id", tenantId).order("updated_at", {
     ascending: false,
   });
   if (ownerCompanyId) {
@@ -307,6 +320,7 @@ export async function listWorkflowRecords(
   const { data: versions } = await supabase
     .from("workflow_versions")
     .select("*")
+    .eq("tenant_id", tenantId)
     .in("id", versionIds);
 
   const versionMap = new Map(
@@ -317,6 +331,7 @@ export async function listWorkflowRecords(
   const { data: publishedVersions } = await supabase
     .from("workflow_versions")
     .select("workflow_id, version")
+    .eq("tenant_id", tenantId)
     .in("workflow_id", workflowIds)
     .eq("status", "published");
 
@@ -345,6 +360,7 @@ export async function listWorkflowRecords(
 
 export async function createNewVersion(
   supabase: SupabaseClient,
+  tenantId: string,
   workflowId: string,
   input: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; status: string }
 ): Promise<WorkflowVersionRow> {
@@ -352,6 +368,7 @@ export async function createNewVersion(
     .from("workflow_versions")
     .select("version")
     .eq("workflow_id", workflowId)
+    .eq("tenant_id", tenantId)
     .order("version", { ascending: false })
     .limit(1)
     .maybeSingle<{ version: number }>();
@@ -362,6 +379,7 @@ export async function createNewVersion(
 
   await supabase.from("workflow_versions").insert({
     id: versionId,
+    tenant_id: tenantId,
     workflow_id: workflowId,
     version,
     status: input.status,
@@ -376,6 +394,7 @@ export async function createNewVersion(
     .from("workflow_versions")
     .select("*")
     .eq("id", versionId)
+    .eq("tenant_id", tenantId)
     .single<WorkflowVersionRow>();
 
   if (!created) {

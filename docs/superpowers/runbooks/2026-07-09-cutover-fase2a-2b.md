@@ -1,10 +1,14 @@
-# Cutover Fase 2A — Fundação Multi-tenant
+# Cutover Fase 2A + 2B — Fundação Multi-tenant + Resolução de Tenant em Webhooks
 
 Procedimento operacional para levar o SmartZap de single-tenant (`MASTER_PASSWORD`) para
-multi-tenant (Supabase Auth via magic link + RLS por `tenant_id`).
+multi-tenant (Supabase Auth via magic link + RLS por `tenant_id`), incluindo a resolução de
+tenant nos webhooks sem sessão (Meta WhatsApp, WhatsApp Flows, Google Calendar) e o fix do
+workflow builder (Fase 2B).
 
-Plano: `docs/superpowers/plans/2026-07-08-fase2a-multitenancy-foundation.md`
-Spec: `docs/superpowers/specs/2026-07-08-fase2a-multitenancy-foundation-design.md`
+Plano 2A: `docs/superpowers/plans/2026-07-08-fase2a-multitenancy-foundation.md`
+Spec 2A: `docs/superpowers/specs/2026-07-08-fase2a-multitenancy-foundation-design.md`
+Plano 2B: `docs/superpowers/plans/2026-07-09-fase2b-webhook-tenant-resolution.md`
+Spec 2B: `docs/superpowers/specs/2026-07-09-fase2b-webhook-tenant-resolution-design.md`
 Ledger completo (decisões, achados, commits): `.superpowers/sdd/progress.md`
 
 Este runbook assume um projeto Supabase **novo ou já rodando o baseline single-tenant**
@@ -35,7 +39,15 @@ Ordem obrigatória (dependem umas das outras):
 20260708000003_multitenancy_rls_policies.sql
 20260708000004_multitenancy_scope_rpcs.sql
 20260708000005_multitenancy_unique_per_tenant.sql
+20260709000001_multitenancy_webhook_tenant_mapping.sql
 ```
+
+A última (`20260709000001`, Fase 2B) cria `whatsapp_phone_numbers` (com coluna
+`flows_webhook_token`) e `google_calendar_channels` — as tabelas de mapeamento que resolvem
+tenant a partir de `phone_number_id`/`channel_token`/token de Flows nos webhooks sem sessão.
+Inclui `GRANT` explícito ao role `authenticated` (achado no planejamento da 2B: RLS sozinho
+não expõe a tabela via Data API/PostgREST — as tabelas de plataforma da Fase 2A também não
+têm esse GRANT, ver "Bloqueadores conhecidos" abaixo).
 
 **Opção A — `supabase` CLI instalado no ambiente de produção:**
 
@@ -164,52 +176,83 @@ Supabase por usuário).
 
 ---
 
-## 6. Bloqueadores conhecidos antes de considerar a 2A pronta para produção
+## 6. Bloqueadores conhecidos antes do cutover de produção
 
-Extraído do ledger (`.superpowers/sdd/progress.md`, seção "Minor findings"). Revisar/mitigar
-antes do cutover de produção, ou aceitar o risco conscientemente:
+Extraído do ledger (`.superpowers/sdd/progress.md`). Revisar/mitigar antes do cutover de
+produção, ou aceitar o risco conscientemente.
 
-- **[CRÍTICO] Workflow builder quebrado.** `lib/builder/workflow-db.ts` (feature separada do
-  workflow visual, ~11 call-sites em `app/api/builder/**`) insere em `workflows` e
-  `workflow_versions` **sem `tenant_id`**, e ambas as tabelas têm `tenant_id NOT NULL` desde
-  a migração `20260708000002`. `ensureWorkflowRecord`/`createWorkflowRecord`/
-  `updateWorkflowRecord` vão **falhar em runtime** (violação de NOT NULL) assim que chamados.
-  Não corrigido na Fase 2A (fora do escopo dos 10 objetos `*Db` da Task 6; mistura rotas com
-  sessão e handlers `serve()` do Upstash Workflow sem sessão — precisa do mesmo padrão
-  "derivar tenant do recurso" usado em `campaign/workflow`). **Se o workflow builder for
-  usado em produção, isso é um crash garantido, não um nice-to-have.**
-- **Webhooks Meta e Google Calendar intencionalmente bloqueados até a Fase 2B.**
-  `app/api/webhook/**` e `app/api/integrations/google-calendar/webhook` chamam
-  `resolveWebhookTenantId()`, que **sempre lança** hoje — deferral legítimo (não há recurso
-  com `tenant_id` derivável do payload ainda; a Fase 2B mapeia `phone_number_id`/canal →
-  tenant). Diferente da regressão do `campaign/dispatch` (corrigida durante a Task 6 —
-  aquela rota atende disparo manual além de QStash e não podia ficar bloqueada). Enquanto o
-  guard não for removido sem revisão, o risco é baixo; remover o guard sem mapear o tenant
-  reabriria vazamento cross-tenant.
-- **Queries diretas sem filtro de tenant fora dos objetos `*Db`.** Não aparecem no `tsc`
-  (não são erro de tipo) e não foram cobertas pelos lotes mecânicos da Task 6. Notado em:
+### Resolvidos pela Fase 2B
+
+- ~~Workflow builder quebrado~~ — `lib/builder/workflow-db.ts` (7 funções) e as 13 rotas que
+  as chamam agora exigem `tenantId` e escrevem `tenant_id` nos inserts. Corrigido também um
+  vazamento cross-tenant real que não estava no escopo original: `fetchWorkflowRecord`/
+  `listWorkflowRecords` liam sem filtro de tenant (qualquer tenant com um `workflowId`
+  alheio conseguia lê-lo), e várias rotas (`[workflowId]` DELETE, `publish`, `rollback`,
+  `run`) faziam update/insert/delete sem filtro de tenant nas tabelas
+  `workflows`/`workflow_versions`/`workflow_runs`. Todos corrigidos.
+- ~~Webhooks Meta e Google Calendar bloqueados~~ — `app/api/webhook/route.ts` resolve tenant
+  por `phone_number_id` (tabela `whatsapp_phone_numbers`); o webhook do Calendar resolve por
+  `channel_token` (tabela `google_calendar_channels`). Payload/token sem match → resposta
+  silenciosa (200 para Meta, 401 para Calendar), não erro.
+- ~~Endpoint de WhatsApp Flows bloqueado~~ — moveu de `/api/flows/endpoint` para
+  `/api/flows/endpoint/[token]` (token opaco por tenant, `flows_webhook_token`). **Ação
+  manual de onboarding**: tenants que já tinham um Flow publicado com endpoint configurado
+  na Meta **precisam republicar o Flow** (ou atualizar a Endpoint URI manualmente no Meta
+  Business Manager) para incluir o novo token — a URL antiga sem token não existe mais.
+- ~~`webhook_verify_token` modelado como per-tenant~~ — virou config de plataforma
+  (`platform_settings`), já que a URL do webhook é única e compartilhada por todos os
+  tenants. **Ação manual se o ambiente de produção já tinha um token salvo per-tenant antes
+  desta fase**: gerar um novo (automático, na primeira chamada ao webhook em modo não-readonly)
+  ou copiar manualmente o valor antigo para `platform_settings` via
+  `mcp__supabase__execute_sql` — e reconfigurar o `hub.verify_token` no App Dashboard da Meta
+  se o valor mudou.
+
+### Ainda pendentes
+
+- **Backfill de `whatsapp_phone_numbers`/`google_calendar_channels` para tenants
+  pré-existentes.** O write-through só roda em saves *novos* de credenciais (Task 3/4 da
+  2B). Se o ambiente de produção já tinha tenants com credenciais salvas **antes** desta
+  fase rodar, essas tabelas ficam vazias para eles — o webhook fica "ignorado" (200 sem
+  processar) até uma resalvagem manual das credenciais. Sem script de backfill dedicado
+  (YAGNI, volume de tenants baixo nesta fase do produto) — ação manual: cada tenant existente
+  precisa reabrir Settings → WhatsApp e salvar as credenciais de novo (mesmo valor, só para
+  disparar o write-through) antes do webhook voltar a funcionar para ele.
+- **Queries diretas sem filtro de tenant fora dos objetos `*Db`/`workflow-db.ts`.** Não
+  aparecem no `tsc` (não são erro de tipo). Notado em:
   - `app/api/settings/all/route.ts`, `app/api/settings/booking/route.ts`
   - `app/api/campaigns/[id]/route.ts` (GET), `resend-skipped`, `cancel-schedule`,
     `report.csv`, `app/api/campaign/[id]/cancel`
-  - `app/api/webhook/route.ts` (~1600 linhas): só as queries que o `tsc` apontou foram
-    corrigidas, mais 3 bugs óbvios de vazamento (clone de template, validate,
-    preview/backfill) — sem auditoria linha-a-linha do arquivo inteiro. Risco baixo enquanto
-    `resolveWebhookTenantId()` seguir bloqueando o fluxo; alto se alguém remover o guard sem
-    revisar o resto do arquivo.
+  - `app/api/webhook/route.ts` (~1650 linhas): só as queries que o `tsc` apontou foram
+    corrigidas na 2A, mais 3 bugs óbvios de vazamento (clone de template, validate,
+    preview/backfill) — sem auditoria linha-a-linha do arquivo inteiro. A 2B corrigiu a
+    resolução de tenant no topo do handler (Task 6), mas não auditou o resto do arquivo.
   Risco: leitura cross-tenant via `service_role` (que bypassa RLS). Revisar antes do review
   final de produção.
-- **Caso positivo de RLS não verificado end-to-end.** A Task 12 verificou ao vivo (contra o
-  projeto `vdgudeijxxbaghqaxpip`) que um usuário `authenticated` sem `tenant_members` vê 0
-  linhas (caso negativo). O caso positivo — 2 usuários JWT reais, cada um vendo só o próprio
-  tenant — **não foi verificado** (o subagente foi bloqueado por permissão ao tentar inserir
-  um usuário fake em `auth.users`, corretamente, sem contornar). Risco residual considerado
-  baixo (mesma policy `tenant_id = current_tenant_id()` já testada indiretamente na Task 4),
-  mas é um gap de cobertura real — validar manualmente com 2 contas reais antes de produção
-  (ver checklist abaixo).
-- **`search_embeddings` (RAG) quebrado.** Pré-existente à Fase 2A: os 2 overloads falham em
-  runtime porque `search_path` não inclui o schema `extensions`, onde vive o operador do
-  pgvector neste projeto. Corrigir junto da Fase 2B/RAG ou no review final (fix = `SET
-  search_path` incluindo `extensions`).
+- **[NOVO — achado no planejamento da 2B] `GRANT` de tabela ausente nas tabelas de
+  plataforma da Fase 2A.** RLS sozinho não expõe uma tabela via Data API/PostgREST — precisa
+  também de `GRANT SELECT/INSERT/UPDATE/DELETE ... TO authenticated`. As tabelas
+  `whatsapp_phone_numbers`/`google_calendar_channels` (2B) já nasceram com o GRANT correto,
+  mas `tenants`/`tenant_members`/`platform_admins`/`platform_settings` (2A) **não têm**.
+  Como o acesso real da aplicação a essas 4 tabelas passa por RPCs `SECURITY DEFINER`
+  (`current_tenant_id()`/`is_platform_admin()`, que executam com privilégios do dono da
+  função, não do chamador) ou por `service_role`, isso não quebra o fluxo atual — mas
+  qualquer feature futura que tente ler essas tabelas diretamente via client `authenticated`
+  (ex.: uma tela de Settings mostrando membros do tenant) receberá `permission denied`, não
+  uma lista vazia. Corrigir com `GRANT SELECT ON public.tenants, public.tenant_members,
+  public.platform_admins, public.platform_settings TO authenticated;` antes do review final.
+- **Handlers `execute`/`resume` do workflow builder não testados contra QStash real.** A
+  correção da 2B (derivar tenant de `workflows.tenant_id` dentro de `context.run`) foi
+  validada via `tsc`/build/suíte, mas não há teste de integração disparando o fluxo completo
+  via QStash real. Testar manualmente: criar um workflow, executá-lo pela UI, confirmar que
+  `workflow_runs.tenant_id` é preenchido corretamente.
+- **Caso positivo de RLS não verificado end-to-end.** 2 usuários JWT reais, cada um vendo só
+  o próprio tenant — **não foi verificado** automatizado (bloqueio de permissão ao tentar
+  inserir usuário fake em `auth.users`, respeitado sem contornar). Risco residual baixo
+  (mesma policy já testada indiretamente), mas gap de cobertura real — validar manualmente
+  com 2 contas reais antes de produção (ver checklist abaixo).
+- **`search_embeddings` (RAG) quebrado.** Pré-existente: os 2 overloads falham em runtime
+  porque `search_path` não inclui o schema `extensions`, onde vive o operador do pgvector
+  neste projeto. Fix = `SET search_path` incluindo `extensions`.
 - **`increment_campaign_stat(p_campaign_id uuid, ...)` — overload uuid quebrado.** Compara
   `uuid` com `campaigns.id` (tipo `text`) → erro de operador. O overload com `text` funciona;
   confirmar qual overload os call-sites usam antes de depender dele.
@@ -235,8 +278,18 @@ antes do cutover de produção, ou aceitar o risco conscientemente:
       login de usuário (rota `/api/auth/status` reporta via Supabase; `lib/user-auth.ts`
       segue no repo mas não é mais chamado no caminho de login — ver Task 10, ainda
       pendente no ledger no momento da escrita deste runbook).
-- [ ] **`npx tsc --noEmit` e `npx vitest run`** limpos no commit que está sendo promovido a
-      produção (baseline conhecido: 0 erros tsc, 3416+ testes passando, 0 falhas).
-- [ ] Revisar a seção "Bloqueadores conhecidos" acima e decidir explicitamente se o workflow
-      builder e os webhooks Meta/Google Calendar ficam desabilitados/avisados na UI até a
-      Fase 2B, ou se algum deles precisa de correção antes deste cutover.
+- [ ] **`npx tsc --noEmit`, `npm run build` e `npx vitest run`** limpos no commit que está
+      sendo promovido a produção (baseline conhecido pós-2B: 0 erros tsc, build ok, 3448
+      testes passando, 0 falhas).
+- [ ] **Webhook Meta resolve tenant:** enviar uma mensagem de teste para um número WhatsApp
+      já conectado a um tenant (via Settings → WhatsApp) e confirmar que ela aparece no
+      Inbox do tenant correto. Enviar para um número **não** cadastrado em
+      `whatsapp_phone_numbers` e confirmar no log que a mensagem foi ignorada (200,
+      `reason: unknown_phone_number_id`) em vez de processada para o tenant errado.
+- [ ] **Endpoint de Flows usa a URL com token:** em Settings → Flows, confirmar que a URL
+      exibida (e a que é enviada à Meta ao publicar um Flow) inclui o segmento
+      `/api/flows/endpoint/<token>`, não a URL antiga sem token.
+- [ ] Revisar a seção "Bloqueadores conhecidos" acima — em especial o GRANT ausente nas
+      tabelas de plataforma da 2A e o backfill de `whatsapp_phone_numbers` para tenants
+      pré-existentes — e decidir explicitamente se algum precisa de correção antes deste
+      cutover ou se o risco é aceito conscientemente.

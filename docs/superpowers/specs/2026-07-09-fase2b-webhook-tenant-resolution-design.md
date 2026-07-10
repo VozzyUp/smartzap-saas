@@ -57,11 +57,45 @@ Mesmo padrão de RLS e write-through, acoplado a `saveCalendarChannel()` em `lib
 
 - O `channel_token` já vem no header `x-goog-channel-token` antes mesmo de saber o tenant (diferente do fluxo atual, que assumia `tenantId` para depois validar o token). Novo fluxo: `select tenant_id, channel_id, resource_id from google_calendar_channels where channel_token = $1`. Não encontrado → `401` (mesmo comportamento de token inválido que já existia, só muda a fonte da comparação). Encontrado → segue com `tenantId` resolvido, chama `getCalendarChannel(tenantId)`/`markCalendarNotification(tenantId, ...)` como hoje.
 
+### 4b. `app/api/flows/endpoint/route.ts` (WhatsApp Flows data_exchange) — URL por tenant
+
+**Achado no planejamento, fora do desenho original:** este endpoint precisa da chave privada
+RSA do tenant **antes** de conseguir descriptografar o payload (`decryptRequest`) — não há
+`phone_number_id` nem nenhum campo fora da criptografia (`encrypted_flow_data`,
+`encrypted_aes_key`, `initial_vector` são os únicos campos do body; sem query params, sem
+headers identificadores). O padrão de lookup pós-decriptação (itens 3 e 4) não se aplica aqui.
+
+**Solução (mesmo padrão já usado por `lead_forms.webhook_token`):** rota vira
+`app/api/flows/endpoint/[token]/route.ts`. Token opaco por tenant, gerado com
+`generateWebhookToken()` (já existe em `lib/supabase-db.ts:51`, padrão `{prefixo}_{uuid sem
+hífen}`; usar prefixo `fwh_`), armazenado como nova coluna nullable
+`flows_webhook_token text unique` em `whatsapp_phone_numbers` (não justifica tabela própria —
+está ligado ao mesmo setup de WhatsApp do tenant, YAGNI). Gerado automaticamente na primeira
+vez que o tenant salva a chave pública/privada do Flow (mesmo ponto que hoje chama
+`generateKeyPair()` em `app/api/flows/endpoint/route.ts`).
+
+O handler novo: `select tenant_id from whatsapp_phone_numbers where flows_webhook_token = $1`.
+Não encontrado → `404` (token nunca existiu ou foi trocado). Encontrado → resolve `tenantId`
+e segue o fluxo existente (`decryptRequest` com a chave do tenant, `handleFlowAction` etc.),
+threading `tenantId` em vez de `resolveWebhookTenantId()` — inclui a chamada em
+`lib/whatsapp/flow-endpoint-handlers.ts:689` (`handleDataExchange`), que recebe `tenantId`
+como parâmetro em vez de resolver internamente.
+
+**Onboarding (nota para Fase 3, não implementar aqui):** o tenant precisa colar essa URL
+específica (com o token) ao configurar a Endpoint URI do Flow no Meta Business Manager —
+passo a incluir no wizard de onboarding da Fase 3.
+
+**Fora de escopo, decisão já tomada:** `lib/mcp/tools/system.ts:219` também chama
+`resolveWebhookTenantId()` — é uma ferramenta MCP administrativa de stress-test (simula
+conversas sintéticas, sem tenant real associado). Não é webhook, não tem recurso do qual
+derivar tenant. Permanece bloqueada; não é bug, é uma ferramenta interna sem contexto de
+produção real.
+
 ### 5. `lib/builder/workflow-db.ts` — tenant-scoping
 
 - `ensureWorkflowRecord(supabase, tenantId, workflowId, ownerCompanyId?)`, `createWorkflowRecord(supabase, tenantId, input, ownerCompanyId?)`, `updateWorkflowRecord(supabase, tenantId, workflowId, patch)`, `getCompanyId(supabase, tenantId)`: `tenantId` sempre logo após `supabase` (2º parâmetro, posição fixa e consistente nas 4 funções — segue a convenção já usada nos objetos `*Db` da Fase 2A, onde o identificador de tenant é o primeiro argumento "de negócio" depois do client). Inserts em `workflows`/`workflow_versions` incluem `tenant_id: tenantId`. Reads (`fetchWorkflowRecord`) passam a filtrar `.eq('tenant_id', tenantId)`.
 - `getCompanyId`: adiciona `.eq('tenant_id', tenantId)` ao select — sem isso, `.maybeSingle()` quebra com "multiple rows" assim que existir mais de um tenant com a chave `company_id` em `settings`.
-- **Call-sites com sessão** (`workflows/create`, `workflows/current`, `workflows/[workflowId]/{route,duplicate,download,publish,run,webhook}`, `executions/[executionId]/logs` — 8 rotas): resolvem via `getTenantContext()`, mesmo padrão já usado em todo o resto do produto pós-2A.
+- **Call-sites com sessão** (confirmado via grep no planejamento — 11 arquivos, não os 8 estimados no brainstorming): `workflows/route.ts`, `workflows/create/route.ts`, `workflows/current/route.ts`, `workflows/executions/[executionId]/logs/route.ts`, `workflows/[workflowId]/route.ts`, `workflows/[workflowId]/duplicate/route.ts`, `workflows/[workflowId]/download/route.ts`, `workflows/[workflowId]/publish/route.ts`, `workflows/[workflowId]/rollback/route.ts` (não estava no brainstorming), `workflows/[workflowId]/run/route.ts`, `workflows/[workflowId]/webhook/route.ts`. Todos resolvem via `getTenantContext()`, mesmo padrão já usado em todo o resto do produto pós-2A.
 - **Call-sites sem sessão** (handlers `serve()` do Upstash Workflow — `workflow/[workflowId]/execute`, `workflow/[workflowId]/resume`): recebem `tenantId` dentro do `requestPayload` de quem os dispara. Os 3 disparadores identificados no brainstorming:
   - `app/api/webhook/route.ts` (linhas ~996 e ~1032): já vai ter `tenantId` resolvido pelo item 3 acima — passa direto.
   - `lib/builder/api-client.ts:491`: chamado de rota com sessão do builder (UI "executar agora") — resolve `tenantId` via `getTenantContext()` antes de montar o payload.

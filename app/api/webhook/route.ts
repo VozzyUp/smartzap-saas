@@ -42,7 +42,7 @@ import {
   handleInboundMessage,
   handleDeliveryStatus,
 } from '@/lib/inbox/inbox-webhook'
-import { resolveWebhookTenantId } from '@/lib/tenant-context'
+import { resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
 
 // Get WhatsApp Access Token from centralized helper
 async function getWhatsAppAccessToken(tenantId: string): Promise<string | null> {
@@ -561,11 +561,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ignored' })
   }
 
-  // Payload da Meta pode trazer mensagens/status de diferentes WABAs (phone_number_id
-  // em change.value.metadata) e o endpoint /api/webhook é compartilhado por todos os
-  // tenants — não há hoje um índice phone_number_id -> tenant_id para resolver isso.
-  // Guard intencional até Fase 2B (schema dedicado de phone numbers com tenant_id).
-  const tenantId = await resolveWebhookTenantId()
+  const entries = Array.isArray(body?.entry) ? body.entry : []
+  const phoneNumberIds = new Set<string>()
+  for (const entry of entries) {
+    for (const change of entry?.changes ?? []) {
+      const pnId = change?.value?.metadata?.phone_number_id
+      if (pnId) phoneNumberIds.add(String(pnId))
+    }
+  }
+
+  if (phoneNumberIds.size === 0) {
+    console.warn('[webhook] Payload sem phone_number_id em nenhum entry/change — ignorando.')
+    return NextResponse.json({ status: 'ignored', reason: 'no_phone_number_id' })
+  }
+
+  const [firstPhoneNumberId, ...restPhoneNumberIds] = Array.from(phoneNumberIds)
+  if (restPhoneNumberIds.length > 0) {
+    console.warn(
+      `[webhook] Payload com múltiplos phone_number_id (${phoneNumberIds.size}) — processando só ${firstPhoneNumberId}, ignorando ${restPhoneNumberIds.length}.`
+    )
+  }
+
+  const tenantId = await resolveTenantByPhoneNumberId(firstPhoneNumberId)
+  if (!tenantId) {
+    console.warn(`[webhook] phone_number_id ${firstPhoneNumberId} não mapeado a nenhum tenant — ignorando.`)
+    return NextResponse.json({ status: 'ignored', reason: 'unknown_phone_number_id' })
+  }
 
   // Evita logs gigantes: guardamos payload estruturado em DB (whatsapp_status_events)
   // e fazemos logs de alto nível aqui.

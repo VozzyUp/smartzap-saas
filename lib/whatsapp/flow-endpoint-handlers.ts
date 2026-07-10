@@ -15,7 +15,6 @@ import {
 import { settingsDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { isSupabaseConfigured } from '@/lib/supabase'
-import { resolveWebhookTenantId } from '@/lib/tenant-context'
 import {
   createSuccessResponse,
   createCloseResponse,
@@ -666,6 +665,7 @@ async function createBookingEvent(tenantId: string, params: {
 // --- Handler Principal ---
 
 export async function handleFlowAction(
+  tenantId: string,
   request: FlowDataExchangeRequest
 ): Promise<Record<string, unknown>> {
   const { action, screen, data, flow_token: flowToken } = request
@@ -683,10 +683,6 @@ export async function handleFlowAction(
       },
     }
   }
-
-  // Rota sem contexto de sessão (webhook Meta) — resolve o tenant no ponto de
-  // entrada. Até a Fase 2B, isso lança sempre (ver resolveWebhookTenantId).
-  const tenantId = await resolveWebhookTenantId()
 
   let result: Record<string, unknown>
   const flowJson = await loadFlowJsonFromToken(tenantId, flowToken)

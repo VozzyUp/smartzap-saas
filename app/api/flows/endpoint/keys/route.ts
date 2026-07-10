@@ -17,6 +17,7 @@ import {
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { metaSetEncryptionPublicKey } from '@/lib/meta-flows-api'
 import { getAppUrl } from '@/lib/app-url'
+import { getOrCreateFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,11 +27,11 @@ const PRIVATE_KEY_SETTING = 'whatsapp_flow_private_key'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 
-function resolveEndpointUrlFromRequest(request: Request): string | null {
+function resolveEndpointUrlFromRequest(request: Request, token: string): string | null {
   const proto = request.headers.get('x-forwarded-proto') || 'https'
   const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
   if (!host) return null
-  return `${proto}://${host}/api/flows/endpoint`
+  return `${proto}://${host}/api/flows/endpoint/${token}`
 }
 
 function isLocalhostUrl(value: string | null): boolean {
@@ -56,10 +57,17 @@ export async function GET(request: Request) {
     ])
     const storedEndpointUrl = await settingsDb.get(ctx.tenantId, ENDPOINT_URL_SETTING)
 
+    let flowsToken: string | null = null
+    try {
+      flowsToken = await getOrCreateFlowsWebhookToken(ctx.tenantId)
+    } catch (err) {
+      console.warn('[flow-endpoint-keys] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+    }
+
     const hasPrivateKey = !!privateKey && isValidPrivateKey(privateKey)
     const hasPublicKey = !!publicKey
-    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL ? `${getAppUrl()}/api/flows/endpoint` : null
-    const headerEndpointUrl = resolveEndpointUrlFromRequest(request)
+    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL && flowsToken ? `${getAppUrl()}/api/flows/endpoint/${flowsToken}` : null
+    const headerEndpointUrl = flowsToken ? resolveEndpointUrlFromRequest(request, flowsToken) : null
     const safeStoredEndpointUrl =
       storedEndpointUrl && !isLocalhostUrl(headerEndpointUrl) && isLocalhostUrl(storedEndpointUrl)
         ? null
@@ -153,9 +161,15 @@ export async function POST(request: Request) {
       settingsDb.set(ctx.tenantId, PRIVATE_KEY_SETTING, privateKey),
       settingsDb.set(ctx.tenantId, PUBLIC_KEY_SETTING, publicKey),
     ])
-    const endpointUrl = resolveEndpointUrlFromRequest(request)
-    const shouldStoreEndpointUrl = endpointUrl && !isLocalhostUrl(endpointUrl)
-    if (shouldStoreEndpointUrl) {
+
+    let endpointUrl: string | null = null
+    try {
+      const flowsToken = await getOrCreateFlowsWebhookToken(ctx.tenantId)
+      endpointUrl = resolveEndpointUrlFromRequest(request, flowsToken)
+    } catch (err) {
+      console.warn('[flow-endpoint-keys] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+    }
+    if (endpointUrl && !isLocalhostUrl(endpointUrl)) {
       await settingsDb.set(ctx.tenantId, ENDPOINT_URL_SETTING, endpointUrl)
     }
 

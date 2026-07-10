@@ -24,6 +24,7 @@ import { validateMetaFlowJson } from '@/lib/meta-flow-json-validator'
 import { settingsDb } from '@/lib/supabase-db'
 import { getAppUrl } from '@/lib/app-url'
 import { getTenantContext } from '@/lib/tenant-context'
+import { getOrCreateFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 
 /**
  * Detecta se o Flow JSON e dinamico (usa data_exchange)
@@ -65,7 +66,13 @@ async function getFlowEndpointUrl(tenantId: string): Promise<string | null> {
 
   // 1. NEXT_PUBLIC_APP_URL (pode ser URL de túnel em dev)
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${getAppUrl()}/api/flows/endpoint`
+    try {
+      const flowsToken = await getOrCreateFlowsWebhookToken(tenantId)
+      return `${getAppUrl()}/api/flows/endpoint/${flowsToken}`
+    } catch (err) {
+      console.warn('[publish] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+      return null
+    }
   }
 
   // 2. Fallback: URL salva no banco

@@ -3,6 +3,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 import { getTenantContext } from '@/lib/tenant-context'
+import { upsertWhatsAppPhoneNumber, clearWhatsAppPhoneNumber } from '@/lib/whatsapp-phone-numbers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -142,6 +143,11 @@ export async function POST(request: NextRequest) {
       isConnected: true
     })
 
+    await upsertWhatsAppPhoneNumber(ctx.tenantId, {
+      phoneNumberId,
+      businessAccountId,
+    })
+
     return NextResponse.json({
       success: true,
       phoneNumberId,
@@ -179,6 +185,8 @@ export async function DELETE() {
       settingsDb.set(ctx.tenantId, 'metaAppId', ''),
       settingsDb.set(ctx.tenantId, 'metaAppSecret', ''),
     ])
+
+    await clearWhatsAppPhoneNumber(ctx.tenantId)
 
     return NextResponse.json({
       success: true,

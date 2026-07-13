@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 import { BulkSetContactCustomFieldSchema, validateBodyOrError } from '@/lib/api-validation'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,9 @@ export async function POST(request: Request) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
 
     const validation = validateBodyOrError(BulkSetContactCustomFieldSchema, body)
@@ -24,7 +28,7 @@ export async function POST(request: Request) {
 
     const { contactIds, key, value } = validation.data
 
-    const result = await contactDb.bulkSetCustomField(contactIds, key, value)
+    const result = await contactDb.bulkSetCustomField(ctx.tenantId, contactIds, key, value)
     return NextResponse.json(result, {
       headers: {
         'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',

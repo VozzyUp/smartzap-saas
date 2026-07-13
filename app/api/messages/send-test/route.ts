@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials';
 import { normalizePhoneNumber } from '@/lib/phone-formatter';
 import { fetchWithTimeout, safeJson } from '@/lib/server-http';
+import { getTenantContext } from '@/lib/tenant-context';
 
 const META_API_VERSION = 'v24.0';
 
@@ -108,6 +109,9 @@ async function findTestTemplate(
  */
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext();
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
     const body = await request.json();
     const { to, credentials: providedCredentials } = body;
 
@@ -128,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Obter credenciais salvas (sempre precisamos do WABA para buscar templates)
-    const savedCredentials = await getWhatsAppCredentials();
+    const savedCredentials = await getWhatsAppCredentials(ctx.tenantId);
 
     // Usar credenciais fornecidas ou salvas para Phone ID e Token
     const phoneNumberId = providedCredentials?.phoneNumberId || savedCredentials?.phoneNumberId;

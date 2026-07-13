@@ -34,7 +34,12 @@ export async function sendTemplateStep(
   "use step";
 
   return withStepLogging(input, async () => {
-    const credentials = await getCredentials();
+    const tenantId = input._context?.tenantId;
+    if (!tenantId) {
+      return { success: false, error: "Tenant ausente no contexto do step" };
+    }
+
+    const credentials = await getCredentials(tenantId);
     if (!credentials) {
       return { success: false, error: "WhatsApp not configured" };
     }

@@ -21,7 +21,7 @@ function corsHeaders() {
 export async function GET(_req: Request, { params }: Params) {
   try {
     const { slug } = await params
-    const form = await leadFormDb.getBySlug(slug)
+    const form = await leadFormDb.getBySlugPublic(slug)
 
     if (!form) {
       return NextResponse.json(

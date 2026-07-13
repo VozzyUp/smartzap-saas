@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant-context";
 import {
   buildDefaultGraph,
   createWorkflowRecord,
@@ -9,6 +10,9 @@ import {
 import { validateWorkflowSchema } from "@/lib/shared/workflow-schema";
 
 export async function POST(request: Request) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json(
@@ -44,10 +48,11 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const companyId = await getCompanyId(supabase);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
   try {
     const record = await createWorkflowRecord(
       supabase,
+      ctx.tenantId,
       normalized,
       companyId
     );

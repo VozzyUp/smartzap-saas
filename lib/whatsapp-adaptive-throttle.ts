@@ -145,13 +145,13 @@ function parseConfig(raw: string | null): AdaptiveThrottleConfig | null {
   }
 }
 
-export async function getAdaptiveThrottleConfig(): Promise<AdaptiveThrottleConfig> {
-  const res = await getAdaptiveThrottleConfigWithSource()
+export async function getAdaptiveThrottleConfig(tenantId: string): Promise<AdaptiveThrottleConfig> {
+  const res = await getAdaptiveThrottleConfigWithSource(tenantId)
   return res.config
 }
 
-export async function getAdaptiveThrottleConfigWithSource(): Promise<AdaptiveThrottleConfigWithSource> {
-  const raw = await settingsDb.get(CONFIG_KEY)
+export async function getAdaptiveThrottleConfigWithSource(tenantId: string): Promise<AdaptiveThrottleConfigWithSource> {
+  const raw = await settingsDb.get(tenantId, CONFIG_KEY)
   const rawPresent = typeof raw === 'string' && raw.trim().length > 0
   const parsed = parseConfig(raw)
   if (parsed) {
@@ -167,13 +167,13 @@ function isInCooldown(state: AdaptiveThrottleState, nowMs: number): boolean {
   return nowMs < until
 }
 
-export async function getAdaptiveThrottleState(phoneNumberId: string): Promise<AdaptiveThrottleState> {
+export async function getAdaptiveThrottleState(tenantId: string, phoneNumberId: string): Promise<AdaptiveThrottleState> {
   const key = `${KEY_PREFIX}${phoneNumberId}`
-  const raw = await settingsDb.get(key)
+  const raw = await settingsDb.get(tenantId, key)
   const parsed = parseJsonState(raw)
   if (parsed) return parsed
 
-  const cfg = await getAdaptiveThrottleConfig().catch(() => null)
+  const cfg = await getAdaptiveThrottleConfig(tenantId).catch(() => null)
   const initial: AdaptiveThrottleState = cfg
     ? {
       targetMps: clampInt(cfg.startMps, MIN_RATE_LIMIT, MAX_RATE_LIMIT),
@@ -183,18 +183,18 @@ export async function getAdaptiveThrottleState(phoneNumberId: string): Promise<A
       updatedAt: nowIso(),
     }
     : defaultState()
-  await settingsDb.set(key, JSON.stringify(initial))
+  await settingsDb.set(tenantId, key, JSON.stringify(initial))
   return initial
 }
 
-export async function setAdaptiveThrottleState(phoneNumberId: string, state: AdaptiveThrottleState): Promise<void> {
+export async function setAdaptiveThrottleState(tenantId: string, phoneNumberId: string, state: AdaptiveThrottleState): Promise<void> {
   const key = `${KEY_PREFIX}${phoneNumberId}`
   const next: AdaptiveThrottleState = {
     ...state,
     targetMps: clampInt(state.targetMps, MIN_RATE_LIMIT, MAX_RATE_LIMIT),
     updatedAt: nowIso(),
   }
-  await settingsDb.set(key, JSON.stringify(next))
+  await settingsDb.set(tenantId, key, JSON.stringify(next))
 }
 
 export interface AdaptiveThrottleUpdateResult {
@@ -207,12 +207,12 @@ export interface AdaptiveThrottleUpdateResult {
 /**
  * Chamado quando NÃO houve 130429 no batch e queremos "pisar" um pouco no acelerador.
  */
-export async function recordStableBatch(phoneNumberId: string, opts?: { minSecondsBetweenIncreases?: number }): Promise<AdaptiveThrottleUpdateResult> {
-  const cfg = await getAdaptiveThrottleConfig().catch(() => configFromEnv())
+export async function recordStableBatch(tenantId: string, phoneNumberId: string, opts?: { minSecondsBetweenIncreases?: number }): Promise<AdaptiveThrottleUpdateResult> {
+  const cfg = await getAdaptiveThrottleConfig(tenantId).catch(() => configFromEnv())
   const minGapSec = Math.max(3, Number(opts?.minSecondsBetweenIncreases ?? cfg.minIncreaseGapSec))
   const maxMps = clampInt(cfg.maxMps, MIN_RATE_LIMIT, MAX_RATE_LIMIT)
 
-  const prev = await getAdaptiveThrottleState(phoneNumberId)
+  const prev = await getAdaptiveThrottleState(tenantId, phoneNumberId)
   const nowMs = Date.now()
 
   if (isInCooldown(prev, nowMs)) {
@@ -240,19 +240,19 @@ export async function recordStableBatch(phoneNumberId: string, opts?: { minSecon
     updatedAt: nowIso(),
   }
 
-  await setAdaptiveThrottleState(phoneNumberId, next)
+  await setAdaptiveThrottleState(tenantId, phoneNumberId, next)
   return { previous: prev, next, changed: true, reason: 'increase' }
 }
 
 /**
  * Chamado quando detectamos 130429 (throughput estourado).
  */
-export async function recordThroughputExceeded(phoneNumberId: string, opts?: { cooldownSeconds?: number }): Promise<AdaptiveThrottleUpdateResult> {
-  const cfg = await getAdaptiveThrottleConfig().catch(() => configFromEnv())
+export async function recordThroughputExceeded(tenantId: string, phoneNumberId: string, opts?: { cooldownSeconds?: number }): Promise<AdaptiveThrottleUpdateResult> {
+  const cfg = await getAdaptiveThrottleConfig(tenantId).catch(() => configFromEnv())
   const cooldownSec = clampInt(Number(opts?.cooldownSeconds ?? cfg.cooldownSec), 1, 600)
   const minMps = clampInt(cfg.minMps, MIN_RATE_LIMIT, MAX_RATE_LIMIT)
 
-  const prev = await getAdaptiveThrottleState(phoneNumberId)
+  const prev = await getAdaptiveThrottleState(tenantId, phoneNumberId)
 
   // AIMD: redução multiplicativa forte
   const nextTarget = clampInt(Math.floor(prev.targetMps * 0.6), minMps, MAX_RATE_LIMIT)
@@ -268,6 +268,6 @@ export async function recordThroughputExceeded(phoneNumberId: string, opts?: { c
     updatedAt: nowIso(),
   }
 
-  await setAdaptiveThrottleState(phoneNumberId, next)
+  await setAdaptiveThrottleState(tenantId, phoneNumberId, next)
   return { previous: prev, next, changed: nextTarget !== prev.targetMps, reason: 'decrease' }
 }

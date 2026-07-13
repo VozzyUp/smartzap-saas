@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteMemoryById, isMem0EnabledAsync } from '@/lib/ai/mem0-client'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -13,13 +14,16 @@ interface RouteParams {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
 
     if (!id) {
       return NextResponse.json({ ok: false, error: 'ID é obrigatório' }, { status: 400 })
     }
 
-    const enabled = await isMem0EnabledAsync()
+    const enabled = await isMem0EnabledAsync(ctx.tenantId)
     if (!enabled) {
       return NextResponse.json({
         ok: false,
@@ -27,7 +31,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       }, { status: 400 })
     }
 
-    const success = await deleteMemoryById(id)
+    const success = await deleteMemoryById(ctx.tenantId, id)
 
     if (!success) {
       return NextResponse.json({

@@ -2,8 +2,13 @@
  * Bootstrap da instância SmartZap.
  * Configura settings iniciais após migrations.
  *
- * SmartZap usa MASTER_PASSWORD para auth, não Supabase Auth.
- * O bootstrap apenas garante que configurações iniciais existam.
+ * NOTA (Task 10 — cutover de auth): `MASTER_PASSWORD` foi aposentado como
+ * login de usuário do dashboard (isso agora é Supabase Auth via magic link —
+ * ver `lib/user-auth.ts` e `proxy.ts`). O único uso restante de
+ * MASTER_PASSWORD no produto é aqui: como gate/senha inicial do wizard de
+ * instalação (`/install`, `app/api/installer/*`), que roda ANTES de existir
+ * qualquer usuário Supabase (chicken-and-egg do bootstrap de infra). Não
+ * remova esse uso.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -21,9 +26,9 @@ type BootstrapResult =
   | { ok: true; mode: 'created' | 'exists' };
 
 /**
- * Verifica se login funciona (para validar instalação).
- * SmartZap usa MASTER_PASSWORD via env var, não Supabase Auth.
- * Esta função apenas verifica conectividade com o Supabase.
+ * Verifica se a conexão com o Supabase funciona (para validar instalação).
+ * Não verifica login de usuário — isso é Supabase Auth (magic link), fora
+ * do escopo do installer. Esta função apenas verifica conectividade.
  */
 export async function verifySupabaseConnection(params: {
   supabaseUrl: string;

@@ -113,6 +113,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
+    // Rota sem sessão (worker QStash) — deriva tenantId do recurso (conversa)
+    const tenantId = await getConversationTenantId(conversationId)
+    if (!tenantId) {
+      console.log(`❌ [AI-RESPOND] tenant_id not found for conversation: ${conversationId}`)
+      return NextResponse.json({ error: 'Conversation tenant not found' }, { status: 404 })
+    }
+
     // 3. Verifica se está em modo bot
     if (conversation.mode !== 'bot') {
       console.log(`⏭️ [AI-RESPOND] Skipping - mode is "${conversation.mode}", not "bot"`)
@@ -165,6 +172,7 @@ export async function POST(req: NextRequest) {
     console.log(`🚀 [AI-RESPOND] Calling processChatAgent...`)
 
     const result = await processChatAgent({
+      tenantId,
       agent,
       conversation,
       messages,
@@ -178,7 +186,7 @@ export async function POST(req: NextRequest) {
       console.log(`❌ [AI-RESPOND] AI failed: ${result.error}`)
 
       // Auto-handoff em caso de erro
-      await handleAutoHandoff(conversationId, conversation.phone, result.error || 'AI processing failed')
+      await handleAutoHandoff(tenantId, conversationId, conversation.phone, result.error || 'AI processing failed')
 
       return NextResponse.json({
         success: false,
@@ -212,7 +220,7 @@ export async function POST(req: NextRequest) {
 
       // Envia typing indicator antes de cada parte (se tiver message_id)
       if (typingMessageId) {
-        await sendTypingIndicator({ messageId: typingMessageId })
+        await sendTypingIndicator(tenantId, { messageId: typingMessageId })
         console.log(`⌨️ [AI-RESPOND] Typing indicator sent for part ${i + 1}`)
       }
 
@@ -224,7 +232,7 @@ export async function POST(req: NextRequest) {
       // Se shouldQuoteUserMessage e é a primeira parte, envia como reply
       const shouldQuote = i === 0 && result.response.shouldQuoteUserMessage && typingMessageId
 
-      const sendResult = await sendWhatsAppMessage({
+      const sendResult = await sendWhatsAppMessage(tenantId, {
         to: conversation.phone,
         type: 'text',
         text: part,
@@ -322,6 +330,25 @@ export async function POST(req: NextRequest) {
 // =============================================================================
 
 /**
+ * Rota sem sessão (worker QStash). Deriva o tenantId a partir da conversa,
+ * já que inbox_conversations tem tenant_id (Fase 2A) mesmo que o tipo
+ * InboxConversation ainda não o exponha.
+ */
+async function getConversationTenantId(conversationId: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+
+  const { data, error } = await supabase
+    .from('inbox_conversations')
+    .select('tenant_id')
+    .eq('id', conversationId)
+    .single()
+
+  if (error || !data) return null
+  return (data as { tenant_id: string }).tenant_id
+}
+
+/**
  * Busca dados do contato para injetar no contexto da IA
  */
 async function getContactData(contactId: string): Promise<ContactContext | undefined> {
@@ -373,6 +400,7 @@ async function getAgentForConversation(agentId: string | null): Promise<AIAgent 
  * Envia mensagem de fallback e transfere para humano
  */
 async function handleAutoHandoff(
+  tenantId: string,
   conversationId: string,
   phone: string,
   errorMessage: string
@@ -383,7 +411,7 @@ async function handleAutoHandoff(
     'Desculpe, estou com dificuldades técnicas. Vou transferir você para um atendente.'
 
   // Envia mensagem de fallback
-  const sendResult = await sendWhatsAppMessage({
+  const sendResult = await sendWhatsAppMessage(tenantId, {
     to: phone,
     type: 'text',
     text: fallbackMessage,

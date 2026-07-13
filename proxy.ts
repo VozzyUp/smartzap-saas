@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import {
     verifyApiKey,
     verifyAdminAccess,
@@ -7,6 +8,7 @@ import {
     unauthorizedResponse,
     forbiddenResponse
 } from '@/lib/auth'
+import { provisionTenantForUser } from '@/lib/tenant-provisioning'
 
 export const config = {
     matcher: [
@@ -21,7 +23,7 @@ const PUBLIC_PAGES = ['/login', '/install', '/debug-auth', '/f', '/atendimento',
 // Rotas que NÃO precisam de autenticação
 // CUIDADO: adicionar rotas aqui expõe elas publicamente!
 const PUBLIC_API_ROUTES = [
-    '/api/auth',              // Login/logout/status
+    '/api/auth',              // Login/logout/status/magic-link/callback
     '/api/webhook',           // Meta WhatsApp webhooks (usa HMAC)
     '/api/health',            // Health checks
     '/api/system',            // Info básica do sistema
@@ -30,12 +32,104 @@ const PUBLIC_API_ROUTES = [
     '/api/public',            // Rotas explicitamente públicas (lead forms, etc)
 ]
 
+type SupabaseCookie = { name: string; value: string; options: CookieOptions }
+
+type SessionInfo = {
+    user: { id: string; email?: string | null } | null
+    tenantId: string | null
+    cookiesToSet: SupabaseCookie[]
+}
+
+const EMPTY_SESSION: SessionInfo = { user: null, tenantId: null, cookiesToSet: [] }
+
+/**
+ * Lê a sessão Supabase a partir dos cookies da requisição (via @supabase/ssr).
+ * Quando há usuário mas nenhum tenant associado ainda (primeiro login via
+ * magic link), provisiona o tenant inline — o proxy roda em runtime Node.js,
+ * então é seguro chamar provisionTenantForUser (usa a service role key).
+ */
+async function resolveSession(request: NextRequest): Promise<SessionInfo> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const publishableKey =
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
+
+    if (!url || !publishableKey) {
+        return EMPTY_SESSION
+    }
+
+    let cookiesToSet: SupabaseCookie[] = []
+
+    const supabase = createServerClient(url, publishableKey, {
+        cookies: {
+            getAll() {
+                return request.cookies.getAll()
+            },
+            setAll(cookies) {
+                cookiesToSet = cookies
+            },
+        },
+    })
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        return { user: null, tenantId: null, cookiesToSet }
+    }
+
+    const { data: currentTenantId } = await supabase.rpc('current_tenant_id')
+    let tenantId = (currentTenantId as string | null) ?? null
+
+    if (!tenantId) {
+        try {
+            const provisioned = await provisionTenantForUser(user.id, user.email ?? user.id)
+            tenantId = provisioned.tenantId
+        } catch (err) {
+            console.error('[proxy] Falha ao provisionar tenant para', user.id, err)
+        }
+    }
+
+    return { user: { id: user.id, email: user.email }, tenantId, cookiesToSet }
+}
+
+/**
+ * Monta a resposta final (next() ou redirect) aplicando cookies atualizados
+ * do Supabase (refresh de token) e injetando o header x-tenant-id quando
+ * há um tenant resolvido para a requisição.
+ */
+function buildResponse(
+    request: NextRequest,
+    session: SessionInfo,
+    redirectTo?: URL,
+): NextResponse {
+    let response: NextResponse
+
+    if (redirectTo) {
+        response = NextResponse.redirect(redirectTo)
+    } else {
+        const headers = new Headers(request.headers)
+        if (session.tenantId) {
+            headers.set('x-tenant-id', session.tenantId)
+        }
+        response = NextResponse.next({ request: { headers } })
+    }
+
+    session.cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+    })
+
+    return response
+}
+
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
-    // Session cookie can exist even when SETUP_COMPLETE env isn't set (dev/local).
-    // If the user has a valid session, we should not force them back into the setup wizard.
-    const sessionCookie = request.cookies.get('smartzap_session')
+    // Lazily resolved (and memoized) Supabase session — a única checagem de
+    // sessão feita por requisição, reaproveitada em todos os branches abaixo.
+    let sessionPromise: Promise<SessionInfo> | null = null
+    const getSession = () => {
+        if (!sessionPromise) sessionPromise = resolveSession(request)
+        return sessionPromise
+    }
 
     // Handle OPTIONS requests for CORS preflight.
     // Alguns scripts (ex.: Vercel feedback/toolbar) disparam OPTIONS/HEAD mesmo em páginas.
@@ -77,18 +171,20 @@ export async function proxy(request: NextRequest) {
     if (shouldLockInstaller && (isInstallerPage || isInstallerApi)) {
         // Para páginas: exige sessão (login)
         if (isInstallerPage) {
-            if (!sessionCookie?.value) {
+            const session = await getSession()
+            if (!session.user) {
                 const loginUrl = new URL('/login', request.url)
                 loginUrl.searchParams.set('reason', 'installer_locked')
                 loginUrl.searchParams.set('redirect', pathname)
-                return NextResponse.redirect(loginUrl)
+                return buildResponse(request, session, loginUrl)
             }
         }
 
         // Para APIs: permite sessão OU admin key
         if (isInstallerApi) {
-            if (sessionCookie?.value) {
-                return NextResponse.next()
+            const session = await getSession()
+            if (session.user) {
+                return buildResponse(request, session)
             }
 
             const adminAuth = await verifyAdminAccess(request)
@@ -113,7 +209,7 @@ export async function proxy(request: NextRequest) {
     //   enquanto INSTALLER_ENABLED é uma env que controla se o installer está disponível.
     // - Para ser mais "à prova de falhas", sempre deixe o usuário cair em /login quando não houver
     //   sessão, e deixe o /login decidir (via /api/auth/status) se precisa mandar para o wizard.
-    // - Se existir session cookie, deixa passar.
+    // - Se existir sessão Supabase válida, deixa passar.
     //
     // Obs: o redirect para /login já é feito mais abaixo para páginas protegidas.
 
@@ -144,10 +240,11 @@ export async function proxy(request: NextRequest) {
             return NextResponse.next()
         }
 
-        // Check for user session cookie (for browser API calls)
-        if (sessionCookie?.value) {
+        // Check for user session (for browser API calls)
+        const session = await getSession()
+        if (session.user) {
             // Session exists, allow request (validation happens in API route)
-            return NextResponse.next()
+            return buildResponse(request, session)
         }
 
         // All other API endpoints require at least API key
@@ -161,7 +258,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // ==========================================================================
-    // Page Routes - Use Session Cookie authentication
+    // Page Routes - Use Supabase session authentication
     // ==========================================================================
 
     // Public pages don't require authentication
@@ -169,13 +266,15 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next()
     }
 
-    // No session cookie - redirect to login
-    if (!sessionCookie?.value) {
+    const session = await getSession()
+
+    // No valid session - redirect to login
+    if (!session.user) {
         const loginUrl = new URL('/login', request.url)
         loginUrl.searchParams.set('redirect', pathname)
-        return NextResponse.redirect(loginUrl)
+        return buildResponse(request, session, loginUrl)
     }
 
-    // Session cookie exists - allow access (validation happens in layout)
-    return NextResponse.next()
+    // Session exists - allow access with x-tenant-id injected
+    return buildResponse(request, session)
 }

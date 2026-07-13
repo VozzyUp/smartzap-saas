@@ -1,8 +1,9 @@
 /**
  * Setup API
- * 
+ *
  * POST: Complete initial setup (company, email, phone)
- * Password is managed via MASTER_PASSWORD env var
+ * Login de usuário é via Supabase Auth (magic link) — o proxy já exige uma
+ * sessão válida antes desta rota ser alcançada.
  */
 
 import { NextRequest, NextResponse } from 'next/server'

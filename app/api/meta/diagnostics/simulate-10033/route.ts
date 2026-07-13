@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -41,7 +42,10 @@ function normalizeErrorPayload(json: any): {
  */
 export async function POST() {
 	try {
-		const creds = await getWhatsAppCredentials().catch(() => null)
+		const ctx = await getTenantContext()
+		if (!ctx?.tenantId) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+
+		const creds = await getWhatsAppCredentials(ctx.tenantId).catch(() => null)
 		if (!creds?.accessToken) {
 			return NextResponse.json(
 				{

@@ -1,6 +1,7 @@
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import { mcpContextStorage } from '@/lib/mcp/context'
 import { registerAllTools } from '@/lib/mcp/index'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,29 +14,39 @@ function extractToken(request: Request): string {
   return request.headers.get('x-api-key')?.trim() ?? ''
 }
 
-// Mesma lógica do dashboard (user-auth.ts): usa crypto.subtle global, sem import
-async function checkMasterPassword(token: string, stored: string): Promise<boolean> {
-  const isHashed = stored.length === 64 && /^[a-f0-9]+$/i.test(stored)
-  if (!isHashed) return token === stored
-  const encoder = new TextEncoder()
-  const data = encoder.encode(token + '_smartzap_salt_2026')
-  const buf = await crypto.subtle.digest('SHA-256', data)
-  const hashed = Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-  return hashed === stored
+// Fallback: aceita um access token de sessão Supabase (magic link) pertencente
+// a um `platform_admin` — MASTER_PASSWORD não é mais aceito aqui (aposentado
+// como login de usuário; permanece só como gate do wizard `/install`).
+async function resolvePlatformAdminToken(token: string): Promise<boolean> {
+  const admin = getSupabaseAdmin()
+  if (!admin) return false
+
+  try {
+    const { data, error } = await admin.auth.getUser(token)
+    if (error || !data.user) return false
+
+    const { data: isPlatformAdmin, error: rpcError } = await admin.rpc('is_platform_admin', {
+      uid: data.user.id,
+    })
+    if (rpcError) return false
+
+    return !!isPlatformAdmin
+  } catch {
+    // Token não é um JWT Supabase válido — ignora e trata como inválido.
+    return false
+  }
 }
 
 // Valida o token e retorna o contexto de admin ou null se inválido
 async function resolveToken(token: string): Promise<{ isAdmin: boolean } | null> {
   const adminKey = process.env.SMARTZAP_ADMIN_KEY
   const apiKey = process.env.SMARTZAP_API_KEY
-  const masterPassword = process.env.MASTER_PASSWORD
 
   if (adminKey && token === adminKey) return { isAdmin: true }
   if (apiKey && token === apiKey) return { isAdmin: false }
-  // MASTER_PASSWORD (texto puro ou hash sha256+salt) também concede acesso admin
-  if (masterPassword && (await checkMasterPassword(token, masterPassword))) return { isAdmin: true }
+
+  // Sessão Supabase de um platform_admin também concede acesso admin.
+  if (await resolvePlatformAdminToken(token)) return { isAdmin: true }
 
   return null
 }

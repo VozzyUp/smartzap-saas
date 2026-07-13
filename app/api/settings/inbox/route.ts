@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { z } from 'zod'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const INBOX_RETENTION_KEY = 'inbox_retention_days'
 const HUMAN_MODE_TIMEOUT_KEY = 'inbox_human_mode_timeout_hours'
@@ -19,9 +20,12 @@ const InboxSettingsSchema = z.object({
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const [retentionRaw, timeoutRaw] = await Promise.all([
-      settingsDb.get(INBOX_RETENTION_KEY),
-      settingsDb.get(HUMAN_MODE_TIMEOUT_KEY),
+      settingsDb.get(ctx.tenantId, INBOX_RETENTION_KEY),
+      settingsDb.get(ctx.tenantId, HUMAN_MODE_TIMEOUT_KEY),
     ])
 
     const retentionDays = retentionRaw ? parseInt(retentionRaw, 10) : DEFAULT_RETENTION_DAYS
@@ -42,6 +46,9 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
     const parsed = InboxSettingsSchema.safeParse(body)
 
@@ -58,19 +65,19 @@ export async function PATCH(request: NextRequest) {
     const updates: Promise<void>[] = []
 
     if (retention_days !== undefined) {
-      updates.push(settingsDb.set(INBOX_RETENTION_KEY, String(retention_days)))
+      updates.push(settingsDb.set(ctx.tenantId, INBOX_RETENTION_KEY, String(retention_days)))
     }
 
     if (human_mode_timeout_hours !== undefined) {
-      updates.push(settingsDb.set(HUMAN_MODE_TIMEOUT_KEY, String(human_mode_timeout_hours)))
+      updates.push(settingsDb.set(ctx.tenantId, HUMAN_MODE_TIMEOUT_KEY, String(human_mode_timeout_hours)))
     }
 
     await Promise.all(updates)
 
     // Return updated settings
     const [retentionRaw, timeoutRaw] = await Promise.all([
-      settingsDb.get(INBOX_RETENTION_KEY),
-      settingsDb.get(HUMAN_MODE_TIMEOUT_KEY),
+      settingsDb.get(ctx.tenantId, INBOX_RETENTION_KEY),
+      settingsDb.get(ctx.tenantId, HUMAN_MODE_TIMEOUT_KEY),
     ])
 
     const currentRetention = retentionRaw ? parseInt(retentionRaw, 10) : DEFAULT_RETENTION_DAYS

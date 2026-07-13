@@ -14,6 +14,7 @@ import { CampaignStatus, ContactStatus } from '@/types'
 import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface DispatchContact {
   contactId?: string
@@ -177,8 +178,9 @@ async function fetchSingleTemplateFromMeta(params: {
 export async function POST(request: NextRequest) {
   const bodyText = await request.text()
   const signature = request.headers.get('upstash-signature')
-  const cookieHeader = request.headers.get('cookie') || ''
-  const hasSession = cookieHeader.includes('smartzap_session=')
+  // Sessão Supabase (Task 8) substituiu o cookie legado smartzap_session.
+  const sessionCtx = signature ? null : await getTenantContext()
+  const hasSession = !!sessionCtx?.tenantId
 
   // Auth: QStash requests têm signature header, requests manuais usam session ou API key
   if (!signature && !hasSession) {
@@ -199,28 +201,24 @@ export async function POST(request: NextRequest) {
   // - O workflow reutiliza este mesmo traceId.
   const traceId = `cmp_${campaignId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 
-  // Carrega campanha E template em paralelo para:
-  // - validar gatilho de agendamento (evitar job "fantasma" após cancelamento)
-  // - obter template_variables quando necessário
-  // - evitar queries duplicadas (template_spec_hash)
-  // PERFORMANCE: Parallelized - these are independent queries
-  const [campaignResult, initialTemplate] = await Promise.all([
-    supabase
-      .from('campaigns')
-      .select('status, scheduled_date, template_variables, template_spec_hash')
-      .eq('id', campaignId)
-      .single(),
-    templateDb.getByName(templateName),
-  ])
+  // O tenant do disparo é o dono da campanha, não do chamador: QStash não tem
+  // sessão, e a rota já é gate-keeped acima por signature/session/API key.
+  // Deriva de campaigns.tenant_id em vez de resolveWebhookTenantId() para não
+  // bloquear o disparo manual (fluxo mais usado do produto) até a Fase 2B.
+  const { data: campaignRow, error: campaignError } = await supabase
+    .from('campaigns')
+    .select('tenant_id, status, scheduled_date, template_variables, template_spec_hash')
+    .eq('id', campaignId)
+    .single()
 
-  const { data: campaignRow, error: campaignError } = campaignResult
-
-  if (campaignError || !campaignRow) {
-    console.error('[Dispatch] Campaign not found:', campaignError)
+  if (campaignError || !campaignRow?.tenant_id) {
     return NextResponse.json({ error: 'Campanha não encontrada' }, { status: 404 })
   }
+  const tenantId: string = campaignRow.tenant_id
 
-  // Validar template (fetched em paralelo acima)
+  const initialTemplate = await templateDb.getByName(tenantId, templateName)
+
+  // Validar template
   if (!initialTemplate) {
     return NextResponse.json(
       { error: 'Template não encontrado no banco local. Sincronize Templates antes de disparar.' },
@@ -302,7 +300,7 @@ export async function POST(request: NextRequest) {
     const example0 = headerInfo0.example
     if (!example0 || !isHttpUrl(example0)) {
       try {
-        const creds = await getWhatsAppCredentials()
+        const creds = await getWhatsAppCredentials(tenantId)
         if (creds?.businessAccountId && creds?.accessToken) {
           const refreshed = await fetchSingleTemplateFromMeta({
             businessAccountId: creds.businessAccountId,
@@ -310,8 +308,8 @@ export async function POST(request: NextRequest) {
             templateName,
           })
           if (refreshed) {
-            await templateDb.upsert([refreshed])
-            const refreshedLocal = await templateDb.getByName(templateName)
+            await templateDb.upsert(tenantId, [refreshed])
+            const refreshedLocal = await templateDb.getByName(tenantId, templateName)
             if (refreshedLocal) template = refreshedLocal
           }
         }
@@ -868,7 +866,7 @@ export async function POST(request: NextRequest) {
 
   // Fallback to Centralized Helper (DB > Env)
   if (!phoneNumberId || !accessToken) {
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(tenantId)
     if (credentials) {
       phoneNumberId = credentials.phoneNumberId
       accessToken = credentials.accessToken
@@ -955,7 +953,7 @@ export async function POST(request: NextRequest) {
 
     // Ler config de throttle AQUI no dispatch (onde temos acesso garantido ao Supabase)
     // e passar para o workflow, evitando que o QStash precise acessar o DB
-    const throttleConfigResult = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+    const throttleConfigResult = await getAdaptiveThrottleConfigWithSource(tenantId).catch(() => null)
     const throttleConfig = throttleConfigResult?.config ?? null
     const throttleSource = throttleConfigResult?.source ?? 'fallback'
     console.log(`[Dispatch] Throttle config source: ${throttleSource}`, throttleConfig ? JSON.stringify(throttleConfig) : 'null')

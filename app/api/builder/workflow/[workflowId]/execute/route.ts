@@ -31,8 +31,24 @@ export const { POST } = serve<BuilderWorkflowInput>(async (context) => {
       error: "Supabase not configured",
     };
   }
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+
+  // Handler serve() sem sessão de usuário — o workflow só pode ser executado
+  // se já existe, então o tenant é derivado da própria linha em workflows
+  // (mesmo padrão do fix de campaign/workflow na Fase 2A).
+  const tenantId = await context.run("resolve-tenant", async () => {
+    const { data, error } = await supabase
+      .from("workflows")
+      .select("tenant_id")
+      .eq("id", workflowId)
+      .single();
+    if (error || !data?.tenant_id) {
+      throw new Error(`Workflow ${workflowId} não encontrado ou sem tenant_id`);
+    }
+    return data.tenant_id as string;
+  });
+
+  const companyId = await getCompanyId(supabase, tenantId);
+  const record = await ensureWorkflowRecord(supabase, tenantId, workflowId, companyId);
   const workflow = toSavedWorkflow(record);
   const validation = validateWorkflowSchema(workflow);
   if (!validation.success) {
@@ -55,6 +71,7 @@ export const { POST } = serve<BuilderWorkflowInput>(async (context) => {
   const executionId = nanoid();
   await supabase.from("workflow_runs").insert({
     id: executionId,
+    tenant_id: tenantId,
     workflow_id: workflowId,
     version_id: record.workflow.active_version_id,
     status: "running",
@@ -111,6 +128,7 @@ export const { POST } = serve<BuilderWorkflowInput>(async (context) => {
 
   const execution = await context.run(`execute-workflow-${workflowId}`, () =>
     executeWorkflow({
+      tenantId: record.workflow.tenant_id,
       nodes: workflow.nodes,
       edges: workflow.edges,
       triggerInput: input ?? {},

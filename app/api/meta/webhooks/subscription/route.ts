@@ -4,6 +4,7 @@ import { normalizeSubscribedFields, type MetaSubscribedApp } from '@/lib/meta-we
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getVerifyToken } from '@/lib/verify-token'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const META_API_VERSION = 'v24.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -97,7 +98,10 @@ async function getWebhookHierarchy(params: { phoneNumberId: string; accessToken:
  * Consulta status de subscription do WABA (subscribed_apps) + hierarquia de webhooks
  */
 export async function GET() {
-  const credentials = await getWhatsAppCredentials()
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const credentials = await getWhatsAppCredentials(ctx.tenantId)
 
   if (!credentials?.businessAccountId || !credentials?.accessToken) {
     return NextResponse.json(
@@ -168,7 +172,10 @@ export async function GET() {
  * { callbackUrl?: string } - Se não fornecido, usa a URL do SmartZap
  */
 export async function POST(request: Request) {
-  const credentials = await getWhatsAppCredentials()
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const credentials = await getWhatsAppCredentials(ctx.tenantId)
 
   if (!credentials?.businessAccountId || !credentials?.accessToken) {
     return NextResponse.json(
@@ -303,7 +310,10 @@ export async function POST(request: Request) {
  * mas mantém a inscrição nos campos (messages).
  */
 export async function DELETE() {
-  const credentials = await getWhatsAppCredentials()
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const credentials = await getWhatsAppCredentials(ctx.tenantId)
 
   if (!credentials?.businessAccountId || !credentials?.accessToken) {
     return NextResponse.json(

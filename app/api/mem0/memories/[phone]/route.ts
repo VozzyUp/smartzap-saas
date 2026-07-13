@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllUserMemories, deleteUserMemories, isMem0EnabledAsync } from '@/lib/ai/mem0-client'
 import { contactDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface RouteParams {
   params: Promise<{ phone: string }>
@@ -21,6 +22,9 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+
     const { phone } = await params
 
     if (!phone) {
@@ -29,8 +33,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Busca dados do perfil do SmartZap (em paralelo com memórias)
     const [contact, mem0Enabled] = await Promise.all([
-      contactDb.getByPhone(phone).catch(() => null),
-      isMem0EnabledAsync(),
+      contactDb.getByPhone(ctx.tenantId, phone).catch(() => null),
+      isMem0EnabledAsync(ctx.tenantId),
     ])
 
     // Monta perfil do contato (dados do SmartZap)
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       })
     }
 
-    const result = await getAllUserMemories(phone)
+    const result = await getAllUserMemories(ctx.tenantId, phone)
 
     return NextResponse.json({
       ok: true,
@@ -79,13 +83,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+
     const { phone } = await params
 
     if (!phone) {
       return NextResponse.json({ ok: false, error: 'Phone é obrigatório' }, { status: 400 })
     }
 
-    const enabled = await isMem0EnabledAsync()
+    const enabled = await isMem0EnabledAsync(ctx.tenantId)
     if (!enabled) {
       return NextResponse.json({
         ok: false,
@@ -93,7 +100,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       }, { status: 400 })
     }
 
-    const result = await deleteUserMemories(phone)
+    const result = await deleteUserMemories(ctx.tenantId, phone)
 
     if (!result.success) {
       return NextResponse.json({

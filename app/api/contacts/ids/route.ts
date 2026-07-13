@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -14,12 +15,15 @@ export async function GET(request: Request) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const url = new URL(request.url)
     const search = url.searchParams.get('search') || ''
     const status = url.searchParams.get('status') || ''
     const tag = url.searchParams.get('tag') || ''
 
-    const ids = await contactDb.getIds({ search, status, tag })
+    const ids = await contactDb.getIds(ctx.tenantId, { search, status, tag })
     return NextResponse.json(ids, {
       headers: {
         'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',

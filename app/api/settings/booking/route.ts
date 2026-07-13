@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import { checkBookingPrerequisites } from '@/lib/ai/tools/booking-tool'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const BOOKING_FLOW_ID_KEY = 'booking_flow_id'
 
@@ -17,6 +18,9 @@ const BOOKING_FLOW_ID_KEY = 'booking_flow_id'
 // =============================================================================
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
@@ -26,10 +30,10 @@ export async function GET() {
     }
 
     // Get prerequisites status
-    const prereqs = await checkBookingPrerequisites()
+    const prereqs = await checkBookingPrerequisites(ctx.tenantId)
 
     // Get current booking flow ID
-    const bookingFlowId = await settingsDb.get(BOOKING_FLOW_ID_KEY)
+    const bookingFlowId = await settingsDb.get(ctx.tenantId, BOOKING_FLOW_ID_KEY)
 
     // Get flow details if configured
     let flowDetails = null
@@ -73,6 +77,9 @@ export async function GET() {
 // =============================================================================
 
 export async function POST(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json({
@@ -115,7 +122,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Save flow ID
-      await settingsDb.set(BOOKING_FLOW_ID_KEY, flowId.trim())
+      await settingsDb.set(ctx.tenantId, BOOKING_FLOW_ID_KEY, flowId.trim())
 
       return NextResponse.json({
         ok: true,

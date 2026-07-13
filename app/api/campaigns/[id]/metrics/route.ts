@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { campaignDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,9 +40,12 @@ function isMissingTableError(err: any): boolean {
   return msg.includes('does not exist') || msg.includes('relation') && msg.includes('does not exist')
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params
+export async function GET(_req: Request, routeCtx: { params: Promise<{ id: string }> }) {
+  const { id } = await routeCtx.params
   if (!id) return noStoreJson({ error: 'Missing campaign id' }, { status: 400 })
+
+  const tenantCtx = await getTenantContext()
+  if (!tenantCtx?.tenantId) return noStoreJson({ error: 'unauthorized' }, { status: 401 })
 
   // 1) Prefer métricas persistidas (run/batch) quando existir
   try {
@@ -94,7 +98,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     // dizer para "aplicar a migration". Retornamos a fonte como run_metrics e
     // usamos o campaigns apenas para preencher o CURRENT de forma sent-only.
     if (tableExists && !run) {
-      const campaign = await campaignDb.getById(id)
+      const campaign = await campaignDb.getById(tenantCtx.tenantId, id)
       if (!campaign) return noStoreJson({ error: 'Campaign not found' }, { status: 404 })
 
       const firstDispatchAt = (campaign as any).firstDispatchAt ?? null
@@ -136,7 +140,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   // 2) Fallback: calcula somente com base na tabela campaigns (sem meta/db avg)
-  const campaign = await campaignDb.getById(id)
+  const campaign = await campaignDb.getById(tenantCtx.tenantId, id)
   if (!campaign) return noStoreJson({ error: 'Campaign not found' }, { status: 404 })
 
   const firstDispatchAt = (campaign as any).firstDispatchAt ?? null

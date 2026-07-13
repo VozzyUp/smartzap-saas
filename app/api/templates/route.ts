@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { canonicalTemplateCategory } from '@/lib/template-category'
 import { createHash } from 'crypto'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Cache GET requests for 5 minutes - templates rarely change
 // POST/PUT/DELETE remain dynamic by default
@@ -108,7 +109,7 @@ async function fetchTemplatesFromMeta(businessAccountId: string, accessToken: st
 // Helper to sync templates to local Supabase DB
 // This ensures templateDb.getByName() works during campaign dispatch
 // IMPORTANTE: Faz FULL REPLACE - deleta templates antigos que não existem mais na Meta
-async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplatesFromMeta> extends Promise<infer T> ? T : never) {
+async function syncTemplatesToLocalDb(tenantId: string, templates: ReturnType<typeof fetchTemplatesFromMeta> extends Promise<infer T> ? T : never) {
   try {
     const now = new Date().toISOString()
 
@@ -129,7 +130,7 @@ async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplate
     )
 
     // Buscar templates locais para identificar os que devem ser removidos
-    const localTemplates = await templateDb.getAll()
+    const localTemplates = await templateDb.getAll(tenantId)
     const templatesToDelete = localTemplates.filter(
       (t) => !metaTemplateKeys.has(`${t.name}::${t.language}`)
     )
@@ -142,6 +143,7 @@ async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplate
           .delete()
           .eq('name', t.name)
           .eq('language', t.language)
+          .eq('tenant_id', tenantId)
       }
 
       console.log(`[Templates] 🗑️ Removidos ${templatesToDelete.length} templates que não existem mais na Meta`)
@@ -150,7 +152,7 @@ async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplate
     // Upsert dos templates atuais da Meta
     // Ambientes antigos podem não ter as colunas parameter_format/spec_hash/fetched_at ainda.
     try {
-      await templateDb.upsert(rows)
+      await templateDb.upsert(tenantId, rows)
     } catch (error: any) {
       const message = String(error?.message || error)
       const missingColumn =
@@ -161,6 +163,7 @@ async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplate
 
       console.warn('[Templates] Falha ao salvar colunas novas (schema antigo). Fazendo fallback para payload legado.')
       await templateDb.upsert(
+        tenantId,
         rows.map(({ name, language, category, components, status }) => ({
           name,
           language,
@@ -181,11 +184,15 @@ async function syncTemplatesToLocalDb(templates: ReturnType<typeof fetchTemplate
 
 // GET /api/templates - Busca templates usando credenciais salvas (Supabase/env)
 export async function GET(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const tenantId = ctx.tenantId
+
   const url = new URL(request.url)
   const source = url.searchParams.get('source')
   if (source === 'local') {
     try {
-      const templates = await templateDb.getAll()
+      const templates = await templateDb.getAll(tenantId)
       return NextResponse.json(templates)
     } catch (error) {
       console.error('Local templates error:', error)
@@ -197,7 +204,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(tenantId)
 
     if (!credentials?.businessAccountId || !credentials?.accessToken) {
       return NextResponse.json(
@@ -213,10 +220,10 @@ export async function GET(request: NextRequest) {
 
     // 🆕 Sync templates to local Supabase DB
     // Importante: aguardamos para evitar race condition com /api/campaign/precheck.
-    await syncTemplatesToLocalDb(templates)
+    await syncTemplatesToLocalDb(tenantId, templates)
 
     // Merge com dados locais (ex.: cache de preview de mídia e header_location).
-    const local = await templateDb.getAll().catch(() => [])
+    const local = await templateDb.getAll(tenantId).catch(() => [])
     const localByName = new Map(local.map((t) => [t.name, t]))
     const merged = templates.map((t) => {
       const cached = localByName.get(t.name)
@@ -269,7 +276,9 @@ export async function POST(request: NextRequest) {
 
   // Fallback para credenciais salvas (Supabase/env)
   if (!businessAccountId || !accessToken) {
-    const credentials = await getWhatsAppCredentials()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (credentials) {
       businessAccountId = credentials.businessAccountId
       accessToken = credentials.accessToken

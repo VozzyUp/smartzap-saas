@@ -6,6 +6,7 @@ export const revalidate = 0
 
 import { supabase } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 function isMissingDbColumn(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -50,6 +51,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  const tenantCtx = await getTenantContext()
+  if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   try {
     const json = await req.json()
     const patch = PatchFlowSchema.parse(json)
@@ -192,7 +195,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         : false
       if (isBookingFlow && normalizedServices.length > 0) {
         console.log('[flows/[id]] Salvando booking_services:', normalizedServices.length, 'serviços')
-        await settingsDb.set('booking_services', JSON.stringify(normalizedServices))
+        await settingsDb.set(tenantCtx.tenantId, 'booking_services', JSON.stringify(normalizedServices))
       } else if (isBookingFlow) {
         console.log('[flows/[id]] Booking flow sem serviços para salvar')
       }

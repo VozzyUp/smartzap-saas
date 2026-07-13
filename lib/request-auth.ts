@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server'
 import { type AuthResult, unauthorizedResponse, verifyApiKey } from '@/lib/auth'
-import { validateSession } from '@/lib/user-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * Require either:
- * - a valid browser session (smartzap_session cookie), OR
+ * - a valid Supabase session (browser cookies, via @supabase/ssr), OR
  * - a valid API key (Authorization: Bearer ... / X-API-Key)
  *
  * Security goal: defense-in-depth for critical endpoints (PII, destructive actions),
@@ -21,8 +21,8 @@ export async function requireSessionOrApiKey(request: NextRequest) {
   }
 
   // Fall back to session-based access for browser UI.
-  const ok = await validateSession()
-  if (!ok) return unauthorizedResponse('Missing session or API key')
+  const ctx = await getTenantContext()
+  if (!ctx) return unauthorizedResponse('Missing session or API key')
   return null
 }
 

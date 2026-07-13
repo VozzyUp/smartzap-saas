@@ -3,15 +3,21 @@ import { supabase } from '@/lib/supabase'
 import { CreateTemplateSchema } from '@/lib/whatsapp/validators/template.schema'
 import { templateService } from '@/lib/whatsapp/template.service'
 import { MetaAPIError } from '@/lib/whatsapp/errors'
+import { getTenantContext } from '@/lib/tenant-context'
 
-export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params
+export async function POST(_req: NextRequest, routeCtx: { params: Promise<{ id: string }> }) {
+  const { id } = await routeCtx.params
+
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const tenantId = ctx.tenantId
 
   try {
     const { data, error } = await supabase
       .from('templates')
       .select('id,name,components,status')
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .single()
 
     if (error || !data) {
@@ -38,6 +44,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
       .select('id, name, status')
       .eq('name', templateName)
       .eq('language', templateLanguage)
+      .eq('tenant_id', tenantId)
       .neq('id', id) // Ignora o próprio rascunho
       .neq('status', 'DRAFT') // Ignora outros rascunhos
       .maybeSingle()
@@ -61,7 +68,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
     }
 
     // Cria na Meta (Cloud API)
-    const result = await templateService.create(parsed as any)
+    const result = await templateService.create(tenantId, parsed as any)
 
     // Atualiza o registro local para sair de "Rascunhos Manuais"
     const now = new Date().toISOString()
@@ -82,6 +89,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
       .from('templates')
       .update(update as any)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (attempt1.error) {
       const msg = String(attempt1.error.message || '')
@@ -92,7 +100,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
 
       // Fallback schema antigo
       const { meta_id, ...legacy } = update as any
-      const attempt2 = await supabase.from('templates').update(legacy).eq('id', id)
+      const attempt2 = await supabase.from('templates').update(legacy).eq('id', id).eq('tenant_id', tenantId)
       if (attempt2.error) {
         return NextResponse.json({ error: attempt2.error.message }, { status: 500 })
       }

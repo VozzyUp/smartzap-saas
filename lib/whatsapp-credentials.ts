@@ -20,9 +20,9 @@ export interface WhatsAppCredentials {
  *
  * Fonte única: Supabase Settings (configurado via UI)
  */
-export async function getWhatsAppCredentials(): Promise<WhatsAppCredentials | null> {
+export async function getWhatsAppCredentials(tenantId: string): Promise<WhatsAppCredentials | null> {
   try {
-    const settings = await settingsDb.getAll()
+    const settings = await settingsDb.getAll(tenantId)
 
     const { phoneNumberId, businessAccountId, accessToken } = settings
 
@@ -44,17 +44,17 @@ export async function getWhatsAppCredentials(): Promise<WhatsAppCredentials | nu
 /**
  * Check if WhatsApp is configured
  */
-export async function isWhatsAppConfigured(): Promise<boolean> {
-  const credentials = await getWhatsAppCredentials()
+export async function isWhatsAppConfigured(tenantId: string): Promise<boolean> {
+  const credentials = await getWhatsAppCredentials(tenantId)
   return credentials !== null
 }
 
 /**
  * Check if WhatsApp is connected (credentials exist and isConnected flag is true)
  */
-export async function isWhatsAppConnected(): Promise<boolean> {
+export async function isWhatsAppConnected(tenantId: string): Promise<boolean> {
   try {
-    const settings = await settingsDb.getAll()
+    const settings = await settingsDb.getAll(tenantId)
     return settings.isConnected && Boolean(settings.phoneNumberId && settings.accessToken)
   } catch {
     return false

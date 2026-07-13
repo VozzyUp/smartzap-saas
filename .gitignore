@@ -5,6 +5,9 @@ node_modules
 .next/
 out/
 
+# graphify (mapa de conhecimento gerado localmente, não é artefato do produto)
+graphify-out/
+
 # Production
 build/
 dist/
@@ -79,6 +82,8 @@ metadata.json
 # exceções pontuais. Por isso usamos scripts/* e liberamos explicitamente o arquivo.
 scripts/*
 !scripts/meta-audit.mjs
+!scripts/purge-dev-data.ts
+!scripts/seed-platform-admin.ts
 
 # OS
 .DS_Store
@@ -108,6 +113,9 @@ tests/
 # Testes de integração da API de agentes IA
 !tests/api/
 !tests/api/**
+# Testes de integração multi-tenant (Fase 2A)
+!tests/integration/
+!tests/integration/**
 
 # Legacy (can be removed)
 # vite.config.ts
@@ -127,8 +135,12 @@ PRD-campaigns-new.md
 
 # Docs (dev-only, kept locally) - /docs/ ignora apenas na raiz
 # Exceção: docs de planejamento do SaaS são versionados (docs/superpowers/**)
+# (negações específicas p/ vencer a regra genérica `specs/` acima)
 /docs/*
 !/docs/superpowers/
+!/docs/superpowers/specs/
+!/docs/superpowers/plans/
+!/docs/superpowers/runbooks/
 .env*.local
 
 # Audit reports e arquivos de teste local

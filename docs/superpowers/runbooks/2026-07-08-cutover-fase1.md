@@ -142,6 +142,23 @@ Se algo der errado durante validação:
 
 ---
 
+## Fase 2A — seed do 1º platform_admin
+
+Após o cutover para multi-tenant (Fase 2A), promova um usuário Supabase existente a `platform_admin`
+(tabela `public.platform_admins`) para liberar acesso ao painel de administração da plataforma.
+
+- [ ] Confirmar que o usuário já existe em `auth.users` (ex.: já fez login/signup no app pelo menos uma vez).
+- [ ] Rodar o script com a service role key configurada no ambiente (`SUPABASE_SECRET_KEY` ou
+      `SUPABASE_SERVICE_ROLE_KEY`, e `NEXT_PUBLIC_SUPABASE_URL`):
+  ```bash
+  npx tsx scripts/seed-platform-admin.ts --email=admin@exemplo.com
+  ```
+- [ ] Script é idempotente (upsert em `platform_admins(user_id)`) — pode ser reexecutado sem duplicar.
+- [ ] Se o usuário não existir em `auth.users`, o script falha com exit code != 0 e mensagem de erro clara;
+      crie o usuário primeiro (signup no app ou Supabase Dashboard) e rode novamente.
+
+---
+
 ## Notas
 
 - **GHCR lowercase:** Docker registries distinguem maiúsculas e minúsculas. O CI publica em `ghcr.io/vozzyup/smartzap-saas` (lowercase). No `docker-compose.yml`, sempre usar `OWNER=vozzyup`.

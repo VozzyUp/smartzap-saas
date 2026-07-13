@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant-context";
 import { ensureWorkflowRecord, getCompanyId } from "@/lib/builder/workflow-db";
 
 type RouteParams = {
@@ -7,6 +8,9 @@ type RouteParams = {
 };
 
 export async function GET(request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { executionId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -19,6 +23,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     .from("workflow_runs")
     .select("*")
     .eq("id", executionId)
+    .eq("tenant_id", ctx.tenantId)
     .single();
 
   if (execError || !execution) {
@@ -29,6 +34,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     .from("workflow_run_logs")
     .select("*")
     .eq("run_id", executionId)
+    .eq("tenant_id", ctx.tenantId)
     .order("started_at", { ascending: true });
 
   if (statusFilter) {
@@ -37,9 +43,10 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const { data: logs } = await logsQuery;
 
-  const companyId = await getCompanyId(supabase);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
   const workflowRecord = await ensureWorkflowRecord(
     supabase,
+    ctx.tenantId,
     execution.workflow_id,
     companyId
   );

@@ -1,5 +1,5 @@
 import { settingsDb } from '@/lib/supabase-db'
-import { isSupabaseConfigured } from '@/lib/supabase'
+import { isSupabaseConfigured, getSupabaseAdmin } from '@/lib/supabase'
 import { getAppUrl } from '@/lib/app-url'
 
 const SETTINGS_KEYS = {
@@ -75,15 +75,15 @@ export function getGoogleCalendarWebhookUrl(): string {
   return process.env.GOOGLE_CALENDAR_WEBHOOK_URL || `${getBaseUrl()}/api/integrations/google-calendar/webhook`
 }
 
-export async function getGoogleCalendarCredentials(): Promise<GoogleCalendarCredentials | null> {
+export async function getGoogleCalendarCredentials(tenantId: string): Promise<GoogleCalendarCredentials | null> {
   const envClientId = String(process.env.GOOGLE_CALENDAR_CLIENT_ID || '').trim()
   const envClientSecret = String(process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '').trim()
 
   if (isSupabaseConfigured()) {
     try {
       const [dbClientIdRaw, dbClientSecretRaw] = await Promise.all([
-        settingsDb.get(SETTINGS_KEYS.clientId),
-        settingsDb.get(SETTINGS_KEYS.clientSecret),
+        settingsDb.get(tenantId, SETTINGS_KEYS.clientId),
+        settingsDb.get(tenantId, SETTINGS_KEYS.clientSecret),
       ])
       const dbClientId = String(dbClientIdRaw || '').trim()
       const dbClientSecret = String(dbClientSecretRaw || '').trim()
@@ -103,15 +103,15 @@ export async function getGoogleCalendarCredentials(): Promise<GoogleCalendarCred
   return null
 }
 
-export async function getGoogleCalendarCredentialsPublic(): Promise<GoogleCalendarCredentialsPublic> {
+export async function getGoogleCalendarCredentialsPublic(tenantId: string): Promise<GoogleCalendarCredentialsPublic> {
   const envClientId = String(process.env.GOOGLE_CALENDAR_CLIENT_ID || '').trim()
   const envClientSecret = String(process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '').trim()
 
   if (isSupabaseConfigured()) {
     try {
       const [dbClientIdRaw, dbClientSecretRaw] = await Promise.all([
-        settingsDb.get(SETTINGS_KEYS.clientId),
-        settingsDb.get(SETTINGS_KEYS.clientSecret),
+        settingsDb.get(tenantId, SETTINGS_KEYS.clientId),
+        settingsDb.get(tenantId, SETTINGS_KEYS.clientSecret),
       ])
       const dbClientId = String(dbClientIdRaw || '').trim()
       const dbClientSecret = String(dbClientSecretRaw || '').trim()
@@ -147,17 +147,17 @@ export async function getGoogleCalendarCredentialsPublic(): Promise<GoogleCalend
   }
 }
 
-export async function getGoogleCalendarOAuthConfig(): Promise<{
+export async function getGoogleCalendarOAuthConfig(tenantId: string): Promise<{
   clientId: string
   clientSecret: string
 } | null> {
-  const credentials = await getGoogleCalendarCredentials()
+  const credentials = await getGoogleCalendarCredentials(tenantId)
   if (!credentials) return null
   return { clientId: credentials.clientId, clientSecret: credentials.clientSecret }
 }
 
-export async function buildGoogleCalendarAuthUrl(state: string): Promise<string> {
-  const config = await getGoogleCalendarOAuthConfig()
+export async function buildGoogleCalendarAuthUrl(tenantId: string, state: string): Promise<string> {
+  const config = await getGoogleCalendarOAuthConfig(tenantId)
   if (!config) {
     throw new Error('Google Calendar OAuth nao configurado')
   }
@@ -196,8 +196,8 @@ export function createChannelToken(): string {
   return randomToken('gc_token')
 }
 
-export async function exchangeCodeForTokens(code: string): Promise<GoogleCalendarTokens> {
-  const config = await getGoogleCalendarOAuthConfig()
+export async function exchangeCodeForTokens(tenantId: string, code: string): Promise<GoogleCalendarTokens> {
+  const config = await getGoogleCalendarOAuthConfig(tenantId)
   if (!config) throw new Error('Google Calendar OAuth nao configurado')
 
   const redirectUri = getGoogleCalendarRedirectUri()
@@ -246,8 +246,8 @@ export async function fetchGoogleAccountEmail(accessToken: string): Promise<stri
   }
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<GoogleCalendarTokens> {
-  const config = await getGoogleCalendarOAuthConfig()
+async function refreshAccessToken(tenantId: string, refreshToken: string): Promise<GoogleCalendarTokens> {
+  const config = await getGoogleCalendarOAuthConfig(tenantId)
   if (!config) throw new Error('Google Calendar OAuth nao configurado')
 
   const body = new URLSearchParams({
@@ -286,9 +286,9 @@ export async function revokeGoogleToken(token: string): Promise<void> {
   }).catch(() => null)
 }
 
-export async function getStoredTokens(): Promise<GoogleCalendarTokens | null> {
+export async function getStoredTokens(tenantId: string): Promise<GoogleCalendarTokens | null> {
   if (!isSupabaseConfigured()) return null
-  const raw = await settingsDb.get(SETTINGS_KEYS.tokens)
+  const raw = await settingsDb.get(tenantId, SETTINGS_KEYS.tokens)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
@@ -299,21 +299,21 @@ export async function getStoredTokens(): Promise<GoogleCalendarTokens | null> {
   }
 }
 
-export async function saveTokens(tokens: GoogleCalendarTokens): Promise<void> {
+export async function saveTokens(tenantId: string, tokens: GoogleCalendarTokens): Promise<void> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase nao configurado')
   }
-  await settingsDb.set(SETTINGS_KEYS.tokens, JSON.stringify(tokens))
+  await settingsDb.set(tenantId, SETTINGS_KEYS.tokens, JSON.stringify(tokens))
 }
 
-export async function clearTokens(): Promise<void> {
+export async function clearTokens(tenantId: string): Promise<void> {
   if (!isSupabaseConfigured()) return
-  await settingsDb.set(SETTINGS_KEYS.tokens, '')
+  await settingsDb.set(tenantId, SETTINGS_KEYS.tokens, '')
 }
 
-export async function getCalendarConfig(): Promise<GoogleCalendarConfig | null> {
+export async function getCalendarConfig(tenantId: string): Promise<GoogleCalendarConfig | null> {
   if (!isSupabaseConfigured()) return null
-  const raw = await settingsDb.get(SETTINGS_KEYS.config)
+  const raw = await settingsDb.get(tenantId, SETTINGS_KEYS.config)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
@@ -324,21 +324,21 @@ export async function getCalendarConfig(): Promise<GoogleCalendarConfig | null> 
   }
 }
 
-export async function saveCalendarConfig(config: GoogleCalendarConfig): Promise<void> {
+export async function saveCalendarConfig(tenantId: string, config: GoogleCalendarConfig): Promise<void> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase nao configurado')
   }
-  await settingsDb.set(SETTINGS_KEYS.config, JSON.stringify(config))
+  await settingsDb.set(tenantId, SETTINGS_KEYS.config, JSON.stringify(config))
 }
 
-export async function clearCalendarConfig(): Promise<void> {
+export async function clearCalendarConfig(tenantId: string): Promise<void> {
   if (!isSupabaseConfigured()) return
-  await settingsDb.set(SETTINGS_KEYS.config, '')
+  await settingsDb.set(tenantId, SETTINGS_KEYS.config, '')
 }
 
-export async function getCalendarChannel(): Promise<GoogleCalendarChannel | null> {
+export async function getCalendarChannel(tenantId: string): Promise<GoogleCalendarChannel | null> {
   if (!isSupabaseConfigured()) return null
-  const raw = await settingsDb.get(SETTINGS_KEYS.channel)
+  const raw = await settingsDb.get(tenantId, SETTINGS_KEYS.channel)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
@@ -349,19 +349,47 @@ export async function getCalendarChannel(): Promise<GoogleCalendarChannel | null
   }
 }
 
-export async function saveCalendarChannel(channel: GoogleCalendarChannel | null): Promise<void> {
+export async function saveCalendarChannel(tenantId: string, channel: GoogleCalendarChannel | null): Promise<void> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase nao configurado')
   }
   if (!channel) {
-    await settingsDb.set(SETTINGS_KEYS.channel, '')
+    await settingsDb.set(tenantId, SETTINGS_KEYS.channel, '')
+    await getSupabaseAdmin()!
+      .from('google_calendar_channels')
+      .delete()
+      .eq('tenant_id', tenantId)
     return
   }
-  await settingsDb.set(SETTINGS_KEYS.channel, JSON.stringify(channel))
+  await settingsDb.set(tenantId, SETTINGS_KEYS.channel, JSON.stringify(channel))
+  const { error } = await getSupabaseAdmin()!
+    .from('google_calendar_channels')
+    .upsert(
+      {
+        channel_token: channel.token,
+        tenant_id: tenantId,
+        channel_id: channel.id,
+        resource_id: channel.resourceId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'channel_token' }
+    )
+  if (error) throw error
 }
 
-export async function ensureAccessToken(): Promise<GoogleCalendarTokens> {
-  const current = await getStoredTokens()
+export async function resolveTenantByChannelToken(channelToken: string): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+  const { data } = await db
+    .from('google_calendar_channels')
+    .select('tenant_id')
+    .eq('channel_token', channelToken)
+    .maybeSingle()
+  return data?.tenant_id ?? null
+}
+
+export async function ensureAccessToken(tenantId: string): Promise<GoogleCalendarTokens> {
+  const current = await getStoredTokens(tenantId)
   if (!current) throw new Error('Google Calendar nao conectado')
 
   const expiresAt = current.expiryDate || 0
@@ -374,14 +402,14 @@ export async function ensureAccessToken(): Promise<GoogleCalendarTokens> {
     return current
   }
 
-  const refreshed = await refreshAccessToken(current.refreshToken)
+  const refreshed = await refreshAccessToken(tenantId, current.refreshToken)
   const merged = { ...current, ...refreshed }
-  await saveTokens(merged)
+  await saveTokens(tenantId, merged)
   return merged
 }
 
-async function googleCalendarFetch(path: string, init?: RequestInit): Promise<any> {
-  const token = await ensureAccessToken()
+async function googleCalendarFetch(tenantId: string, path: string, init?: RequestInit): Promise<any> {
+  const token = await ensureAccessToken(tenantId)
   const response = await fetch(`${GOOGLE_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -399,22 +427,22 @@ async function googleCalendarFetch(path: string, init?: RequestInit): Promise<an
   return json
 }
 
-export async function listCalendars(): Promise<any[]> {
-  const data = await googleCalendarFetch('/users/me/calendarList')
+export async function listCalendars(tenantId: string): Promise<any[]> {
+  const data = await googleCalendarFetch(tenantId, '/users/me/calendarList')
   return Array.isArray(data?.items) ? data.items : []
 }
 
-export async function getCalendar(calendarId: string): Promise<any> {
-  return googleCalendarFetch(`/calendars/${encodeURIComponent(calendarId)}`)
+export async function getCalendar(tenantId: string, calendarId: string): Promise<any> {
+  return googleCalendarFetch(tenantId, `/calendars/${encodeURIComponent(calendarId)}`)
 }
 
-export async function listBusyTimes(params: {
+export async function listBusyTimes(tenantId: string, params: {
   calendarId: string
   timeMin: string
   timeMax: string
   timeZone?: string
 }): Promise<Array<{ start: string; end: string }>> {
-  const data = await googleCalendarFetch('/freeBusy', {
+  const data = await googleCalendarFetch(tenantId, '/freeBusy', {
     method: 'POST',
     body: JSON.stringify({
       timeMin: params.timeMin,
@@ -432,19 +460,19 @@ export async function listBusyTimes(params: {
   }))
 }
 
-export async function createEvent(params: {
+export async function createEvent(tenantId: string, params: {
   calendarId: string
   event: Record<string, unknown>
 }): Promise<any> {
-  return googleCalendarFetch(`/calendars/${encodeURIComponent(params.calendarId)}/events`, {
+  return googleCalendarFetch(tenantId, `/calendars/${encodeURIComponent(params.calendarId)}/events`, {
     method: 'POST',
     body: JSON.stringify(params.event),
   })
 }
 
-export async function stopWatchChannel(channel: { id: string; resourceId: string }): Promise<void> {
+export async function stopWatchChannel(tenantId: string, channel: { id: string; resourceId: string }): Promise<void> {
   try {
-    await googleCalendarFetch('/channels/stop', {
+    await googleCalendarFetch(tenantId, '/channels/stop', {
       method: 'POST',
       body: JSON.stringify({ id: channel.id, resourceId: channel.resourceId }),
     })
@@ -453,13 +481,13 @@ export async function stopWatchChannel(channel: { id: string; resourceId: string
   }
 }
 
-export async function createWatchChannel(params: {
+export async function createWatchChannel(tenantId: string, params: {
   calendarId: string
   channelId: string
   channelToken: string
   address: string
 }): Promise<GoogleCalendarChannel> {
-  const data = await googleCalendarFetch(`/calendars/${encodeURIComponent(params.calendarId)}/events/watch`, {
+  const data = await googleCalendarFetch(tenantId, `/calendars/${encodeURIComponent(params.calendarId)}/events/watch`, {
     method: 'POST',
     body: JSON.stringify({
       id: params.channelId,
@@ -479,8 +507,8 @@ export async function createWatchChannel(params: {
   }
 }
 
-export async function buildDefaultCalendarConfig(accountEmail?: string | null): Promise<GoogleCalendarConfig> {
-  const calendars = await listCalendars()
+export async function buildDefaultCalendarConfig(tenantId: string, accountEmail?: string | null): Promise<GoogleCalendarConfig> {
+  const calendars = await listCalendars(tenantId)
   const primary = calendars.find((item: any) => item.primary) || calendars[0]
   if (!primary) {
     throw new Error('Nenhum calendario encontrado')
@@ -494,8 +522,8 @@ export async function buildDefaultCalendarConfig(accountEmail?: string | null): 
   }
 }
 
-export async function ensureCalendarChannel(calendarId: string): Promise<GoogleCalendarChannel> {
-  const existing = await getCalendarChannel()
+export async function ensureCalendarChannel(tenantId: string, calendarId: string): Promise<GoogleCalendarChannel> {
+  const existing = await getCalendarChannel(tenantId)
   const now = Date.now()
   if (existing && existing.calendarId === calendarId) {
     const expiresAt = existing.expiration || 0
@@ -506,41 +534,41 @@ export async function ensureCalendarChannel(calendarId: string): Promise<GoogleC
   }
 
   if (existing?.id && existing.resourceId) {
-    await stopWatchChannel({ id: existing.id, resourceId: existing.resourceId })
+    await stopWatchChannel(tenantId, { id: existing.id, resourceId: existing.resourceId })
   }
 
   const channelId = randomToken('gc_channel')
   const channelToken = createChannelToken()
   const address = getGoogleCalendarWebhookUrl()
-  const channel = await createWatchChannel({
+  const channel = await createWatchChannel(tenantId, {
     calendarId,
     channelId,
     channelToken,
     address,
   })
-  await saveCalendarChannel(channel)
+  await saveCalendarChannel(tenantId, channel)
   return channel
 }
 
-export async function clearCalendarIntegration(): Promise<void> {
-  const channel = await getCalendarChannel()
+export async function clearCalendarIntegration(tenantId: string): Promise<void> {
+  const channel = await getCalendarChannel(tenantId)
   if (channel?.id && channel.resourceId) {
-    await stopWatchChannel({ id: channel.id, resourceId: channel.resourceId })
+    await stopWatchChannel(tenantId, { id: channel.id, resourceId: channel.resourceId })
   }
-  await saveCalendarChannel(null)
-  await clearCalendarConfig()
-  await clearTokens()
+  await saveCalendarChannel(tenantId, null)
+  await clearCalendarConfig(tenantId)
+  await clearTokens(tenantId)
 }
 
-export async function markCalendarNotification(params: {
+export async function markCalendarNotification(tenantId: string, params: {
   resourceState?: string | null
 }): Promise<void> {
-  const channel = await getCalendarChannel()
+  const channel = await getCalendarChannel(tenantId)
   if (!channel) return
   const updated: GoogleCalendarChannel = {
     ...channel,
     lastNotificationAt: new Date().toISOString(),
     lastResourceState: params.resourceState || channel.lastResourceState || null,
   }
-  await saveCalendarChannel(updated)
+  await saveCalendarChannel(tenantId, updated)
 }

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { campaignFolderDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const postSchema = z.object({
   name: z.string().min(1).max(50),
@@ -13,10 +14,13 @@ const postSchema = z.object({
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Retorna folders com contagem de campanhas
-    const folders = await campaignFolderDb.getAllWithCounts()
-    const totalCount = await campaignFolderDb.getTotalCount()
-    const unfiledCount = await campaignFolderDb.getUnfiledCount()
+    const folders = await campaignFolderDb.getAllWithCounts(ctx.tenantId)
+    const totalCount = await campaignFolderDb.getTotalCount(ctx.tenantId)
+    const unfiledCount = await campaignFolderDb.getUnfiledCount(ctx.tenantId)
 
     return NextResponse.json({
       folders,
@@ -34,6 +38,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const parsed = postSchema.safeParse(body)
@@ -45,7 +52,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const folder = await campaignFolderDb.create(parsed.data)
+    const folder = await campaignFolderDb.create(ctx.tenantId, parsed.data)
 
     return NextResponse.json(folder, { status: 201 })
   } catch (error) {

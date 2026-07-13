@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { ensureHeaderMediaPreviewUrl } from '@/lib/whatsapp/template-media-preview'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // GET /api/templates/[name] - Buscar template específico
 export async function GET(
@@ -13,11 +14,13 @@ export async function GET(
     const forcePreview =
       url.searchParams.get('refresh_preview') === '1' || url.searchParams.get('force_preview') === '1'
     const { name } = await params
-    const credentials = await getWhatsAppCredentials()
-    
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
+
     if (!credentials?.businessAccountId || !credentials?.accessToken) {
       return NextResponse.json(
-        { error: 'Credenciais não configuradas.' }, 
+        { error: 'Credenciais não configuradas.' },
         { status: 401 }
       )
     }
@@ -97,11 +100,13 @@ export async function DELETE(
 ) {
   try {
     const { name } = await params
-    const credentials = await getWhatsAppCredentials()
-    
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
+
     if (!credentials?.businessAccountId || !credentials?.accessToken) {
       return NextResponse.json(
-        { error: 'Credenciais não configuradas.' }, 
+        { error: 'Credenciais não configuradas.' },
         { status: 401 }
       )
     }

@@ -1,5 +1,6 @@
 import { campaignDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,9 +31,12 @@ const safeFilename = (value: string) => {
  */
 export async function GET(_request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return new Response('unauthorized', { status: 401 })
+
     const { id } = await params
 
-    const campaign = await campaignDb.getById(id)
+    const campaign = await campaignDb.getById(ctx.tenantId, id)
     if (!campaign) {
       return new Response('Campanha não encontrada', { status: 404 })
     }

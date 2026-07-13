@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,9 +55,14 @@ export interface AccountAlert {
  */
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const { data, error } = await supabase
       .from('account_alerts')
       .select('*')
+      .eq('tenant_id', tenantId)
       .eq('dismissed', false)
       .order('created_at', { ascending: false })
       .limit(10)
@@ -100,7 +106,7 @@ export async function GET() {
 
     if (maybeLocked.length) {
       try {
-        const creds = await getWhatsAppCredentials().catch(() => null)
+        const creds = await getWhatsAppCredentials(tenantId).catch(() => null)
         const accessToken = (creds as any)?.accessToken
         const phoneNumberId = (creds as any)?.phoneNumberId
 
@@ -123,6 +129,7 @@ export async function GET() {
         await supabase
           .from('account_alerts')
           .update({ dismissed: true })
+          .eq('tenant_id', tenantId)
           .in('id', Array.from(toDismiss))
       } catch {
         // best-effort
@@ -151,6 +158,9 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { type, code, message, details } = await request.json()
 
     if (!type || !message) {
@@ -167,6 +177,7 @@ export async function POST(request: Request) {
       .from('account_alerts')
       .insert({
         id,
+        tenant_id: ctx.tenantId,
         type,
         code: code || null,
         message,
@@ -193,6 +204,9 @@ export async function POST(request: Request) {
  */
 export async function DELETE(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { searchParams } = new URL(request.url)
     const alertId = searchParams.get('id')
     const dismissAll = searchParams.get('all') === 'true'
@@ -201,6 +215,7 @@ export async function DELETE(request: Request) {
       const { error } = await supabase
         .from('account_alerts')
         .update({ dismissed: true })
+        .eq('tenant_id', ctx.tenantId)
         .neq('dismissed', true)
 
       if (error) throw error
@@ -217,6 +232,7 @@ export async function DELETE(request: Request) {
     const { error } = await supabase
       .from('account_alerts')
       .update({ dismissed: true })
+      .eq('tenant_id', ctx.tenantId)
       .eq('id', alertId)
 
     if (error) throw error

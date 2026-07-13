@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase, getSupabaseAdmin } from '@/lib/supabase'
 import { fetchWithTimeout } from '@/lib/server-http'
 import { getAppEnv } from '@/lib/app-env'
@@ -365,50 +364,16 @@ export async function GET() {
     })(),
 
     // 3. WHATSAPP
+    // /api/system é um endpoint público (sem sessão) — ver PUBLIC_ENDPOINTS em
+    // lib/auth.ts. Credenciais WhatsApp agora são por tenant (Fase 2A) e não
+    // há um tenant específico para sondar aqui sem hardcodar um tenantId
+    // (proibido pelas convenções de multi-tenancy). Reportamos como
+    // não-aplicável até a Fase 2B trazer um checkup por tenant.
     (async () => {
-      try {
-        const credentials = await getWhatsAppCredentials()
-
-        if (credentials) {
-          const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number,whatsapp_business_manager_messaging_limit,quality_score`
-          const res = await fetchWithTimeout(testUrl, {
-            headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
-            timeoutMs: 3500,
-          })
-
-          if (res.ok) {
-            const data = await res.json()
-            response.health.services.whatsapp = {
-              status: 'ok',
-              source: 'db',
-              phoneNumber: data.display_phone_number,
-            }
-
-            const rawTier = data.whatsapp_business_manager_messaging_limit
-            if (typeof rawTier === 'string') {
-              response.usage.whatsapp.tier = rawTier
-            } else if (rawTier && typeof rawTier === 'object') {
-              response.usage.whatsapp.tier = rawTier.current_limit || rawTier.tier || 'TIER_250'
-            }
-
-            response.usage.whatsapp.quality = data.quality_score?.score?.toUpperCase() || 'GREEN'
-
-            const tierLimits: Record<string, number> = {
-              'TIER_250': 250, 'TIER_1K': 1000, 'TIER_2K': 2000,
-              'TIER_10K': 10000, 'TIER_100K': 100000, 'TIER_UNLIMITED': 1000000, 'STANDARD': 100000,
-            }
-            response.usage.whatsapp.tierLimit = tierLimits[response.usage.whatsapp.tier] || 250
-          } else {
-            const error = await res.json()
-            response.health.services.whatsapp = { status: 'error', source: 'db', message: error.error?.message || 'Token invalid' }
-            response.health.overall = 'degraded'
-          }
-        } else {
-          response.health.services.whatsapp = { status: 'not_configured', source: 'none', message: 'Not configured' }
-        }
-      } catch (error) {
-        response.health.services.whatsapp = { status: 'error', message: (error as Error).message }
-        response.health.overall = 'degraded'
+      response.health.services.whatsapp = {
+        status: 'not_configured',
+        source: 'none',
+        message: 'Verificação por tenant não disponível neste endpoint multi-tenant (Fase 2B)',
       }
     })(),
 

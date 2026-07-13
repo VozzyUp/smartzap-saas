@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 import {
   CreateContactSchema,
   DeleteContactsSchema,
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
   try {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
+
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const url = new URL(request.url)
     const limitParam = url.searchParams.get('limit')
@@ -39,7 +43,7 @@ export async function GET(request: Request) {
       const limit = Math.max(1, Math.min(100, Number.isFinite(limitRaw) ? limitRaw : 10))
       const offset = Math.max(0, Number.isFinite(offsetRaw) ? offsetRaw : 0)
 
-      const result = await contactDb.list({
+      const result = await contactDb.list(ctx.tenantId, {
         limit,
         offset,
         search,
@@ -60,7 +64,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const contacts = await contactDb.getAll()
+    const contacts = await contactDb.getAll(ctx.tenantId)
     return NextResponse.json(contacts, {
       headers: {
         // Dados dinâmicos: cache compartilhado (CDN/edge) causa estado “fantasma” pós CRUD.
@@ -87,6 +91,9 @@ export async function POST(request: Request) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const validation = validateBodyOrError(CreateContactSchema, body)
@@ -98,7 +105,7 @@ export async function POST(request: Request) {
       email: validation.data.email ?? undefined,
     }
 
-    const contact = await contactDb.add(contactData)
+    const contact = await contactDb.add(ctx.tenantId, contactData)
     return NextResponse.json(contact, { status: 201 })
   } catch (error: any) {
     console.error('Failed to add contact:', error)
@@ -118,12 +125,15 @@ export async function DELETE(request: Request) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const validation = validateBodyOrError(DeleteContactsSchema, body)
     if (!validation.success) return validation.response
 
-    const deleted = await contactDb.deleteMany(validation.data.ids)
+    const deleted = await contactDb.deleteMany(ctx.tenantId, validation.data.ids)
     return NextResponse.json({ deleted })
   } catch (error) {
     console.error('Failed to delete contacts:', error)

@@ -10,9 +10,9 @@ export class TemplateService {
     /**
      * Creates a WhatsApp Template (orchestrates Validation, Transformation, Sending, and DB Update)
      */
-    async create(data: CreateTemplateInput): Promise<TemplateCreationResult> {
+    async create(tenantId: string, data: CreateTemplateInput): Promise<TemplateCreationResult> {
         // 1. Authenticate / Get Credentials
-        const credentials = await getWhatsAppCredentials()
+        const credentials = await getWhatsAppCredentials(tenantId)
         if (!credentials) {
             throw new Error('WhatsApp credentials not found')
         }
@@ -54,7 +54,7 @@ export class TemplateService {
             // This makes the service "State Aware" which is useful for our SaaS
             if (data.itemId) {
                 try {
-                    await templateProjectDb.updateItem(data.itemId, {
+                    await templateProjectDb.updateItem(tenantId, data.itemId, {
                         meta_id: result.id,
                         meta_status: result.status || 'PENDING'
                     })

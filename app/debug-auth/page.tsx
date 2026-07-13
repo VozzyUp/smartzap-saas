@@ -26,7 +26,8 @@ export default function DebugAuthPage() {
             )}
             <div className="mt-4">
                 <p className="text-zinc-500">
-                    If isConfigured is false, MASTER_PASSWORD is missing in the API environment.
+                    If isConfigured is false, Supabase env vars (NEXT_PUBLIC_SUPABASE_URL /
+                    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) are missing in the API environment.
                 </p>
             </div>
         </div>

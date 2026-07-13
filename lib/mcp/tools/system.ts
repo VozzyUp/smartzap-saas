@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { getMcpContext } from '@/lib/mcp/context'
 import { ok, err } from '@/lib/mcp/helpers'
 import { getAppUrl } from '@/lib/app-url'
+import { resolveWebhookTenantId } from '@/lib/tenant-context'
 
 const getDb = () => getSupabaseAdmin()!
 const baseUrl = () => getAppUrl()
@@ -213,6 +214,9 @@ export function registerSystemTools(server: McpServer) {
 
       // Simula uma conversa com N turnos
       async function runConversation(idx: number): Promise<ConvResult> {
+        // Ferramenta MCP administrativa, sem contexto de sessão/tenant — guard
+        // intencional até a Fase 2B (ver resolveWebhookTenantId).
+        const tenantId = await resolveWebhookTenantId()
         const scenario = SCENARIOS[idx % SCENARIOS.length]
         const convStart = Date.now()
         const turnResults: TurnResult[] = []
@@ -269,6 +273,7 @@ export function registerSystemTools(server: McpServer) {
           try {
             const { processChatAgent } = await import('@/lib/ai/agents/chat-agent')
             const result = await processChatAgent({
+              tenantId,
               agent,
               conversation: fakeConversation,
               messages: [...messages],

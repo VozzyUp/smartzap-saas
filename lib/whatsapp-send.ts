@@ -36,10 +36,11 @@ export interface SendWhatsAppMessageResult {
  * @returns Result with messageId on success or error on failure
  */
 export async function sendWhatsAppMessage(
+  tenantId: string,
   options: SendWhatsAppMessageOptions
 ): Promise<SendWhatsAppMessageResult> {
   // Get credentials
-  const credentials = options.credentials || await getWhatsAppCredentials()
+  const credentials = options.credentials || await getWhatsAppCredentials(tenantId)
   if (!credentials?.accessToken || !credentials?.phoneNumberId) {
     return { success: false, error: 'WhatsApp credentials not configured' }
   }
@@ -179,9 +180,10 @@ export interface SendTypingIndicatorOptions {
  * @returns Result with success status
  */
 export async function sendTypingIndicator(
+  tenantId: string,
   options: SendTypingIndicatorOptions
 ): Promise<{ success: boolean; error?: string }> {
-  const credentials = options.credentials || await getWhatsAppCredentials()
+  const credentials = options.credentials || await getWhatsAppCredentials(tenantId)
   if (!credentials?.accessToken || !credentials?.phoneNumberId) {
     return { success: false, error: 'WhatsApp credentials not configured' }
   }
@@ -249,9 +251,10 @@ export interface SendReactionOptions {
  * @returns Result with success status
  */
 export async function sendReaction(
+  tenantId: string,
   options: SendReactionOptions
 ): Promise<{ success: boolean; error?: string }> {
-  const credentials = options.credentials || await getWhatsAppCredentials()
+  const credentials = options.credentials || await getWhatsAppCredentials(tenantId)
   if (!credentials?.accessToken || !credentials?.phoneNumberId) {
     return { success: false, error: 'WhatsApp credentials not configured' }
   }
@@ -333,10 +336,11 @@ export interface SendFlowMessageOptions {
  * @returns Result with messageId on success or error on failure
  */
 export async function sendFlowMessage(
+  tenantId: string,
   options: SendFlowMessageOptions
 ): Promise<SendWhatsAppMessageResult> {
   // Get credentials
-  const credentials = options.credentials || (await getWhatsAppCredentials())
+  const credentials = options.credentials || (await getWhatsAppCredentials(tenantId))
   if (!credentials?.accessToken || !credentials?.phoneNumberId) {
     return { success: false, error: 'WhatsApp credentials not configured' }
   }

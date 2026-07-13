@@ -3,6 +3,7 @@ import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { ImportContactsSchema, validateBodyOrError } from '@/lib/api-validation'
 import { ContactStatus } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * POST /api/contacts/import
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
+
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     let body: unknown
     try {
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
       custom_fields: c.custom_fields || {},
     }))
 
-    const result = await contactDb.import(contactsWithDefaults)
+    const result = await contactDb.import(ctx.tenantId, contactsWithDefaults)
 
     return NextResponse.json({
       inserted: result.inserted,

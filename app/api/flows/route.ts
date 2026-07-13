@@ -8,6 +8,7 @@ export const revalidate = 300
 import { supabase } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'
 import { getFlowTemplateByKey } from '@/lib/flow-templates'
+import { getTenantContext } from '@/lib/tenant-context'
 
 function isMissingDbColumn(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -87,6 +88,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const json = await request.json()
     const input = CreateFlowSchema.parse(json)
 
@@ -197,7 +201,7 @@ export async function POST(request: Request) {
             
             if (normalizedServices.length > 0) {
               console.log('[flows/POST] Salvando booking_services do template:', normalizedServices.length, 'serviços')
-              await settingsDb.set('booking_services', JSON.stringify(normalizedServices))
+              await settingsDb.set(ctx.tenantId, 'booking_services', JSON.stringify(normalizedServices))
             }
           }
         }

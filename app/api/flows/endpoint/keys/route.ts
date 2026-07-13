@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 import {
   generateKeyPair,
   isValidPrivateKey,
@@ -16,6 +17,7 @@ import {
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { metaSetEncryptionPublicKey } from '@/lib/meta-flows-api'
 import { getAppUrl } from '@/lib/app-url'
+import { getOrCreateFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,11 +27,11 @@ const PRIVATE_KEY_SETTING = 'whatsapp_flow_private_key'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 
-function resolveEndpointUrlFromRequest(request: Request): string | null {
+function resolveEndpointUrlFromRequest(request: Request, token: string): string | null {
   const proto = request.headers.get('x-forwarded-proto') || 'https'
   const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
   if (!host) return null
-  return `${proto}://${host}/api/flows/endpoint`
+  return `${proto}://${host}/api/flows/endpoint/${token}`
 }
 
 function isLocalhostUrl(value: string | null): boolean {
@@ -42,20 +44,30 @@ function isLocalhostUrl(value: string | null): boolean {
  */
 export async function GET(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
     const [privateKey, publicKey] = await Promise.all([
-      settingsDb.get(PRIVATE_KEY_SETTING),
-      settingsDb.get(PUBLIC_KEY_SETTING),
+      settingsDb.get(ctx.tenantId, PRIVATE_KEY_SETTING),
+      settingsDb.get(ctx.tenantId, PUBLIC_KEY_SETTING),
     ])
-    const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
+    const storedEndpointUrl = await settingsDb.get(ctx.tenantId, ENDPOINT_URL_SETTING)
+
+    let flowsToken: string | null = null
+    try {
+      flowsToken = await getOrCreateFlowsWebhookToken(ctx.tenantId)
+    } catch (err) {
+      console.warn('[flow-endpoint-keys] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+    }
 
     const hasPrivateKey = !!privateKey && isValidPrivateKey(privateKey)
     const hasPublicKey = !!publicKey
-    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL ? `${getAppUrl()}/api/flows/endpoint` : null
-    const headerEndpointUrl = resolveEndpointUrlFromRequest(request)
+    const envEndpointUrl = process.env.NEXT_PUBLIC_APP_URL && flowsToken ? `${getAppUrl()}/api/flows/endpoint/${flowsToken}` : null
+    const headerEndpointUrl = flowsToken ? resolveEndpointUrlFromRequest(request, flowsToken) : null
     const safeStoredEndpointUrl =
       storedEndpointUrl && !isLocalhostUrl(headerEndpointUrl) && isLocalhostUrl(storedEndpointUrl)
         ? null
@@ -115,6 +127,9 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
@@ -143,13 +158,19 @@ export async function POST(request: Request) {
 
     // Salva as chaves localmente
     await Promise.all([
-      settingsDb.set(PRIVATE_KEY_SETTING, privateKey),
-      settingsDb.set(PUBLIC_KEY_SETTING, publicKey),
+      settingsDb.set(ctx.tenantId, PRIVATE_KEY_SETTING, privateKey),
+      settingsDb.set(ctx.tenantId, PUBLIC_KEY_SETTING, publicKey),
     ])
-    const endpointUrl = resolveEndpointUrlFromRequest(request)
-    const shouldStoreEndpointUrl = endpointUrl && !isLocalhostUrl(endpointUrl)
-    if (shouldStoreEndpointUrl) {
-      await settingsDb.set(ENDPOINT_URL_SETTING, endpointUrl)
+
+    let endpointUrl: string | null = null
+    try {
+      const flowsToken = await getOrCreateFlowsWebhookToken(ctx.tenantId)
+      endpointUrl = resolveEndpointUrlFromRequest(request, flowsToken)
+    } catch (err) {
+      console.warn('[flow-endpoint-keys] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+    }
+    if (endpointUrl && !isLocalhostUrl(endpointUrl)) {
+      await settingsDb.set(ctx.tenantId, ENDPOINT_URL_SETTING, endpointUrl)
     }
 
     // Sincroniza automaticamente com a Meta (se credenciais disponíveis)
@@ -157,7 +178,7 @@ export async function POST(request: Request) {
     let metaSyncError: string | null = null
 
     try {
-      const credentials = await getWhatsAppCredentials()
+      const credentials = await getWhatsAppCredentials(ctx.tenantId)
 
       if (credentials?.accessToken && credentials?.phoneNumberId) {
         console.log('[flow-endpoint-keys] 🔄 Sincronizando chave pública com a Meta...')
@@ -204,13 +225,16 @@ export async function POST(request: Request) {
  */
 export async function DELETE() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
     await Promise.all([
-      settingsDb.set(PRIVATE_KEY_SETTING, ''),
-      settingsDb.set(PUBLIC_KEY_SETTING, ''),
+      settingsDb.set(ctx.tenantId, PRIVATE_KEY_SETTING, ''),
+      settingsDb.set(ctx.tenantId, PUBLIC_KEY_SETTING, ''),
     ])
 
     return NextResponse.json({

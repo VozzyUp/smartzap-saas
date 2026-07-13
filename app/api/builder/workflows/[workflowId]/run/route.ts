@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant-context";
 import {
   ensureWorkflowRecord,
   getCompanyId,
@@ -12,6 +13,9 @@ type RouteParams = {
 };
 
 export async function POST(_request: Request, { params }: RouteParams) {
+  const ctx = await getTenantContext();
+  if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { workflowId } = await params;
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -20,8 +24,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  const companyId = await getCompanyId(supabase);
-  const record = await ensureWorkflowRecord(supabase, workflowId, companyId);
+  const companyId = await getCompanyId(supabase, ctx.tenantId);
+  const record = await ensureWorkflowRecord(supabase, ctx.tenantId, workflowId, companyId);
   const workflow = toSavedWorkflow(record);
   const validation = validateWorkflowSchema(workflow);
   if (!validation.success) {
@@ -34,6 +38,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
   const executionId = `exec_${Date.now()}`;
   await supabase.from("workflow_runs").insert({
     id: executionId,
+    tenant_id: ctx.tenantId,
     workflow_id: workflowId,
     version_id: record.workflow.active_version_id,
     status: "queued",

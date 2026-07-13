@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createEvent, getCalendarConfig } from '@/lib/google-calendar'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,8 +9,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase nao configurado' }, { status: 400 })
     }
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const body = await request.json().catch(() => ({}))
-    const calendarId = String(body?.calendarId || '') || (await getCalendarConfig())?.calendarId
+    const calendarId = String(body?.calendarId || '') || (await getCalendarConfig(tenantId))?.calendarId
     if (!calendarId) {
       return NextResponse.json({ error: 'calendarId ausente' }, { status: 400 })
     }
@@ -39,7 +44,7 @@ export async function POST(request: NextRequest) {
       extendedProperties,
     }
 
-    const created = await createEvent({ calendarId, event })
+    const created = await createEvent(tenantId, { calendarId, event })
 
     return NextResponse.json({
       id: created?.id || null,

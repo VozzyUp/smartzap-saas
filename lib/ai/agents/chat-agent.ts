@@ -115,6 +115,7 @@ export interface ContactContext {
 }
 
 export interface SupportAgentConfig {
+  tenantId: string
   agent: AIAgent
   conversation: InboxConversation
   messages: InboxMessage[]
@@ -303,7 +304,7 @@ async function persistAILog(data: {
 export async function processChatAgent(
   config: SupportAgentConfig
 ): Promise<SupportAgentResult> {
-  const { agent, conversation, messages } = config
+  const { tenantId, agent, conversation, messages } = config
   const startTime = Date.now()
 
   // Dynamic imports - required for background execution context
@@ -332,10 +333,10 @@ export async function processChatAgent(
   let memoryContext = { systemPromptAddition: '', memoryCount: 0 }
   let mem0Enabled = false
   try {
-    mem0Enabled = await isMem0EnabledAsync()
+    mem0Enabled = await isMem0EnabledAsync(tenantId)
     if (mem0Enabled) {
       console.log(`[chat-agent] Mem0 enabled, fetching memories for ${conversation.phone}...`)
-      memoryContext = await fetchRelevantMemories(inputText, {
+      memoryContext = await fetchRelevantMemories(tenantId, inputText, {
         user_id: conversation.phone,
         agent_id: agent.id,
       })
@@ -527,7 +528,7 @@ export async function processChatAgent(
       const { sendBookingFlow, checkBookingPrerequisites, BOOKING_TOOL_DESCRIPTION } = await import('@/lib/ai/tools/booking-tool')
 
       // Check if prerequisites are met (async check)
-      const prereqs = await checkBookingPrerequisites()
+      const prereqs = await checkBookingPrerequisites(tenantId)
       console.log(`[chat-agent] 📅 Prerequisites check: ready=${prereqs.ready}, missing=${prereqs.missing.join(', ') || 'none'}`)
 
       if (prereqs.ready) {
@@ -539,7 +540,7 @@ export async function processChatAgent(
           }),
           execute: async () => {
             console.log(`[chat-agent] 📅 LLM requested booking flow for: ${conversation.phone}`)
-            const result = await sendBookingFlow(conversation.phone)
+            const result = await sendBookingFlow(tenantId, conversation.phone)
 
             if (result.success) {
               console.log(`[chat-agent] 📅 Booking flow sent successfully: ${result.messageId}`)
@@ -578,7 +579,7 @@ export async function processChatAgent(
         execute: async ({ emoji }) => {
           console.log(`[chat-agent] 😀 LLM requested reaction: ${emoji} on message ${lastUserMessage.whatsapp_message_id}`)
 
-          const result = await sendReaction({
+          const result = await sendReaction(tenantId, {
             to: conversation.phone,
             messageId: lastUserMessage.whatsapp_message_id!,
             emoji,
@@ -808,6 +809,7 @@ export async function processChatAgent(
     // Save interaction to Mem0 (fire-and-forget, não bloqueia resposta)
     if (mem0Enabled) {
       saveInteractionMemory(
+        tenantId,
         [
           { role: 'user', content: inputText },
           { role: 'assistant', content: response.message },

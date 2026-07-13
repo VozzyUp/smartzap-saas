@@ -6,6 +6,7 @@ import {
   getWorkflowExecutionConfig,
 } from "@/lib/builder/workflow-execution-settings";
 import { clampInt } from "@/lib/validation-utils";
+import { getTenantContext } from "@/lib/tenant-context";
 
 const CONFIG_KEY = "workflow_execution_config";
 
@@ -21,7 +22,10 @@ function fallbackConfig(): WorkflowExecutionConfig {
 
 export async function GET() {
   try {
-    const { config, source } = await getWorkflowExecutionConfig();
+    const ctx = await getTenantContext();
+    if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const { config, source } = await getWorkflowExecutionConfig(ctx.tenantId);
     return NextResponse.json({ ok: true, source, config });
   } catch (error) {
     console.error("Error fetching workflow execution config:", error);
@@ -36,6 +40,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext();
+    if (!ctx?.tenantId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
     if (!isSupabaseConfigured()) {
       return NextResponse.json(
         {
@@ -47,7 +54,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const current = await getWorkflowExecutionConfig();
+    const current = await getWorkflowExecutionConfig(ctx.tenantId);
 
     const next: WorkflowExecutionConfig = {
       retryCount:
@@ -64,8 +71,8 @@ export async function POST(request: Request) {
           : current.config.timeoutMs,
     };
 
-    await settingsDb.set(CONFIG_KEY, JSON.stringify(next));
-    clearWorkflowExecutionConfigCache();
+    await settingsDb.set(ctx.tenantId, CONFIG_KEY, JSON.stringify(next));
+    clearWorkflowExecutionConfigCache(ctx.tenantId);
 
     return NextResponse.json({ ok: true, config: next });
   } catch (error) {

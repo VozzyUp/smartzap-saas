@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCalendarChannel, getCalendarConfig, getStoredTokens } from '@/lib/google-calendar'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function GET() {
   try {
@@ -8,10 +9,14 @@ export async function GET() {
       return NextResponse.json({ connected: false, error: 'Supabase não configurado' }, { status: 400 })
     }
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ connected: false, error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const [tokens, config, channel] = await Promise.all([
-      getStoredTokens(),
-      getCalendarConfig(),
-      getCalendarChannel(),
+      getStoredTokens(tenantId),
+      getCalendarConfig(tenantId),
+      getCalendarChannel(tenantId),
     ])
 
     const connected = !!tokens?.accessToken

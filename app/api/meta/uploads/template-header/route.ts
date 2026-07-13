@@ -3,6 +3,7 @@ import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getMetaAppId } from '@/lib/meta-app-credentials'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -87,7 +88,11 @@ export async function POST(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
-    const metaAppId = await getMetaAppId()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return jsonNoStore({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
+    const metaAppId = await getMetaAppId(tenantId)
     if (!metaAppId) {
       return jsonNoStore(
         {
@@ -98,7 +103,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const wa = await getWhatsAppCredentials()
+    const wa = await getWhatsAppCredentials(tenantId)
     if (!wa?.accessToken) {
       return jsonNoStore(
         {

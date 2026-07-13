@@ -3,6 +3,7 @@ import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase } from '@/lib/supabase'
 import { ensureHeaderMediaPreviewUrl, getTemplateHeaderMediaExampleLink } from '@/lib/whatsapp/template-media-preview'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,10 @@ const isHttpUrl = (value: string) => /^https?:\/\//i.test(String(value || '').tr
 export async function POST(request: NextRequest) {
   const auth = await requireSessionOrApiKey(request)
   if (auth) return auth
+
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const tenantId = ctx.tenantId
 
   let body: BackfillBody = {}
   try {
@@ -37,7 +42,7 @@ export async function POST(request: NextRequest) {
   const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0
   const status = statusRaw === 'ALL' ? 'ALL' : statusRaw
 
-  const credentials = await getWhatsAppCredentials()
+  const credentials = await getWhatsAppCredentials(tenantId)
   if (!credentials?.accessToken) {
     return NextResponse.json(
       { error: 'Credenciais não configuradas.' },
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest) {
     .select('name,status,components,header_media_preview_url,header_media_preview_expires_at,header_media_hash', {
       count: 'exact',
     })
+    .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
 
   if (status !== 'ALL') {

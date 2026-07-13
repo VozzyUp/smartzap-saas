@@ -9,6 +9,7 @@ import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -146,6 +147,9 @@ interface ContactRow {
  */
 export async function POST(_request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id: campaignId } = await params
 
     // 1) Carregar campanha (templateName + templateVariables)
@@ -175,7 +179,7 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     // 2) Template precisa existir no cache local (documented-only)
-    const initialTemplate = await templateDb.getByName(templateName)
+    const initialTemplate = await templateDb.getByName(ctx.tenantId, templateName)
     if (!initialTemplate) {
       return NextResponse.json(
         { error: 'Template não encontrado no banco local. Sincronize Templates antes de reenviar ignorados.' },
@@ -192,7 +196,7 @@ export async function POST(_request: Request, { params }: Params) {
       const example0 = headerInfo0.example
       if (!example0 || !isHttpUrl(example0)) {
         try {
-          const creds = await getWhatsAppCredentials()
+          const creds = await getWhatsAppCredentials(ctx.tenantId)
           if (creds?.businessAccountId && creds?.accessToken) {
             const refreshed = await fetchSingleTemplateFromMeta({
               businessAccountId: creds.businessAccountId,
@@ -200,8 +204,8 @@ export async function POST(_request: Request, { params }: Params) {
               templateName,
             })
             if (refreshed) {
-              await templateDb.upsert([refreshed])
-              const refreshedLocal = await templateDb.getByName(templateName)
+              await templateDb.upsert(ctx.tenantId, [refreshed])
+              const refreshedLocal = await templateDb.getByName(ctx.tenantId, templateName)
               if (refreshedLocal) template = refreshedLocal
             }
           }
@@ -583,7 +587,7 @@ export async function POST(_request: Request, { params }: Params) {
 
     // Atualiza contador de skipped na campanha (para UI imediata)
     try {
-      await campaignDb.updateStatus(campaignId, { skipped: stillSkipped })
+      await campaignDb.updateStatus(ctx.tenantId, campaignId, { skipped: stillSkipped })
     } catch (e) {
       console.warn('[ResendSkipped] Falha ao atualizar contador de skipped na campanha (best-effort):', e)
     }
@@ -634,7 +638,7 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     // 6) Credenciais WhatsApp (Supabase settings/env)
-    const credentials = await getWhatsAppCredentials()
+    const credentials = await getWhatsAppCredentials(ctx.tenantId)
     if (!credentials?.phoneNumberId || !credentials?.accessToken) {
       return NextResponse.json(
         { error: 'Credenciais WhatsApp não configuradas. Configure em Configurações.' },

@@ -47,7 +47,7 @@ function getVercelDashboardUrl(): string | null {
     return null
 }
 
-export async function getHealthStatus(options: HealthCheckOptions = { checkExternal: true, checkPing: true }): Promise<HealthStatus> {
+export async function getHealthStatus(tenantId: string, options: HealthCheckOptions = { checkExternal: true, checkPing: true }): Promise<HealthStatus> {
     const { checkExternal = true, checkPing = true } = options;
     const dashboardUrl = getVercelDashboardUrl()
 
@@ -117,7 +117,7 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
 
     // 3. Check WhatsApp credentials
     try {
-        const credentials = await getWhatsAppCredentials()
+        const credentials = await getWhatsAppCredentials(tenantId)
 
         if (credentials) {
             if (options.checkExternal) {

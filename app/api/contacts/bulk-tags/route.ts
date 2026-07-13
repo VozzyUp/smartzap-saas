@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { contactDb } from '@/lib/supabase-db'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { validateBodyOrError } from '@/lib/api-validation'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -22,6 +23,9 @@ export async function POST(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json().catch(() => ({}))
 
     const validation = validateBodyOrError(BulkUpdateTagsSchema, body)
@@ -34,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ updated: 0 })
     }
 
-    const updated = await contactDb.bulkUpdateTags(ids, tagsToAdd, tagsToRemove)
+    const updated = await contactDb.bulkUpdateTags(ctx.tenantId, ids, tagsToAdd, tagsToRemove)
     return NextResponse.json({ updated })
   } catch (error) {
     console.error('Failed to bulk update tags:', error)

@@ -23,6 +23,8 @@ import { generateBookingDynamicFlowJson, generateDynamicFlowJson, normalizeDynam
 import { validateMetaFlowJson } from '@/lib/meta-flow-json-validator'
 import { settingsDb } from '@/lib/supabase-db'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
+import { getOrCreateFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 
 /**
  * Detecta se o Flow JSON e dinamico (usa data_exchange)
@@ -58,17 +60,23 @@ const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
  *
  * Para dev local, configure NEXT_PUBLIC_APP_URL com sua URL de túnel (ex: Cloudflare Tunnel)
  */
-async function getFlowEndpointUrl(): Promise<string | null> {
-  const privateKey = await settingsDb.get('whatsapp_flow_private_key')
+async function getFlowEndpointUrl(tenantId: string): Promise<string | null> {
+  const privateKey = await settingsDb.get(tenantId, 'whatsapp_flow_private_key')
   if (!privateKey) return null
 
   // 1. NEXT_PUBLIC_APP_URL (pode ser URL de túnel em dev)
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${getAppUrl()}/api/flows/endpoint`
+    try {
+      const flowsToken = await getOrCreateFlowsWebhookToken(tenantId)
+      return `${getAppUrl()}/api/flows/endpoint/${flowsToken}`
+    } catch (err) {
+      console.warn('[publish] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+      return null
+    }
   }
 
   // 2. Fallback: URL salva no banco
-  const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
+  const storedEndpointUrl = await settingsDb.get(tenantId, ENDPOINT_URL_SETTING)
   const resolved = storedEndpointUrl || null
   console.log('[publish] 📍 Endpoint URL resolvida:', resolved, '(stored:', storedEndpointUrl, ')')
   return resolved
@@ -350,11 +358,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const debugInfo: Record<string, unknown> = {}
   let credentials: Awaited<ReturnType<typeof getWhatsAppCredentials>> | null = null
 
+  const tenantCtx = await getTenantContext()
+  if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   try {
     const input = PublishSchema.parse(await req.json().catch(() => ({})))
     wantsDebug = req.headers.get('x-debug-client') === '1'
 
-    credentials = await getWhatsAppCredentials()
+    credentials = await getWhatsAppCredentials(tenantCtx.tenantId)
     if (!credentials?.accessToken || !credentials.businessAccountId) {
       return NextResponse.json(
         {
@@ -500,7 +511,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       debugInfo.requiresEndpoint = requiresEndpoint
 
       if (requiresEndpoint) {
-        const url = await getFlowEndpointUrl()
+        const url = await getFlowEndpointUrl(tenantCtx.tenantId)
         debugInfo.endpointUrl = url ?? null
         if (!url) {
           return NextResponse.json(
@@ -517,7 +528,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
 
       if (requiresEndpoint) {
-        const publicKey = await settingsDb.get(PUBLIC_KEY_SETTING)
+        const publicKey = await settingsDb.get(tenantCtx.tenantId, PUBLIC_KEY_SETTING)
         const hasPublicKey = Boolean(publicKey)
         if (!publicKey) {
           return NextResponse.json(

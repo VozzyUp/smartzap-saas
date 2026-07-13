@@ -6,9 +6,11 @@ import type {
 } from '@/lib/whatsapp-adaptive-throttle'
 
 // Mock settingsDb
+const TENANT_ID = 'tenant-1'
+
 const mockSettingsDb = {
-  get: vi.fn<(key: string) => Promise<string | null>>(),
-  set: vi.fn<(key: string, value: string) => Promise<void>>(),
+  get: vi.fn<(tenantId: string, key: string) => Promise<string | null>>(),
+  set: vi.fn<(tenantId: string, key: string, value: string) => Promise<void>>(),
 }
 
 vi.mock('@/lib/supabase-db', () => ({
@@ -58,7 +60,7 @@ describe('whatsapp-adaptive-throttle', () => {
       process.env.WHATSAPP_ADAPTIVE_MAX_MPS = '100'
       process.env.WHATSAPP_ADAPTIVE_MIN_MPS = '10'
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.enabled).toBe(true)
       expect(config.startMps).toBe(25)
@@ -78,7 +80,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.enabled).toBe(true)
       expect(config.startMps).toBe(40)
@@ -92,7 +94,7 @@ describe('whatsapp-adaptive-throttle', () => {
       mockSettingsDb.get.mockResolvedValue('invalid json {{{')
       process.env.WHATSAPP_ADAPTIVE_START_MPS = '30'
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.startMps).toBe(30)
     })
@@ -107,7 +109,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.startMps).toBeLessThanOrEqual(MAX_RATE_LIMIT)
       expect(config.minMps).toBeGreaterThanOrEqual(MIN_RATE_LIMIT)
@@ -124,7 +126,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       // startMps deve ser ajustado para estar dentro do range
       expect(config.startMps).toBeLessThanOrEqual(config.maxMps)
@@ -136,7 +138,7 @@ describe('whatsapp-adaptive-throttle', () => {
     it('indica source "db" quando config vem do DB', async () => {
       mockSettingsDb.get.mockResolvedValue(JSON.stringify({ enabled: true }))
 
-      const result = await getAdaptiveThrottleConfigWithSource()
+      const result = await getAdaptiveThrottleConfigWithSource(TENANT_ID)
 
       expect(result.source).toBe('db')
       expect(result.rawPresent).toBe(true)
@@ -145,7 +147,7 @@ describe('whatsapp-adaptive-throttle', () => {
     it('indica source "env" quando config vem do env', async () => {
       mockSettingsDb.get.mockResolvedValue(null)
 
-      const result = await getAdaptiveThrottleConfigWithSource()
+      const result = await getAdaptiveThrottleConfigWithSource(TENANT_ID)
 
       expect(result.source).toBe('env')
       expect(result.rawPresent).toBe(false)
@@ -154,7 +156,7 @@ describe('whatsapp-adaptive-throttle', () => {
     it('indica rawPresent true mesmo quando parse falha', async () => {
       mockSettingsDb.get.mockResolvedValue('invalid json')
 
-      const result = await getAdaptiveThrottleConfigWithSource()
+      const result = await getAdaptiveThrottleConfigWithSource(TENANT_ID)
 
       expect(result.source).toBe('env')
       expect(result.rawPresent).toBe(true)
@@ -170,14 +172,14 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T11:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
         return null
       })
 
-      const state = await getAdaptiveThrottleState('phone123')
+      const state = await getAdaptiveThrottleState(TENANT_ID, 'phone123')
 
       expect(state.targetMps).toBe(50)
       expect(state.lastIncreaseAt).toBe('2024-01-15T11:00:00.000Z')
@@ -187,7 +189,7 @@ describe('whatsapp-adaptive-throttle', () => {
       mockSettingsDb.get.mockResolvedValue(null)
       process.env.WHATSAPP_ADAPTIVE_START_MPS = '35'
 
-      const state = await getAdaptiveThrottleState('phone123')
+      const state = await getAdaptiveThrottleState(TENANT_ID, 'phone123')
 
       expect(state.targetMps).toBe(35)
       expect(state.cooldownUntil).toBeNull()
@@ -195,27 +197,27 @@ describe('whatsapp-adaptive-throttle', () => {
     })
 
     it('usa startMps da config do DB quando disponivel', async () => {
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key === 'whatsapp_adaptive_throttle_config') {
           return JSON.stringify({ enabled: true, startMps: 45 })
         }
         return null
       })
 
-      const state = await getAdaptiveThrottleState('phone123')
+      const state = await getAdaptiveThrottleState(TENANT_ID, 'phone123')
 
       expect(state.targetMps).toBe(45)
     })
 
     it('aplica clamp no targetMps ao parsear', async () => {
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify({ targetMps: 99999 })
         }
         return null
       })
 
-      const state = await getAdaptiveThrottleState('phone123')
+      const state = await getAdaptiveThrottleState(TENANT_ID, 'phone123')
 
       expect(state.targetMps).toBeLessThanOrEqual(MAX_RATE_LIMIT)
     })
@@ -225,7 +227,7 @@ describe('whatsapp-adaptive-throttle', () => {
     it('salva state no DB com updatedAt atualizado', async () => {
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      await setAdaptiveThrottleState('phone123', {
+      await setAdaptiveThrottleState(TENANT_ID, 'phone123', {
         targetMps: 60,
         cooldownUntil: null,
         lastIncreaseAt: null,
@@ -233,10 +235,12 @@ describe('whatsapp-adaptive-throttle', () => {
       })
 
       expect(mockSettingsDb.set).toHaveBeenCalledWith(
+        TENANT_ID,
         'whatsapp_adaptive_mps_state:phone123',
         expect.stringContaining('"targetMps":60')
       )
       expect(mockSettingsDb.set).toHaveBeenCalledWith(
+        TENANT_ID,
         'whatsapp_adaptive_mps_state:phone123',
         expect.stringContaining('"updatedAt"')
       )
@@ -245,14 +249,14 @@ describe('whatsapp-adaptive-throttle', () => {
     it('aplica clamp no targetMps ao salvar', async () => {
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      await setAdaptiveThrottleState('phone123', {
+      await setAdaptiveThrottleState(TENANT_ID, 'phone123', {
         targetMps: 5000, // acima do limite
         cooldownUntil: null,
         lastIncreaseAt: null,
         lastDecreaseAt: null,
       })
 
-      const savedValue = JSON.parse(mockSettingsDb.set.mock.calls[0][1])
+      const savedValue = JSON.parse(mockSettingsDb.set.mock.calls[0][2])
       expect(savedValue.targetMps).toBeLessThanOrEqual(MAX_RATE_LIMIT)
     })
   })
@@ -266,7 +270,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -277,7 +281,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       expect(result.changed).toBe(true)
       expect(result.reason).toBe('increase')
@@ -293,14 +297,14 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
         return null
       })
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       expect(result.changed).toBe(false)
       expect(result.reason).toBe('noop')
@@ -316,7 +320,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -326,7 +330,7 @@ describe('whatsapp-adaptive-throttle', () => {
         return null
       })
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       expect(result.changed).toBe(false)
       expect(result.reason).toBe('noop')
@@ -340,7 +344,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -351,7 +355,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       expect(result.next.targetMps).toBeLessThanOrEqual(100)
     })
@@ -364,7 +368,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -374,7 +378,7 @@ describe('whatsapp-adaptive-throttle', () => {
         return null
       })
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       expect(result.changed).toBe(false)
       expect(result.reason).toBe('noop')
@@ -389,7 +393,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -401,7 +405,7 @@ describe('whatsapp-adaptive-throttle', () => {
       mockSettingsDb.set.mockResolvedValue(undefined)
 
       // 5s > 3s, entao deve aumentar
-      const result = await recordStableBatch('phone123', { minSecondsBetweenIncreases: 3 })
+      const result = await recordStableBatch(TENANT_ID, 'phone123', { minSecondsBetweenIncreases: 3 })
 
       expect(result.changed).toBe(true)
       expect(result.reason).toBe('increase')
@@ -415,7 +419,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -426,7 +430,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       // 5% de 100 = 5, entao esperamos 105
       expect(result.next.targetMps).toBe(105)
@@ -440,7 +444,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -451,7 +455,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       // 5% de 10 = 0.5, arredonda para 1
       expect(result.next.targetMps).toBe(11)
@@ -467,7 +471,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -478,7 +482,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordThroughputExceeded('phone123')
+      const result = await recordThroughputExceeded(TENANT_ID, 'phone123')
 
       expect(result.changed).toBe(true)
       expect(result.reason).toBe('decrease')
@@ -493,7 +497,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -504,7 +508,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordThroughputExceeded('phone123')
+      const result = await recordThroughputExceeded(TENANT_ID, 'phone123')
 
       // changed = false porque targetMps nao mudou (5 * 0.6 = 3, mas minMps = 5)
       expect(result.changed).toBe(false)
@@ -520,7 +524,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -531,7 +535,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordThroughputExceeded('phone123')
+      const result = await recordThroughputExceeded(TENANT_ID, 'phone123')
 
       // 10 * 0.6 = 6, mas minMps = 8, entao deve ser 8
       expect(result.next.targetMps).toBe(8)
@@ -545,7 +549,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -556,7 +560,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordThroughputExceeded('phone123', { cooldownSeconds: 60 })
+      const result = await recordThroughputExceeded(TENANT_ID, 'phone123', { cooldownSeconds: 60 })
 
       const cooldownUntil = new Date(result.next.cooldownUntil!).getTime()
       const expectedCooldown = Date.now() + 60 * 1000
@@ -571,7 +575,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -579,7 +583,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordThroughputExceeded('phone123')
+      const result = await recordThroughputExceeded(TENANT_ID, 'phone123')
 
       expect(result.next.lastDecreaseAt).toBe('2024-01-15T12:00:00.000Z')
     })
@@ -595,7 +599,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.startMps).toBeGreaterThanOrEqual(MIN_RATE_LIMIT)
       expect(config.maxMps).toBeLessThanOrEqual(MAX_RATE_LIMIT)
@@ -610,7 +614,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.startMps).toBe(25)
       expect(config.cooldownSec).toBe(30)
@@ -623,7 +627,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.enabled).toBe(true)
     })
@@ -635,7 +639,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.enabled).toBe(true)
     })
@@ -647,20 +651,20 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.enabled).toBe(true)
     })
 
     it('parseJsonState retorna null para objeto invalido', async () => {
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(null)
         }
         return null
       })
 
-      const state = await getAdaptiveThrottleState('phone123')
+      const state = await getAdaptiveThrottleState(TENANT_ID, 'phone123')
 
       // Deve criar um novo state default
       expect(state.targetMps).toBeGreaterThanOrEqual(MIN_RATE_LIMIT)
@@ -675,7 +679,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -686,7 +690,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       // Deve aumentar porque cooldown invalido eh ignorado
       expect(result.changed).toBe(true)
@@ -701,7 +705,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -712,7 +716,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       // Deve aumentar porque cooldown ja passou
       expect(result.changed).toBe(true)
@@ -723,7 +727,7 @@ describe('whatsapp-adaptive-throttle', () => {
     it('usa valores default quando env vars nao estao definidas', async () => {
       mockSettingsDb.get.mockResolvedValue(null)
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       // Defaults: ativado por padrão com valores conservadores (Balanced profile)
       expect(config.enabled).toBe(true)
@@ -745,7 +749,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.sendConcurrency).toBeLessThanOrEqual(50)
     })
@@ -758,7 +762,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.batchSize).toBeLessThanOrEqual(200)
     })
@@ -771,7 +775,7 @@ describe('whatsapp-adaptive-throttle', () => {
         })
       )
 
-      const config = await getAdaptiveThrottleConfig()
+      const config = await getAdaptiveThrottleConfig(TENANT_ID)
 
       expect(config.sendFloorDelayMs).toBeLessThanOrEqual(5000)
     })
@@ -787,7 +791,7 @@ describe('whatsapp-adaptive-throttle', () => {
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
 
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(currentState)
         }
@@ -798,27 +802,27 @@ describe('whatsapp-adaptive-throttle', () => {
         return null
       })
 
-      mockSettingsDb.set.mockImplementation(async (key, value) => {
+      mockSettingsDb.set.mockImplementation(async (_tenantId, key, value) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           currentState = JSON.parse(value)
         }
       })
 
       // Primeiro batch estavel - aumento gradual
-      const result1 = await recordStableBatch('phone123')
+      const result1 = await recordStableBatch(TENANT_ID, 'phone123')
       const firstIncrease = result1.next.targetMps
       expect(firstIncrease).toBeGreaterThan(50) // Deve ter aumentado
 
       // Avanca o tempo para poder aumentar novamente (mais de 3 segundos)
       vi.setSystemTime(new Date('2024-01-15T12:00:05.000Z'))
 
-      const result2 = await recordStableBatch('phone123')
+      const result2 = await recordStableBatch(TENANT_ID, 'phone123')
       const secondIncrease = result2.next.targetMps
       expect(secondIncrease).toBeGreaterThan(firstIncrease) // Deve ter aumentado mais
 
       // Throughput excedido - reducao rapida (40% de reducao, ou seja, 60% do valor)
       vi.setSystemTime(new Date('2024-01-15T12:00:10.000Z'))
-      const result3 = await recordThroughputExceeded('phone123')
+      const result3 = await recordThroughputExceeded(TENANT_ID, 'phone123')
       const afterDecrease = result3.next.targetMps
 
       // A reducao deve ser aproximadamente 60% do valor anterior
@@ -834,7 +838,7 @@ describe('whatsapp-adaptive-throttle', () => {
         lastDecreaseAt: null,
         updatedAt: '2024-01-15T10:00:00.000Z',
       }
-      mockSettingsDb.get.mockImplementation(async (key) => {
+      mockSettingsDb.get.mockImplementation(async (_tenantId, key) => {
         if (key.startsWith('whatsapp_adaptive_mps_state:')) {
           return JSON.stringify(existingState)
         }
@@ -845,7 +849,7 @@ describe('whatsapp-adaptive-throttle', () => {
       })
       mockSettingsDb.set.mockResolvedValue(undefined)
 
-      const result = await recordStableBatch('phone123')
+      const result = await recordStableBatch(TENANT_ID, 'phone123')
 
       // 5% de 900 = 45, que esta dentro do limite
       expect(result.next.targetMps).toBe(945)

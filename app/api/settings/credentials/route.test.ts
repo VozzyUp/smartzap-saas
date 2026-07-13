@@ -1,0 +1,52 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
+
+vi.mock('@/lib/tenant-context', () => ({
+  getTenantContext: vi.fn(async () => ({ tenantId: 't1', userId: 'u1', isPlatformAdmin: false })),
+}))
+vi.mock('@/lib/supabase', () => ({ isSupabaseConfigured: () => true }))
+const saveAllMock = vi.fn(async () => {})
+const setMock = vi.fn(async () => {})
+vi.mock('@/lib/supabase-db', () => ({
+  settingsDb: {
+    getAll: vi.fn(),
+    saveAll: (...a: any[]) => saveAllMock(...a),
+    set: (...a: any[]) => setMock(...a),
+  },
+}))
+const upsertMock = vi.fn(async () => {})
+const clearMock = vi.fn(async () => {})
+vi.mock('@/lib/whatsapp-phone-numbers', () => ({
+  upsertWhatsAppPhoneNumber: (...a: any[]) => upsertMock(...a),
+  clearWhatsAppPhoneNumber: (...a: any[]) => clearMock(...a),
+}))
+vi.mock('@/lib/server-http', () => ({
+  fetchWithTimeout: vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ display_phone_number: '+551199999999', verified_name: 'Test', quality_rating: 'GREEN' }),
+  })),
+  safeJson: vi.fn(async () => ({ display_phone_number: '+551199999999', verified_name: 'Test', quality_rating: 'GREEN' })),
+  isAbortError: () => false,
+}))
+
+import { POST, DELETE } from './route'
+
+describe('settings/credentials write-through', () => {
+  beforeEach(() => {
+    upsertMock.mockClear(); clearMock.mockClear(); saveAllMock.mockClear(); setMock.mockClear()
+  })
+
+  it('POST faz upsert em whatsapp_phone_numbers após salvar credenciais', async () => {
+    const req = new NextRequest('http://localhost/api/settings/credentials', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' }),
+    })
+    await POST(req)
+    expect(upsertMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1' })
+  })
+
+  it('DELETE limpa whatsapp_phone_numbers', async () => {
+    await DELETE()
+    expect(clearMock).toHaveBeenCalledWith('t1')
+  })
+})

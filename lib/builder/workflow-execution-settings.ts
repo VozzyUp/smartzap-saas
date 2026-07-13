@@ -16,9 +16,11 @@ const DEFAULT_CONFIG: WorkflowExecutionConfig = {
   timeoutMs: 10000,
 };
 
-let cached:
-  | { config: WorkflowExecutionConfig; source: "db" | "env"; expiresAt: number }
-  | null = null;
+// Cache por tenant (evita vazar config de execução de um tenant para outro).
+const cacheByTenant = new Map<
+  string,
+  { config: WorkflowExecutionConfig; source: "db" | "env"; expiresAt: number }
+>();
 
 function clampInt(value: unknown, min: number, max: number): number {
   const parsed = Number(value);
@@ -42,11 +44,12 @@ function configFromEnv(): WorkflowExecutionConfig {
   };
 }
 
-export async function getWorkflowExecutionConfig(): Promise<{
+export async function getWorkflowExecutionConfig(tenantId: string): Promise<{
   config: WorkflowExecutionConfig;
   source: "db" | "env";
 }> {
   const now = Date.now();
+  const cached = cacheByTenant.get(tenantId);
   if (cached && cached.expiresAt > now) {
     return { config: cached.config, source: cached.source };
   }
@@ -55,7 +58,7 @@ export async function getWorkflowExecutionConfig(): Promise<{
   let raw: string | null = null;
   if (isSupabaseConfigured()) {
     try {
-      raw = await settingsDb.get(CONFIG_KEY);
+      raw = await settingsDb.get(tenantId, CONFIG_KEY);
     } catch {
       raw = null;
     }
@@ -78,17 +81,21 @@ export async function getWorkflowExecutionConfig(): Promise<{
             ? clampInt(parsed.timeoutMs, 0, 60_000)
             : envConfig.timeoutMs,
       };
-      cached = { config, source: "db", expiresAt: now + CACHE_TTL_MS };
+      cacheByTenant.set(tenantId, { config, source: "db", expiresAt: now + CACHE_TTL_MS });
       return { config, source: "db" };
     } catch {
       // fall through to env defaults
     }
   }
 
-  cached = { config: envConfig, source: "env", expiresAt: now + CACHE_TTL_MS };
+  cacheByTenant.set(tenantId, { config: envConfig, source: "env", expiresAt: now + CACHE_TTL_MS });
   return { config: envConfig, source: "env" };
 }
 
-export function clearWorkflowExecutionConfigCache(): void {
-  cached = null;
+export function clearWorkflowExecutionConfigCache(tenantId?: string): void {
+  if (tenantId) {
+    cacheByTenant.delete(tenantId);
+    return;
+  }
+  cacheByTenant.clear();
 }

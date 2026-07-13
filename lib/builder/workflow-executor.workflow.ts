@@ -84,6 +84,7 @@ export type WorkflowExecutionInput = {
   triggerInput?: Record<string, unknown>;
   executionId?: string;
   workflowId?: string; // Used by steps to fetch credentials
+  tenantId: string;
 };
 
 /**
@@ -566,7 +567,7 @@ export async function executeWorkflow(
 
   console.log("[Workflow Executor] Starting workflow execution");
 
-  const { nodes, edges, triggerInput = {}, executionId, workflowId } = input;
+  const { nodes, edges, triggerInput = {}, executionId, workflowId, tenantId } = input;
 
   console.log("[Workflow Executor] Input:", {
     nodeCount: nodes.length,
@@ -580,7 +581,7 @@ export async function executeWorkflow(
   const variables: Record<string, unknown> = {
     ...(input.initialVariables || {}),
   };
-  const executionDefaults = await getWorkflowExecutionConfig()
+  const executionDefaults = await getWorkflowExecutionConfig(tenantId)
     .then((res) => res.config)
     .catch((error) => {
       console.error(
@@ -783,6 +784,7 @@ export async function executeWorkflow(
           const triggerContext: StepContext = {
             executionId,
             workflowId,
+            tenantId,
             nodeId: node.id,
             nodeName: getNodeName(node),
             nodeType: node.data.type,
@@ -828,6 +830,7 @@ export async function executeWorkflow(
             const stepContext: StepContext = {
               executionId,
               workflowId,
+              tenantId,
               nodeId: node.id,
               nodeName: getNodeName(node),
               nodeType: effectiveActionType,

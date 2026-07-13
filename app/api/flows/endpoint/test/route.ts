@@ -2,20 +2,32 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
+import { getOrCreateFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 
 const ENDPOINT_URL_SETTING = 'whatsapp_flow_endpoint_url'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 
-function buildEndpointUrl(): string | null {
+function buildEndpointUrl(token: string): string | null {
   if (!process.env.NEXT_PUBLIC_APP_URL) return null
-  return `${getAppUrl()}/api/flows/endpoint`
+  return `${getAppUrl()}/api/flows/endpoint/${token}`
 }
 
 export async function GET() {
-  const envEndpointUrl = buildEndpointUrl()
-  const storedEndpointUrl = await settingsDb.get(ENDPOINT_URL_SETTING)
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  let flowsToken: string | null = null
+  try {
+    flowsToken = await getOrCreateFlowsWebhookToken(ctx.tenantId)
+  } catch (err) {
+    console.warn('[flow-endpoint-test] flows_webhook_token indisponível (credenciais WhatsApp ainda não salvas):', err)
+  }
+
+  const envEndpointUrl = flowsToken ? buildEndpointUrl(flowsToken) : null
+  const storedEndpointUrl = await settingsDb.get(ctx.tenantId, ENDPOINT_URL_SETTING)
   const endpointUrl = envEndpointUrl || storedEndpointUrl || null
-  const publicKey = await settingsDb.get(PUBLIC_KEY_SETTING)
+  const publicKey = await settingsDb.get(ctx.tenantId, PUBLIC_KEY_SETTING)
 
   // #region agent log
   // #endregion agent log

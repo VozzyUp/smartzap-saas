@@ -3,8 +3,12 @@ import { settingsDb } from '@/lib/supabase-db'
 
 import { getVerifyToken } from '@/lib/verify-token'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   const webhookUrl = `${getAppUrl()}/api/webhook`
 
   const webhookToken = await getVerifyToken()

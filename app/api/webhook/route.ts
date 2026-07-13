@@ -42,22 +42,23 @@ import {
   handleInboundMessage,
   handleDeliveryStatus,
 } from '@/lib/inbox/inbox-webhook'
+import { resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
 
 // Get WhatsApp Access Token from centralized helper
-async function getWhatsAppAccessToken(): Promise<string | null> {
-  const credentials = await getWhatsAppCredentials()
+async function getWhatsAppAccessToken(tenantId: string): Promise<string | null> {
+  const credentials = await getWhatsAppCredentials(tenantId)
   return credentials?.accessToken || null
 }
 
 // Get or generate webhook verify token (Supabase settings preferred, env var fallback)
 import { getVerifyToken } from '@/lib/verify-token'
 
-async function getCalendarBookingSettings(): Promise<{
+async function getCalendarBookingSettings(tenantId: string): Promise<{
   timezone: string | null
   externalWebhookUrl: string | null
 }> {
   try {
-    const raw = await settingsDb.get('calendar_booking_config')
+    const raw = await settingsDb.get(tenantId, 'calendar_booking_config')
     if (!raw) {
       return {
         timezone: null,
@@ -77,8 +78,8 @@ async function getCalendarBookingSettings(): Promise<{
   }
 }
 
-async function sendExternalWebhook(payload: Record<string, unknown>): Promise<void> {
-  const settings = await getCalendarBookingSettings()
+async function sendExternalWebhook(tenantId: string, payload: Record<string, unknown>): Promise<void> {
+  const settings = await getCalendarBookingSettings(tenantId)
   const webhookUrl = settings?.externalWebhookUrl?.trim()
   if (!webhookUrl) return
 
@@ -504,6 +505,9 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
+  // Handshake de verificação da Meta: uma única URL compartilhada por todos
+  // os tenants, validada uma vez na configuração do App — webhook_verify_token
+  // é configuração de plataforma (platform_settings), não por tenant.
   const MY_VERIFY_TOKEN = await getVerifyToken({ readonly: true })
 
   console.log('🔍 Webhook Verification Request:')
@@ -557,6 +561,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ignored' })
   }
 
+  const entries = Array.isArray(body?.entry) ? body.entry : []
+  const phoneNumberIds = new Set<string>()
+  for (const entry of entries) {
+    for (const change of entry?.changes ?? []) {
+      const pnId = change?.value?.metadata?.phone_number_id
+      if (pnId) phoneNumberIds.add(String(pnId))
+    }
+  }
+
+  if (phoneNumberIds.size === 0) {
+    console.warn('[webhook] Payload sem phone_number_id em nenhum entry/change — ignorando.')
+    return NextResponse.json({ status: 'ignored', reason: 'no_phone_number_id' })
+  }
+
+  const [firstPhoneNumberId, ...restPhoneNumberIds] = Array.from(phoneNumberIds)
+  if (restPhoneNumberIds.length > 0) {
+    console.warn(
+      `[webhook] Payload com múltiplos phone_number_id (${phoneNumberIds.size}) — processando só ${firstPhoneNumberId}, ignorando ${restPhoneNumberIds.length}.`
+    )
+  }
+
+  const tenantId = await resolveTenantByPhoneNumberId(firstPhoneNumberId)
+  if (!tenantId) {
+    console.warn(`[webhook] phone_number_id ${firstPhoneNumberId} não mapeado a nenhum tenant — ignorando.`)
+    return NextResponse.json({ status: 'ignored', reason: 'unknown_phone_number_id' })
+  }
+
   // Evita logs gigantes: guardamos payload estruturado em DB (whatsapp_status_events)
   // e fazemos logs de alto nível aqui.
   console.log('📨 Webhook received:', JSON.stringify({
@@ -568,7 +599,7 @@ export async function POST(request: NextRequest) {
   // Antes: 2 queries sequenciais (~200ms cada)
   // Depois: 1 batch paralelo (~200ms total)
   const [defaultWorkflowIdFromDb, allKeywordWorkflows] = await Promise.all([
-    settingsDb.get('workflow_builder_default_id'),
+    settingsDb.get(tenantId, 'workflow_builder_default_id'),
     loadKeywordWorkflows(null), // Carrega todos, filtra depois
   ])
 
@@ -845,7 +876,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 try {
-                  await maybeAutoSuppressByFailure({
+                  await maybeAutoSuppressByFailure(tenantId, {
                     phone,
                     failureCode: errorCode,
                     failureTitle: errorTitle,
@@ -1006,8 +1037,8 @@ export async function POST(request: NextRequest) {
 
           if (targetWorkflowId && text && from) {
             try {
-              const companyId = await getCompanyId(supabaseAdmin)
-              await ensureWorkflowRecord(supabaseAdmin, targetWorkflowId, companyId)
+              const companyId = await getCompanyId(supabaseAdmin, tenantId)
+              await ensureWorkflowRecord(supabaseAdmin, tenantId, targetWorkflowId, companyId)
 
               // Usa QStash Client para ter assinatura válida (evita SignatureError)
               const baseUrl = getAppUrl(request.nextUrl.origin)
@@ -1264,7 +1295,7 @@ export async function POST(request: NextRequest) {
 
               // Enviar payload para webhook externo (se configurado)
               try {
-                const settings = await getCalendarBookingSettings()
+                const settings = await getCalendarBookingSettings(tenantId)
                 const timezone = settings?.timezone || 'America/Sao_Paulo'
                 const responseObj = (responseJson as any) || {}
                 const selectedDate = typeof responseObj.selected_date === 'string' ? responseObj.selected_date : null
@@ -1282,7 +1313,7 @@ export async function POST(request: NextRequest) {
                   )
                   : null
 
-                await sendExternalWebhook({
+                await sendExternalWebhook(tenantId, {
                   event: 'flow_submission',
                   source: 'whatsapp',
                   message_id: messageId || null,
@@ -1312,9 +1343,9 @@ export async function POST(request: NextRequest) {
 
               // Confirmação automática após conclusão do Flow
               try {
-                const token = await getWhatsAppAccessToken()
+                const token = await getWhatsAppAccessToken(tenantId)
                 if (token && phoneNumberId && normalizedFrom) {
-                  const settings = await getCalendarBookingSettings()
+                  const settings = await getCalendarBookingSettings(tenantId)
                   const timezone = settings?.timezone || 'America/Sao_Paulo'
                   const responseObj =
                     responseJson && typeof responseJson === 'object' ? (responseJson as any) : {}

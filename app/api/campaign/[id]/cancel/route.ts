@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { campaignDb } from '@/lib/supabase-db'
 import { CampaignStatus } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,9 @@ export async function POST(
   const { id: campaignId } = await params
 
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { data: row, error } = await supabase
       .from('campaigns')
       .select('id, status, cancelled_at')
@@ -35,7 +39,7 @@ export async function POST(
 
     // Idempotência: se já está cancelada, apenas retorna.
     if (row.status === CampaignStatus.CANCELLED) {
-      const campaign = await campaignDb.getById(campaignId)
+      const campaign = await campaignDb.getById(ctx.tenantId, campaignId)
       return NextResponse.json({ ok: true, status: 'already_cancelled', campaignId, campaign })
     }
 
@@ -58,7 +62,7 @@ export async function POST(
     const nowIso = new Date().toISOString()
 
     // 1) Marca campanha como CANCELLED
-    await campaignDb.updateStatus(campaignId, {
+    await campaignDb.updateStatus(ctx.tenantId, campaignId, {
       status: CampaignStatus.CANCELLED,
       cancelledAt: nowIso,
       // Defesa: caso a campanha tenha sido iniciada a partir de um agendamento.
@@ -93,7 +97,7 @@ export async function POST(
       console.warn('[CancelCampaign] Failed to mark pending contacts as skipped (best-effort):', e)
     }
 
-    const campaign = await campaignDb.getById(campaignId)
+    const campaign = await campaignDb.getById(ctx.tenantId, campaignId)
 
     console.log(`🛑 Campaign ${campaignId} cancelled.`)
 

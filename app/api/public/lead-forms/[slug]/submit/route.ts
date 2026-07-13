@@ -24,7 +24,7 @@ function corsHeaders() {
 export async function POST(request: Request, { params }: Params) {
   try {
     const { slug } = await params
-    const form = await leadFormDb.getBySlug(slug)
+    const form = await leadFormDb.getBySlugPublic(slug)
 
     if (!form) {
       return NextResponse.json(
@@ -126,6 +126,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const createdOrUpdated = await contactDb.upsertMergeTagsByPhone(
+      form.tenantId,
       {
         name,
         phone: normalized,

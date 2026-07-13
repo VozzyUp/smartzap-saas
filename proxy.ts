@@ -9,6 +9,7 @@ import {
     forbiddenResponse
 } from '@/lib/auth'
 import { provisionTenantForUser } from '@/lib/tenant-provisioning'
+import { getAppUrl } from '@/lib/app-url'
 
 export const config = {
     matcher: [
@@ -173,7 +174,7 @@ export async function proxy(request: NextRequest) {
         if (isInstallerPage) {
             const session = await getSession()
             if (!session.user) {
-                const loginUrl = new URL('/login', request.url)
+                const loginUrl = new URL('/login', getAppUrl(request.nextUrl.origin))
                 loginUrl.searchParams.set('reason', 'installer_locked')
                 loginUrl.searchParams.set('redirect', pathname)
                 return buildResponse(request, session, loginUrl)
@@ -198,7 +199,7 @@ export async function proxy(request: NextRequest) {
     // If not configured and not already on install, redirect immediately
     if (!hasMasterPassword) {
         if (!pathname.startsWith('/install') && !pathname.startsWith('/api')) {
-            const installUrl = new URL('/install', request.url)
+            const installUrl = new URL('/install', getAppUrl(request.nextUrl.origin))
             return NextResponse.redirect(installUrl)
         }
     }
@@ -270,7 +271,7 @@ export async function proxy(request: NextRequest) {
 
     // No valid session - redirect to login
     if (!session.user) {
-        const loginUrl = new URL('/login', request.url)
+        const loginUrl = new URL('/login', getAppUrl(request.nextUrl.origin))
         loginUrl.searchParams.set('redirect', pathname)
         return buildResponse(request, session, loginUrl)
     }

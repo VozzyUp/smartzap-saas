@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
+import { settingsDb } from '@/lib/supabase-db'
 import { clearSettingsCache } from '@/lib/ai'
 import { DEFAULT_AI_DIRECT, DEFAULT_AI_PROMPTS, DEFAULT_AI_ROUTES } from '@/lib/ai/ai-center-defaults'
 import { DEFAULT_OCR_MODEL } from '@/lib/ai/ocr/providers/gemini'
@@ -72,24 +74,24 @@ const getPreview = (key: string) =>
 
 export async function GET() {
   try {
-    const { data, error } = await supabase.admin
-      ?.from('settings')
-      .select('key, value')
-      .in('key', [
-        'ai_direct',
-        'google_api_key',
-        'openai_api_key',
-        'ai_routes',
-        'ai_prompts',
-        'ocr_gemini_model',
-        'strategyMarketing',
-        'strategyUtility',
-        'strategyBypass',
-      ]) || { data: null, error: null }
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    if (error) console.error('Supabase error:', error)
+    const keys = [
+      'ai_direct',
+      'google_api_key',
+      'openai_api_key',
+      'ai_routes',
+      'ai_prompts',
+      'ocr_gemini_model',
+      'strategyMarketing',
+      'strategyUtility',
+      'strategyBypass',
+    ] as const
 
-    const settingsMap = new Map(data?.map((s) => [s.key, s.value]) || [])
+    const values = await Promise.all(keys.map((key) => settingsDb.get(ctx.tenantId as string, key)))
+
+    const settingsMap = new Map(keys.map((key, i) => [key, values[i]]))
 
     const directRaw = parseJsonSetting(
       settingsMap.get('ai_direct') as string | null,
@@ -147,6 +149,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
     const {
       provider,
@@ -228,11 +233,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (updates.length > 0) {
-      const { error } = await supabase.admin
-        ?.from('settings')
-        .upsert(updates) || { error: new Error('Supabase not configured') }
-
-      if (error) {
+      try {
+        await Promise.all(
+          updates.map((u) => settingsDb.set(ctx.tenantId as string, u.key, u.value))
+        )
+      } catch (error) {
         console.error('Supabase error:', error)
         throw new Error('Failed to save to database')
       }
@@ -258,6 +263,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
 
@@ -273,7 +281,8 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase.admin
       ?.from('settings')
       .delete()
-      .eq('key', keyName) || { error: new Error('Supabase not configured') }
+      .eq('key', keyName)
+      .eq('tenant_id', ctx.tenantId) || { error: new Error('Supabase not configured') }
 
     if (error) {
       console.error('Supabase error:', error)

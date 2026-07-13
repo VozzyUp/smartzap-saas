@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { settingsDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export interface AIModelInfo {
   id: string
@@ -35,14 +36,8 @@ function isOpenAIExcluded(id: string): boolean {
   return OPENAI_EXCLUDED_PATTERNS.some((p) => id.includes(p))
 }
 
-async function getSettingValue(key: string): Promise<string | null> {
-  const { data, error } = await supabase.admin
-    ?.from('settings')
-    .select('value')
-    .eq('key', key)
-    .single() || { data: null, error: null }
-  if (error || !data) return null
-  return data.value
+async function getSettingValue(tenantId: string, key: string): Promise<string | null> {
+  return settingsDb.get(tenantId, key)
 }
 
 async function fetchGoogleModels(apiKey: string): Promise<AIModelInfo[]> {
@@ -118,6 +113,9 @@ async function fetchOpenAIModels(apiKey: string): Promise<AIModelInfo[]> {
  * buscando diretamente da API do provider com a chave configurada no banco.
  */
 export async function GET(request: NextRequest) {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   const provider = new URL(request.url).searchParams.get('provider')
 
   if (provider !== 'google' && provider !== 'openai') {
@@ -128,7 +126,7 @@ export async function GET(request: NextRequest) {
   }
 
   const keyName = provider === 'google' ? 'google_api_key' : 'openai_api_key'
-  const apiKey = await getSettingValue(keyName)
+  const apiKey = await getSettingValue(ctx.tenantId, keyName)
 
   if (!apiKey) {
     return NextResponse.json({ models: [] })

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { settingsDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const KEYS = {
   onboardingCompleted: 'onboarding_completed',
@@ -7,30 +8,18 @@ const KEYS = {
 }
 
 /**
- * Busca setting diretamente do Supabase (sem cache Redis)
- * Isso garante que sempre retorna o valor mais recente
- */
-async function getSettingDirect(key: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('settings')
-    .select('value')
-    .eq('key', key)
-    .single()
-  
-  if (error || !data) return null
-  return data.value
-}
-
-/**
  * GET /api/settings/onboarding
- * Retorna o status do onboarding (completo + token permanente)
- * SEMPRE busca direto do banco - sem cache
+ * Retorna o status do onboarding (completo + token permanente) do tenant atual.
+ * SEMPRE busca direto do banco (settingsDb já é per-tenant) - sem cache.
  */
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const [onboardingCompleted, permanentTokenConfirmed] = await Promise.all([
-      getSettingDirect(KEYS.onboardingCompleted),
-      getSettingDirect(KEYS.permanentTokenConfirmed),
+      settingsDb.get(ctx.tenantId, KEYS.onboardingCompleted),
+      settingsDb.get(ctx.tenantId, KEYS.permanentTokenConfirmed),
     ])
 
     const response = NextResponse.json({
@@ -55,37 +44,26 @@ export async function GET() {
 }
 
 /**
- * Salva setting diretamente no Supabase
- */
-async function setSettingDirect(key: string, value: string): Promise<void> {
-  const now = new Date().toISOString()
-  const { error } = await supabase
-    .from('settings')
-    .upsert({ key, value, updated_at: now }, { onConflict: 'key' })
-  
-  if (error) {
-    throw error
-  }
-}
-
-/**
  * POST /api/settings/onboarding
- * Salva configurações do onboarding
+ * Salva configurações do onboarding do tenant atual.
  * Body: { onboardingCompleted?: boolean, permanentTokenConfirmed?: boolean }
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
     const { onboardingCompleted, permanentTokenConfirmed } = body
 
     const updates: Promise<void>[] = []
 
     if (typeof onboardingCompleted === 'boolean') {
-      updates.push(setSettingDirect(KEYS.onboardingCompleted, onboardingCompleted ? 'true' : 'false'))
+      updates.push(settingsDb.set(ctx.tenantId, KEYS.onboardingCompleted, onboardingCompleted ? 'true' : 'false'))
     }
 
     if (typeof permanentTokenConfirmed === 'boolean') {
-      updates.push(setSettingDirect(KEYS.permanentTokenConfirmed, permanentTokenConfirmed ? 'true' : 'false'))
+      updates.push(settingsDb.set(ctx.tenantId, KEYS.permanentTokenConfirmed, permanentTokenConfirmed ? 'true' : 'false'))
     }
 
     if (updates.length === 0) {

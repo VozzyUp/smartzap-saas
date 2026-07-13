@@ -1,36 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { settingsDb } from '@/lib/supabase-db'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const SETTING_KEY = 'ai_agents_global_enabled'
 
 /**
  * GET /api/settings/ai-agents-toggle
- * Retorna o estado do toggle global de agentes IA
+ * Retorna o estado do toggle de agentes IA do tenant atual
+ * ("global" = todos os agentes do tenant, não da plataforma).
  */
 export async function GET() {
   try {
-    const adminClient = supabase.admin
-    if (!adminClient) {
-      return NextResponse.json(
-        { error: 'Supabase admin not configured' },
-        { status: 500 }
-      )
-    }
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    const { data, error } = await adminClient
-      .from('settings')
-      .select('value')
-      .eq('key', SETTING_KEY)
-      .single()
-
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 = no rows returned (setting não existe ainda)
-      console.error('[AI Agents Toggle] Error fetching:', error)
-      throw error
-    }
+    const value = await settingsDb.get(ctx.tenantId, SETTING_KEY)
 
     // Default: habilitado se não existir
-    const enabled = data?.value !== 'false'
+    const enabled = value !== 'false'
 
     return NextResponse.json({ enabled })
   } catch (error) {
@@ -44,10 +31,13 @@ export async function GET() {
 
 /**
  * POST /api/settings/ai-agents-toggle
- * Atualiza o estado do toggle global de agentes IA
+ * Atualiza o estado do toggle de agentes IA do tenant atual
  */
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
     const { enabled } = body
 
@@ -58,33 +48,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const adminClient = supabase.admin
-    if (!adminClient) {
-      return NextResponse.json(
-        { error: 'Supabase admin not configured' },
-        { status: 500 }
-      )
-    }
-
-    const { error } = await adminClient
-      .from('settings')
-      .upsert({
-        key: SETTING_KEY,
-        value: enabled.toString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'key' })
-
-    if (error) {
-      console.error('[AI Agents Toggle] Error saving:', error)
-      throw error
-    }
+    await settingsDb.set(ctx.tenantId, SETTING_KEY, enabled.toString())
 
     return NextResponse.json({
       success: true,
       enabled,
       message: enabled
-        ? 'Agentes IA habilitados globalmente'
-        : 'Agentes IA desabilitados globalmente'
+        ? 'Agentes IA habilitados'
+        : 'Agentes IA desabilitados'
     })
   } catch (error) {
     console.error('[AI Agents Toggle] POST error:', error)

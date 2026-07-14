@@ -33,8 +33,15 @@ export async function GET(request: NextRequest) {
     await provisionTenantForUser(data.user.id, data.user.email ?? data.user.id)
 
     const nextParam = request.nextUrl.searchParams.get('next')
-    // Só caminhos internos (começam com "/" e não "//") — nunca URL externa.
-    const nextPath = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/'
+    // Valida a URL resolvida (não a string): o parser normaliza "\" para "/",
+    // então checagem de prefixo na string crua é contornável (/\evil.com).
+    let nextPath = '/'
+    if (nextParam) {
+      const resolved = new URL(nextParam, baseUrl)
+      if (resolved.origin === new URL(baseUrl).origin) {
+        nextPath = resolved.pathname + resolved.search
+      }
+    }
     return NextResponse.redirect(new URL(nextPath, baseUrl))
   } catch (error) {
     console.error('Auth callback error:', error)

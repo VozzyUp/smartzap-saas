@@ -58,4 +58,70 @@ describe('GET /api/auth/callback', () => {
     const location = res.headers.get('location')
     expect(location).toBe('https://app.example.com/')
   })
+
+  it('redireciona para o path interno informado em ?next=', async () => {
+    exchangeCodeForSession.mockResolvedValueOnce({
+      data: { user: { id: 'u1', email: 'ana@empresa.com' } },
+      error: null,
+    })
+    provisionTenantForUser.mockResolvedValueOnce({ tenantId: 't1', created: true })
+
+    const res = await GET(
+      makeRequest('https://app.example.com/api/auth/callback?code=abc&next=/reset-password')
+    )
+
+    const location = res.headers.get('location')
+    expect(location).toBe('https://app.example.com/reset-password')
+  })
+
+  it('não permite open redirect via backslash em ?next= (/\\evil.com)', async () => {
+    exchangeCodeForSession.mockResolvedValueOnce({
+      data: { user: { id: 'u1', email: 'ana@empresa.com' } },
+      error: null,
+    })
+    provisionTenantForUser.mockResolvedValueOnce({ tenantId: 't1', created: true })
+
+    const res = await GET(
+      makeRequest('https://app.example.com/api/auth/callback?code=abc&next=/%5Cevil.com')
+    )
+
+    const location = res.headers.get('location')
+    expect(location).toBeTruthy()
+    expect(new URL(location as string).hostname).not.toBe('evil.com')
+    expect(new URL(location as string).hostname).toBe('app.example.com')
+  })
+
+  it('não permite open redirect via protocol-relative em ?next= (//evil.com)', async () => {
+    exchangeCodeForSession.mockResolvedValueOnce({
+      data: { user: { id: 'u1', email: 'ana@empresa.com' } },
+      error: null,
+    })
+    provisionTenantForUser.mockResolvedValueOnce({ tenantId: 't1', created: true })
+
+    const res = await GET(
+      makeRequest('https://app.example.com/api/auth/callback?code=abc&next=//evil.com')
+    )
+
+    const location = res.headers.get('location')
+    expect(location).toBeTruthy()
+    expect(new URL(location as string).hostname).not.toBe('evil.com')
+    expect(new URL(location as string).hostname).toBe('app.example.com')
+  })
+
+  it('não permite open redirect via URL absoluta em ?next= (https://evil.com)', async () => {
+    exchangeCodeForSession.mockResolvedValueOnce({
+      data: { user: { id: 'u1', email: 'ana@empresa.com' } },
+      error: null,
+    })
+    provisionTenantForUser.mockResolvedValueOnce({ tenantId: 't1', created: true })
+
+    const res = await GET(
+      makeRequest('https://app.example.com/api/auth/callback?code=abc&next=https://evil.com')
+    )
+
+    const location = res.headers.get('location')
+    expect(location).toBeTruthy()
+    expect(new URL(location as string).hostname).not.toBe('evil.com')
+    expect(new URL(location as string).hostname).toBe('app.example.com')
+  })
 })

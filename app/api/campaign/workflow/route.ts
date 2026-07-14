@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 import { serve } from '@upstash/workflow/nextjs'
 import { campaignDb, templateDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
@@ -545,12 +548,12 @@ const workflowHandler = serve<CampaignWorkflowInput>(
       )
     }
 
-    let shouldStopWorkflow: 'cancelled' | null = null
+    let shouldStopWorkflow: 'cancelled' | 'paused' | null = null
 
     // Step 1: Check cancellation and mark campaign as SENDING
     // IMPORTANTE: Todo código não-determinístico (DB, fetch, etc) DEVE estar dentro de context.run()
     // Ref: https://upstash.com/docs/workflow/basics/caveats#avoid-non-deterministic-code-outside-context-run
-    await context.run('init-campaign', async () => {
+    shouldStopWorkflow = await context.run('init-campaign', async () => {
       // Emit trace de início
       await emitWorkflowTrace({
         traceId,
@@ -568,7 +571,6 @@ const workflowHandler = serve<CampaignWorkflowInput>(
       const nowIso = new Date().toISOString()
       const existing = await campaignDb.getById(tenantId, campaignId)
 
-      // Verifica se campanha foi cancelada antes de iniciar
       if (existing?.status === CampaignStatus.CANCELLED) {
         await emitWorkflowTrace({
           traceId,
@@ -578,8 +580,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           ok: true,
         })
         console.log(`🛑 Campaign ${campaignId} already CANCELLED before workflow start. Exiting.`)
-        shouldStopWorkflow = 'cancelled'
-        return
+        return 'cancelled' as const
       }
 
       const startedAt = (existing as any)?.startedAt || nowIso
@@ -592,6 +593,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
       console.log(`📊 Campaign ${campaignId} started with ${contacts.length} contacts (traceId=${traceId})`)
       console.log(`📝 Template variables: ${JSON.stringify(templateVariables || [])}`)
+      return null
     })
 
     if (shouldStopWorkflow === 'cancelled') {
@@ -628,10 +630,11 @@ const workflowHandler = serve<CampaignWorkflowInput>(
     // Step 3+: Process contacts in smaller batches
     // Each batch is a separate step = separate HTTP request = bypasses 10s limit
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      if (shouldStopWorkflow) break;
+
       const batch = batches[batchIndex]
 
-
-      await context.run(`send-batch-${batchIndex}`, async () => {
+      const batchResult = await context.run(`send-batch-${batchIndex}`, async () => {
         const step = `send-batch-${batchIndex}`
 
         let batchOk = true
@@ -1174,7 +1177,6 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
           if (campaignStatusAtBatchStart?.status === CampaignStatus.CANCELLED) {
             console.log(`🛑 Campaign ${campaignId} is cancelled, stopping workflow at batch ${batchIndex}`)
-            shouldStopWorkflow = 'cancelled'
 
             // Broadcast best-effort
             try {
@@ -1196,12 +1198,12 @@ const workflowHandler = serve<CampaignWorkflowInput>(
               ok: true,
             })
 
-            return
+            return { stop: 'cancelled' as const }
           }
 
           if (campaignStatusAtBatchStart?.status === CampaignStatus.PAUSED) {
             console.log(`⏸️ Campaign ${campaignId} is paused, skipping batch ${batchIndex}`)
-            return
+            return { stop: 'paused' as const }
           }
 
           if (adaptiveEnabled) {
@@ -2228,10 +2230,27 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             }
           }
 
+          // Verifica se o workflow foi cancelado/pausado
+          const currentCampaign = await campaignDb.getById(tenantId, campaignId)
+          if (currentCampaign?.status === CampaignStatus.CANCELLED) return { stop: 'cancelled' }
+          if (currentCampaign?.status === CampaignStatus.PAUSED) return { stop: 'paused' }
+
+          return { stop: null }
         } catch (err) {
           batchOk = false
           batchError = err instanceof Error ? err.message : String(err)
-          throw err
+          
+          // Broadcast the error best-effort
+          try {
+            await broadcastCampaignPhase(campaignId, {
+              traceId,
+              batchIndex,
+              phase: 'batch_error',
+            })
+          } catch {
+            // best-effort
+          }
+          return { stop: null }
         } finally {
           // Sinaliza fim do batch e faz flush final
           try {
@@ -2410,10 +2429,17 @@ const workflowHandler = serve<CampaignWorkflowInput>(
         )
 
         console.log(`📦 Batch ${batchIndex + 1}/${batches.length}: ${sentCount} sent, ${failedCount} failed, ${skippedCount} skipped`)
+        
+        // Se chegou até o fim do batch sem early returns de pause/cancel, não para.
+        return { stop: null }
       })
 
+      if (batchResult?.stop) {
+        shouldStopWorkflow = batchResult.stop
+        break
+      }
 
-      if (shouldStopWorkflow === 'cancelled') break
+      if (shouldStopWorkflow === 'cancelled' || shouldStopWorkflow === 'paused') break
     }
 
     // Step 3: Mark campaign as completed

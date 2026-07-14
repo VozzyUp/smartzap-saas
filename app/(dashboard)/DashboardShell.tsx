@@ -381,15 +381,21 @@ export function DashboardShell({
         )
     }
 
-    // Determina se deve mostrar o modal de onboarding do WhatsApp
-    // Mostra quando: infra OK E onboarding não marcado como completo no banco
-    // Só mostra modal de onboarding após carregar status do banco (evita flash)
-    const showWhatsAppOnboarding = !needsSetup && !isOnboardingStatusLoading && !isOnboardingCompletedInDb
+    // Se WhatsApp já está conectado mas onboarding não foi marcado como completo,
+    // auto-completa sem forçar mais steps. O WebhookAlertBanner cuida de lembrar
+    // sobre webhook separadamente. Isso resolve loops causados por forceStep.
+    const autoCompleteAttempted = React.useRef(false)
+    React.useEffect(() => {
+        if (isWhatsAppConnected && !isOnboardingCompletedInDb && !isOnboardingStatusLoading && !autoCompleteAttempted.current) {
+            autoCompleteAttempted.current = true
+            handleMarkOnboardingComplete()
+        }
+    }, [isWhatsAppConnected, isOnboardingCompletedInDb, isOnboardingStatusLoading, handleMarkOnboardingComplete])
 
-    // Se WhatsApp já conectado mas onboarding não completo, força ir para step de webhook
-    const onboardingForceStep = isWhatsAppConnected && !isOnboardingCompletedInDb
-        ? 'configure-webhook' as const
-        : undefined
+    // Determina se deve mostrar o modal de onboarding do WhatsApp
+    // Mostra quando: infra OK, onboarding não completo no banco, E WhatsApp NÃO conectado ainda
+    // Se WhatsApp já conectado, o useEffect acima cuida de auto-completar
+    const showWhatsAppOnboarding = !needsSetup && !isOnboardingStatusLoading && !isOnboardingCompletedInDb && !isWhatsAppConnected
 
     const isBuilderRoute = pathname?.startsWith('/builder') ?? false
     const isInboxRoute = pathname?.startsWith('/inbox') ?? false
@@ -569,7 +575,6 @@ export function DashboardShell({
                         isConnected={!!isWhatsAppConnected}
                         onSaveCredentials={handleSaveCredentials}
                         onMarkComplete={handleMarkOnboardingComplete}
-                        forceStep={onboardingForceStep}
                     />
                 )}
 

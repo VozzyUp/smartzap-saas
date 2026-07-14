@@ -2,12 +2,18 @@ import { describe, it, expect, vi } from 'vitest'
 const rpcCurrent = vi.fn()
 const rpcAdmin = vi.fn()
 const getUser = vi.fn()
+const maybeSingle = vi.fn(() => Promise.resolve({ data: null, error: null }))
 vi.mock('@/lib/supabase-server', () => ({
   createClient: async () => ({
     auth: { getUser },
     rpc: (name: string, params?: any) =>
       name === 'current_tenant_id' ? rpcCurrent() :
       name === 'is_platform_admin' ? rpcAdmin(params) : Promise.reject(new Error('unknown rpc')),
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle }),
+      }),
+    }),
   }),
 }))
 
@@ -23,7 +29,7 @@ describe('getTenantContext', () => {
     rpcCurrent.mockResolvedValueOnce({ data: 't1', error: null })
     rpcAdmin.mockResolvedValueOnce({ data: false, error: null })
     const ctx = await getTenantContext()
-    expect(ctx).toEqual({ tenantId: 't1', userId: 'u1', isPlatformAdmin: false })
+    expect(ctx).toEqual({ tenantId: 't1', userId: 'u1', isPlatformAdmin: false, trialExpired: false })
     expect(rpcAdmin).toHaveBeenCalledWith({ uid: 'u1' })
   })
 })

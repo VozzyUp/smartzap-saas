@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase-server'
+import { isTrialExpired } from '@/lib/trial'
 
 export type TenantContext = {
   tenantId: string | null
   userId: string
   isPlatformAdmin: boolean
+  trialExpired: boolean
 }
 
 export async function getTenantContext(): Promise<TenantContext | null> {
@@ -14,7 +16,14 @@ export async function getTenantContext(): Promise<TenantContext | null> {
     supa.rpc('current_tenant_id'),
     supa.rpc('is_platform_admin', { uid: user.id }),
   ])
-  return { tenantId: (tenantId as string) ?? null, userId: user.id, isPlatformAdmin: !!isAdmin }
+  const resolvedTenantId = (tenantId as string) ?? null
+  let trialExpired = false
+  if (resolvedTenantId && !isAdmin) {
+    const { data: tenantRow } = await supa
+      .from('tenants').select('trial_ends_at').eq('id', resolvedTenantId).maybeSingle()
+    trialExpired = isTrialExpired(tenantRow?.trial_ends_at ?? null)
+  }
+  return { tenantId: resolvedTenantId, userId: user.id, isPlatformAdmin: !!isAdmin, trialExpired }
 }
 
 /**

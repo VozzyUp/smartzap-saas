@@ -46,8 +46,8 @@ import type { ResolvedTemplateValues } from '@/lib/whatsapp/template-contract'
 // Conversation Service
 // =============================================================================
 
-export async function listConversations(filters: ConversationFilters = {}) {
-  return getConversations(filters)
+export async function listConversations(tenantId: string, filters: ConversationFilters = {}) {
+  return getConversations(tenantId, filters)
 }
 
 export async function getConversation(id: string) {

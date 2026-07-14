@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { listConversations } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { ConversationStatus, ConversationMode } from '@/types'
 
 const querySchema = z.object({
@@ -18,6 +19,11 @@ const querySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     const parsed = querySchema.safeParse({
@@ -36,7 +42,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await listConversations({
+    const result = await listConversations(ctx.tenantId, {
       status: parsed.data.status as ConversationStatus | undefined,
       mode: parsed.data.mode as ConversationMode | undefined,
       labelId: parsed.data.label,

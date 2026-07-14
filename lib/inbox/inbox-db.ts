@@ -59,6 +59,7 @@ export interface PaginatedConversations {
  * Get all conversations with optional filters and pagination
  */
 export async function getConversations(
+  tenantId: string,
   filters: ConversationFilters = {}
 ): Promise<PaginatedConversations> {
   const supabase = getClient()
@@ -74,6 +75,7 @@ export async function getConversations(
       ),
       ai_agent:ai_agents(id, name, is_active)
     `, { count: 'exact' })
+    .eq('tenant_id', tenantId)
     .order('last_message_at', { ascending: false, nullsFirst: false })
 
   // Apply filters

@@ -6,6 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 import { isProduction } from '@/lib/app-env'
 
 function getSupabasePublishableKey(): string | undefined {
@@ -105,7 +106,12 @@ export function getSupabaseBrowser(): SupabaseClient | null {
     }
 
     if (!_supabaseBrowser) {
-        _supabaseBrowser = createClient(url, key)
+        // createBrowserClient (@supabase/ssr) lê a sessão dos cookies compartilhados
+        // com o server client, então o Realtime autentica com o token do usuário —
+        // necessário para receber postgres_changes em tabelas com RLS por tenant
+        // (Fase 2A). Com createClient puro o Realtime conectava como anon e a RLS
+        // barrava todos os eventos (inbox não atualizava sozinho).
+        _supabaseBrowser = createBrowserClient(url, key)
     }
     return _supabaseBrowser
 }

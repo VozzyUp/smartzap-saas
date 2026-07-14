@@ -3,45 +3,34 @@
 /**
  * Login Page
  *
- * Login via magic link (email) — Supabase Auth.
+ * Login via email + senha — Supabase Auth.
  */
 
 import { useState, Suspense } from 'react'
-import { Mail, Send, CheckCircle2 } from 'lucide-react'
+import { Mail, Lock, Send } from 'lucide-react'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sent, setSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (!email) {
-      setError('Digite seu email')
-      return
-    }
-
+    if (!email || !password) { setError('Preencha e-mail e senha'); return }
     setIsLoading(true)
-
     try {
-      const response = await fetch('/api/auth/magic-link', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, password }),
       })
-
       const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar link de acesso')
-      }
-
-      setSent(true)
+      if (!response.ok) throw new Error(data.error || 'Erro ao entrar')
+      window.location.href = '/'
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao enviar link de acesso')
+      setError(err instanceof Error ? err.message : 'Erro ao entrar')
     } finally {
       setIsLoading(false)
     }
@@ -60,50 +49,63 @@ function LoginForm() {
 
       {/* Card */}
       <div className="bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-2xl p-6 shadow-xl">
-        {sent ? (
-          <div className="text-center py-4">
-            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-            <p className="text-[var(--ds-text-primary)] font-medium">Cheque seu email</p>
-            <p className="text-sm text-[var(--ds-text-secondary)] mt-1">
-              Enviamos um link de acesso para <strong>{email}</strong>. Clique no link para entrar.
-            </p>
+        <form onSubmit={handleSubmit}>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--ds-text-muted)]" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Seu email"
+              name="email"
+              autoComplete="email"
+              className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] rounded-xl pl-11 pr-4 py-3 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              autoFocus
+            />
           </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--ds-text-muted)]" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Seu email"
-                name="email"
-                autoComplete="email"
-                className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] rounded-xl pl-11 pr-4 py-3 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                autoFocus
-              />
-            </div>
 
-            {error && (
-              <p className="mt-4 text-[var(--ds-status-error-text)] text-sm">{error}</p>
+          <div className="relative mt-4">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--ds-text-muted)]" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Sua senha"
+              name="password"
+              autoComplete="current-password"
+              className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] rounded-xl pl-11 pr-4 py-3 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
+          {error && (
+            <p className="mt-4 text-[var(--ds-status-error-text)] text-sm">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full mt-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                Entrar
+                <Send className="w-4 h-4" />
+              </>
             )}
+          </button>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full mt-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  Enviar link de acesso
-                  <Send className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-        )}
+          <div className="mt-4 text-center text-sm text-[var(--ds-text-secondary)]">
+            <a href="/forgot-password" className="hover:text-emerald-500 transition-colors">
+              Esqueci minha senha
+            </a>
+            {' '}·{' '}
+            <a href="/signup" className="hover:text-emerald-500 transition-colors">
+              Criar conta
+            </a>
+          </div>
+        </form>
       </div>
 
       {/* Footer */}

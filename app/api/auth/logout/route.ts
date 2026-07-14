@@ -1,7 +1,7 @@
 /**
  * Logout API
  *
- * POST: Encerra a sessão Supabase do usuário (magic link auth).
+ * POST: Encerra a sessão Supabase do usuário (login por senha).
  */
 
 import { NextResponse } from 'next/server'

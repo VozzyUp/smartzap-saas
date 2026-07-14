@@ -14,7 +14,7 @@ function extractToken(request: Request): string {
   return request.headers.get('x-api-key')?.trim() ?? ''
 }
 
-// Fallback: aceita um access token de sessão Supabase (magic link) pertencente
+// Fallback: aceita um access token de sessão Supabase (login por senha) pertencente
 // a um `platform_admin` — MASTER_PASSWORD não é mais aceito aqui (aposentado
 // como login de usuário; permanece só como gate do wizard `/install`).
 async function resolvePlatformAdminToken(token: string): Promise<boolean> {

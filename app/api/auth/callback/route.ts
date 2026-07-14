@@ -1,8 +1,9 @@
 /**
  * Auth Callback API
  *
- * GET: Troca o `code` do magic link por uma sessão Supabase e garante que o
- * usuário tenha um tenant provisionado antes de liberar o acesso ao app.
+ * GET: Troca o `code` (confirmação de cadastro ou reset de senha) por uma
+ * sessão Supabase e garante que o usuário tenha um tenant provisionado
+ * antes de liberar o acesso ao app.
  */
 
 import { NextRequest, NextResponse } from 'next/server'

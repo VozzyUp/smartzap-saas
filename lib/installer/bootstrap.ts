@@ -3,7 +3,7 @@
  * Configura settings iniciais após migrations.
  *
  * NOTA (Task 10 — cutover de auth): `MASTER_PASSWORD` foi aposentado como
- * login de usuário do dashboard (isso agora é Supabase Auth via magic link —
+ * login de usuário do dashboard (isso agora é Supabase Auth por senha —
  * ver `lib/user-auth.ts` e `proxy.ts`). O único uso restante de
  * MASTER_PASSWORD no produto é aqui: como gate/senha inicial do wizard de
  * instalação (`/install`, `app/api/installer/*`), que roda ANTES de existir
@@ -27,7 +27,7 @@ type BootstrapResult =
 
 /**
  * Verifica se a conexão com o Supabase funciona (para validar instalação).
- * Não verifica login de usuário — isso é Supabase Auth (magic link), fora
+ * Não verifica login de usuário — isso é Supabase Auth (senha), fora
  * do escopo do installer. Esta função apenas verifica conectividade.
  */
 export async function verifySupabaseConnection(params: {

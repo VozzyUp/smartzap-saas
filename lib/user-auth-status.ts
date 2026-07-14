@@ -3,7 +3,7 @@
  *
  * Combina "empresa configurada" (settings no banco, ver `lib/user-auth.ts`)
  * com "usuário autenticado" (sessão Supabase, ver `lib/tenant-context.ts`).
- * Login de usuário é via Supabase Auth (magic link) — não há mais
+ * Login de usuário é via Supabase Auth (senha) — não há mais
  * MASTER_PASSWORD como caminho de autenticação de usuário.
  */
 

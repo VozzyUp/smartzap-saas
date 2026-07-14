@@ -191,7 +191,7 @@ export async function POST(req: Request) {
       // Auth
       // MASTER_PASSWORD: único uso restante é o gate do wizard de instalação do
       // operador (Task 10 aposentou MASTER_PASSWORD como login de usuário do
-      // dashboard — isso agora é Supabase Auth/magic link). Não remova.
+      // dashboard — isso agora é Supabase Auth por senha). Não remova.
       { key: 'MASTER_PASSWORD', value: admin.passwordHash, targets: envTargets },
 
       // API Key para acesso programático

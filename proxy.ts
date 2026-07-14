@@ -24,7 +24,7 @@ const PUBLIC_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password'
 // Rotas que NÃO precisam de autenticação
 // CUIDADO: adicionar rotas aqui expõe elas publicamente!
 const PUBLIC_API_ROUTES = [
-    '/api/auth',              // Login/logout/status/magic-link/callback
+    '/api/auth',              // Login/logout/status/forgot-password/callback
     '/api/webhook',           // Meta WhatsApp webhooks (usa HMAC)
     '/api/health',            // Health checks
     '/api/system',            // Info básica do sistema

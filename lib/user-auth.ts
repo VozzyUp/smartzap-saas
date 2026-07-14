@@ -1,8 +1,8 @@
 /**
  * Company Setup Helpers
  *
- * Login de usuário é feito via Supabase Auth (magic link) — ver
- * `app/api/auth/{magic-link,callback}` e `proxy.ts`.
+ * Login de usuário é feito via Supabase Auth (senha) — ver
+ * `app/api/auth/{login,callback}` e `proxy.ts`.
  *
  * Este módulo hoje só cuida dos dados de "empresa" (nome, admin, e-mail,
  * telefone) preenchidos no wizard de onboarding, persistidos na tabela

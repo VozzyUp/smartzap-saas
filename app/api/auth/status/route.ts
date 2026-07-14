@@ -3,8 +3,8 @@
  *
  * GET: Check current auth status (setup complete? authenticated? configured?)
  *
- * "Autenticado" agora significa "tem sessão Supabase válida" (magic link) —
- * ver `proxy.ts` e `app/api/auth/{magic-link,callback}`. MASTER_PASSWORD não
+ * "Autenticado" agora significa "tem sessão Supabase válida" (login por
+ * senha) — ver `proxy.ts` e `app/api/auth/{login,callback}`. MASTER_PASSWORD não
  * é mais um mecanismo de login de usuário (permanece só como gate do wizard
  * `/install`, fora do escopo desta rota).
  */

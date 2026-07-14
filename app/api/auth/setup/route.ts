@@ -2,7 +2,7 @@
  * Setup API
  *
  * POST: Complete initial setup (company, email, phone)
- * Login de usuário é via Supabase Auth (magic link) — o proxy já exige uma
+ * Login de usuário é via Supabase Auth (senha) — o proxy já exige uma
  * sessão válida antes desta rota ser alcançada.
  */
 

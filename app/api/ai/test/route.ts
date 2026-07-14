@@ -131,8 +131,10 @@ export async function POST(req: NextRequest) {
     console.log(`🧪 [AI-TEST] Using agent: ${agent.name} (${agent.model})`)
 
     // 4. Monta conversa mock
+    const mockTenantId = (agent as unknown as { tenant_id: string }).tenant_id
     const mockConversation: InboxConversation = {
       id: 'test-conversation-' + Date.now(),
+      tenant_id: mockTenantId,
       phone,
       mode: 'bot',
       ai_agent_id: agent.id,
@@ -161,6 +163,7 @@ export async function POST(req: NextRequest) {
       const msg = conversationHistory[i]
       mockMessages.push({
         id: `test-msg-${i}`,
+        tenant_id: mockTenantId,
         conversation_id: mockConversation.id,
         direction: msg.role === 'user' ? 'inbound' : 'outbound',
         content: msg.content,
@@ -179,6 +182,7 @@ export async function POST(req: NextRequest) {
     // Adiciona mensagem atual
     mockMessages.push({
       id: `test-msg-current`,
+      tenant_id: mockTenantId,
       conversation_id: mockConversation.id,
       direction: 'inbound',
       content: message,

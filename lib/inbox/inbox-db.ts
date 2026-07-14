@@ -201,6 +201,7 @@ export async function findConversationByPhone(
  * @returns Conversa com campos essenciais ou null se não encontrada
  */
 export async function findConversationByPhoneLightweight(
+  tenantId: string,
   phone: string
 ): Promise<Pick<
   InboxConversation,
@@ -224,6 +225,7 @@ export async function findConversationByPhoneLightweight(
       total_messages,
       unread_count
     `)
+    .eq('tenant_id', tenantId)
     .eq('phone', phone)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .limit(1)
@@ -241,6 +243,7 @@ export async function findConversationByPhoneLightweight(
  * Get or create a conversation by phone number
  */
 export async function getOrCreateConversation(
+  tenantId: string,
   phone: string,
   contactId?: string,
   aiAgentId?: string
@@ -251,6 +254,7 @@ export async function getOrCreateConversation(
   const { data: existing } = await supabase
     .from('inbox_conversations')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('phone', phone)
     .eq('status', 'open')
     .single()
@@ -265,6 +269,7 @@ export async function getOrCreateConversation(
     const { data: defaultAgent } = await supabase
       .from('ai_agents')
       .select('id')
+      .eq('tenant_id', tenantId)
       .eq('is_default', true)
       .eq('is_active', true)
       .single()
@@ -280,6 +285,7 @@ export async function getOrCreateConversation(
   const { data, error } = await supabase
     .from('inbox_conversations')
     .insert({
+      tenant_id: tenantId,
       phone,
       contact_id: contactId,
       ai_agent_id: agentId,
@@ -302,7 +308,7 @@ export async function getOrCreateConversation(
 export async function createConversation(
   dto: CreateInboxConversationDTO
 ): Promise<InboxConversation> {
-  return getOrCreateConversation(dto.phone, dto.contact_id, dto.ai_agent_id)
+  return getOrCreateConversation(dto.tenant_id, dto.phone, dto.contact_id, dto.ai_agent_id)
 }
 
 /**

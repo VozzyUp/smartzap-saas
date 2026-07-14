@@ -254,6 +254,7 @@ export async function POST(req: NextRequest) {
 
         // Salva cada parte no banco
         await inboxDb.createMessage({
+          tenant_id: tenantId,
           conversation_id: conversationId,
           direction: 'outbound',
           content: part,
@@ -285,6 +286,7 @@ export async function POST(req: NextRequest) {
       await inboxDb.updateConversation(conversationId, { mode: 'human' })
 
       await inboxDb.createMessage({
+        tenant_id: tenantId,
         conversation_id: conversationId,
         direction: 'outbound',
         content: `🤖 **Transferência para atendente**\n\n${result.response.handoffReason ? `**Motivo:** ${result.response.handoffReason}\n` : ''}${result.response.handoffSummary ? `**Resumo:** ${result.response.handoffSummary}` : ''}`,
@@ -425,6 +427,7 @@ async function handleAutoHandoff(
 
   if (sendResult.success && sendResult.messageId) {
     await inboxDb.createMessage({
+      tenant_id: tenantId,
       conversation_id: conversationId,
       direction: 'outbound',
       content: fallbackMessage,
@@ -439,6 +442,7 @@ async function handleAutoHandoff(
 
   // Cria nota interna
   await inboxDb.createMessage({
+    tenant_id: tenantId,
     conversation_id: conversationId,
     direction: 'outbound',
     content: `🤖 **Transferência automática**\n\n**Motivo:** Erro técnico: ${errorMessage}`,

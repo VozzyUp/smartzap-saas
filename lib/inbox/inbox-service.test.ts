@@ -20,6 +20,7 @@ const mockCreateMessage = createMessage as Mock
 
 describe('syncCampaignTemplateToInbox', () => {
   const baseParams = {
+    tenantId: 'tenant_123',
     phone: '+5511999999999',
     contactId: 'contact_123',
     whatsappMessageId: 'wamid.123456',
@@ -78,11 +79,13 @@ describe('syncCampaignTemplateToInbox', () => {
     expect(result).toBe('msg_123')
     expect(mockFindMessageByWhatsAppId).toHaveBeenCalledWith('wamid.123456')
     expect(mockGetOrCreateConversation).toHaveBeenCalledWith(
+      'tenant_123',
       '+5511999999999',
       'contact_123',
       undefined
     )
     expect(mockCreateMessage).toHaveBeenCalledWith({
+      tenant_id: 'tenant_123',
       conversation_id: 'conv_123',
       direction: 'outbound',
       content: baseParams.templatePreviewText,
@@ -174,6 +177,7 @@ describe('syncCampaignTemplateToInbox', () => {
     // Assert
     expect(result).toBe('msg_123')
     expect(mockGetOrCreateConversation).toHaveBeenCalledWith(
+      'tenant_123',
       '+5511999999999',
       undefined, // contactId null vira undefined
       undefined

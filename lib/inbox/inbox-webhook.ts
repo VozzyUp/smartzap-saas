@@ -54,6 +54,8 @@ const getQStashClient = () => {
 // =============================================================================
 
 export interface InboundMessagePayload {
+  /** Tenant que recebeu a mensagem (resolvido pelo webhook via phone_number_id) */
+  tenantId: string
   /** WhatsApp message ID */
   messageId: string
   /** Sender phone number (raw format from webhook) */
@@ -108,6 +110,7 @@ export async function handleInboundMessage(
   if (supabase) {
     try {
       const { data, error } = await supabase.rpc('process_inbound_message', {
+        p_tenant_id: payload.tenantId,
         p_phone: normalizedPhone,
         p_content: payload.text || `[${payload.type}]`,
         p_whatsapp_message_id: payload.messageId || null,
@@ -197,12 +200,13 @@ async function handleInboundMessageLegacy(
   triggeredAI: boolean
 }> {
   // 1. Busca conversa existente (versão LIGHTWEIGHT - sem JOINs)
-  let conversation = await findConversationByPhoneLightweight(normalizedPhone)
+  let conversation = await findConversationByPhoneLightweight(payload.tenantId, normalizedPhone)
 
   if (!conversation) {
     // Paraleliza: busca contato enquanto prepara criação da conversa
-    const contactId = await findContactId(normalizedPhone)
+    const contactId = await findContactId(payload.tenantId, normalizedPhone)
     const fullConversation = await inboxDb.createConversation({
+      tenant_id: payload.tenantId,
       phone: normalizedPhone,
       contact_id: contactId || undefined,
       mode: 'bot',
@@ -225,6 +229,7 @@ async function handleInboundMessageLegacy(
 
   // 2. Cria mensagem
   const message = await inboxDb.createMessage({
+    tenant_id: payload.tenantId,
     conversation_id: conversation.id,
     direction: 'inbound',
     content: payload.text || `[${payload.type}]`,
@@ -456,6 +461,7 @@ async function handleAIHandoff(
 
   // Create internal note about handoff
   await inboxDb.createMessage({
+    tenant_id: conversation.tenant_id,
     conversation_id: conversation.id,
     direction: 'outbound',
     content: `🤖 **Transferência para atendente**\n\n${reason ? `**Motivo:** ${reason}\n` : ''}${summary ? `**Resumo:** ${summary}` : ''}`,
@@ -535,7 +541,7 @@ export async function handleDeliveryStatus(
 /**
  * Find contact ID by phone number
  */
-async function findContactId(phone: string): Promise<string | null> {
+async function findContactId(tenantId: string, phone: string): Promise<string | null> {
   const supabase = getSupabaseAdmin()
   if (!supabase) {
     console.error('[Inbox] Supabase admin client not available')
@@ -545,6 +551,7 @@ async function findContactId(phone: string): Promise<string | null> {
   const { data } = await supabase
     .from('contacts')
     .select('id')
+    .eq('tenant_id', tenantId)
     .eq('phone', phone)
     .single()
 

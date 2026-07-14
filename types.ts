@@ -545,6 +545,7 @@ export type Sentiment = 'positive' | 'neutral' | 'negative' | 'frustrated';
 // T002: InboxConversation interface
 export interface InboxConversation {
   id: string;
+  tenant_id: string;
   contact_id: string | null;
   ai_agent_id: string | null;
   phone: string;
@@ -571,6 +572,7 @@ export interface InboxConversation {
 // T003: InboxMessage interface
 export interface InboxMessage {
   id: string;
+  tenant_id: string;
   conversation_id: string;
   direction: MessageDirection;
   content: string;
@@ -694,6 +696,7 @@ export interface InboxQuickReply {
 
 // DTO types for API operations
 export interface CreateInboxConversationDTO {
+  tenant_id: string;
   phone: string;
   contact_id?: string;
   ai_agent_id?: string;
@@ -709,6 +712,7 @@ export interface UpdateInboxConversationDTO {
 }
 
 export interface CreateInboxMessageDTO {
+  tenant_id: string;
   conversation_id: string;
   direction: MessageDirection;
   content: string;

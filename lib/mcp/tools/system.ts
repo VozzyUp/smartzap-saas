@@ -251,6 +251,7 @@ export function registerSystemTools(server: McpServer) {
 
           const fakeConversation = {
             id: fakeConvId,
+            tenant_id: tenantId,
             contact_id: null,
             ai_agent_id: agent.id,
             phone: `+5511999${String(idx).padStart(6, '0')}`,

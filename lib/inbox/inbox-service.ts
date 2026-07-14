@@ -55,11 +55,12 @@ export async function getConversation(id: string) {
 }
 
 export async function findOrCreateConversation(
+  tenantId: string,
   phone: string,
   contactId?: string,
   aiAgentId?: string
 ) {
-  return getOrCreateConversation(phone, contactId, aiAgentId)
+  return getOrCreateConversation(tenantId, phone, contactId, aiAgentId)
 }
 
 export async function patchConversation(
@@ -161,6 +162,7 @@ export async function sendMessage(
 
   // Persist the message
   const message = await createMessage({
+    tenant_id: tenantId,
     conversation_id: conversationId,
     direction: 'outbound',
     content,
@@ -182,6 +184,7 @@ export async function sendMessage(
  * Persist an inbound message from webhook
  */
 export async function persistInboundMessage(
+  tenantId: string,
   phone: string,
   content: string,
   messageType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text',
@@ -191,10 +194,11 @@ export async function persistInboundMessage(
   contactId?: string
 ): Promise<{ conversation: InboxConversation; message: InboxMessage }> {
   // Find or create conversation
-  const conversation = await findOrCreateConversation(phone, contactId)
+  const conversation = await findOrCreateConversation(tenantId, phone, contactId)
 
   // Create message
   const message = await createMessage({
+    tenant_id: tenantId,
     conversation_id: conversation.id,
     direction: 'inbound',
     content,
@@ -359,6 +363,7 @@ export async function executeHandoff(
 // =============================================================================
 
 export interface SyncCampaignTemplateParams {
+  tenantId: string
   phone: string
   contactId: string | null
   whatsappMessageId: string
@@ -388,6 +393,7 @@ export async function syncCampaignTemplateToInbox(
   params: SyncCampaignTemplateParams
 ): Promise<string | null> {
   const {
+    tenantId,
     phone,
     contactId,
     whatsappMessageId,
@@ -408,6 +414,7 @@ export async function syncCampaignTemplateToInbox(
 
     // Busca ou cria conversa para esse telefone
     const conversation = await getOrCreateConversation(
+      tenantId,
       phone,
       contactId || undefined,
       undefined // aiAgentId - usar default
@@ -415,6 +422,7 @@ export async function syncCampaignTemplateToInbox(
 
     // Cria a mensagem no inbox
     const message = await createMessage({
+      tenant_id: tenantId,
       conversation_id: conversation.id,
       direction: 'outbound',
       content: templatePreviewText,

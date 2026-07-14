@@ -1586,6 +1586,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
               // Permite que a IA tenha contexto e o operador veja o histórico
               const activeTemplateForSync = refreshedTemplateForBatch || templateForBatch
               syncCampaignTemplateToInbox({
+                tenantId,
                 phone: precheck.normalizedPhone,
                 contactId: contact.contactId,
                 whatsappMessageId: messageId,

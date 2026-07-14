@@ -990,6 +990,7 @@ export async function POST(request: NextRequest) {
           // =================================================================
           try {
             const inboxResult = await handleInboundMessage({
+              tenantId,
               messageId: message.id || '',
               from,
               type: messageType,

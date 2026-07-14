@@ -283,6 +283,9 @@ export function useMessages(conversationId: string | null) {
       // Optimistic update - add pending message
       const optimisticMessage: InboxMessage = {
         id: `temp-${Date.now()}`,
+        // Placeholder local-only — nunca persistido; a resposta real do servidor
+        // (com tenant_id correto) substitui este objeto otimista.
+        tenant_id: '',
         conversation_id: conversationId!,
         direction: 'outbound',
         content: params.content,

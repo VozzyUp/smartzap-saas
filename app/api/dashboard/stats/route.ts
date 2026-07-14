@@ -1,44 +1,23 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Allow 60s cache on Vercel Edge - dashboard uses realtime/polling for updates
 export const revalidate = 60
 
 export async function GET() {
   try {
-    // Try to use pre-aggregated view first (migration 0033)
-    const { data: viewData, error: viewError } = await supabase
-      .from('campaign_stats_summary')
-      .select('*')
-      .maybeSingle()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    // View exists and returned data - use optimized path
-    if (!viewError && viewData) {
-      const totalSent = viewData.total_sent || 0
-      const totalDelivered = viewData.total_delivered || 0
-      const deliveryRate = totalSent > 0
-        ? Math.round((totalDelivered / totalSent) * 100)
-        : 0
-
-      return NextResponse.json({
-        totalSent,
-        totalDelivered,
-        totalRead: viewData.total_read || 0,
-        totalFailed: viewData.total_failed || 0,
-        activeCampaigns: (viewData.active_campaigns || 0) + (viewData.scheduled_campaigns || 0),
-        deliveryRate,
-        // Extra stats from view
-        sent24h: viewData.sent_24h || 0,
-        delivered24h: viewData.delivered_24h || 0,
-        failed24h: viewData.failed_24h || 0,
-      })
-    }
-
-    // Fallback: View doesn't exist yet, use legacy query
-    // This path will be removed once migration 0033 is applied
+    // NOTA: `campaign_stats_summary` é uma view global (sem coluna tenant_id,
+    // agrega TODAS as campanhas de TODOS os tenants) — não pode ser filtrada
+    // por tenant, então não é mais usada aqui. Query direta em `campaigns`
+    // com `.eq('tenant_id', ...)` substitui o antigo caminho "otimizado".
     const { data, error } = await supabase
       .from('campaigns')
       .select('sent, delivered, read, failed, status')
+      .eq('tenant_id', ctx.tenantId)
 
     if (error) throw error
 

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { getBrazilUfFromPhone } from '@/lib/br-geo'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -27,6 +28,9 @@ export async function GET(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Paginação: PostgREST limita a 1000 rows sem .range() explícito.
     const PAGE_SIZE = 1000
     const counts: Record<string, number> = {}
@@ -36,6 +40,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase
         .from('contacts')
         .select('phone')
+        .eq('tenant_id', ctx.tenantId)
         .order('id')
         .range(from, from + PAGE_SIZE - 1)
       if (error) throw error

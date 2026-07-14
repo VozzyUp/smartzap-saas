@@ -4,7 +4,8 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
+import { settingsDb } from '@/lib/supabase-db'
 import { EMBEDDING_PROVIDERS } from '@/lib/ai/embeddings'
 import type { EmbeddingProvider } from '@/types'
 
@@ -22,27 +23,19 @@ const EMBEDDING_API_KEY_MAP: Record<EmbeddingProvider, { settingKey: string; env
  */
 export async function GET() {
   try {
-    const supabase = getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Supabase not configured' },
-        { status: 500 }
-      )
-    }
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     // Busca todas as API keys de embedding de uma vez
     const settingKeys = Object.values(EMBEDDING_API_KEY_MAP).map(c => c.settingKey)
 
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('key, value')
-      .in('key', settingKeys)
+    const values = await Promise.all(
+      settingKeys.map((key) => settingsDb.get(ctx.tenantId as string, key))
+    )
 
     // Cria mapa de quais keys existem
     const configuredKeys = new Set(
-      settings
-        ?.filter(s => s.value && s.value.trim() !== '')
-        .map(s => s.key) || []
+      settingKeys.filter((key, i) => values[i] && values[i]!.trim() !== '')
     )
 
     // Verifica também env vars

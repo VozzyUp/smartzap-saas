@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const PatchDraftSchema = z
   .object({
@@ -20,10 +21,14 @@ const PatchDraftSchema = z
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
   try {
+    const tenantCtx = await getTenantContext()
+    if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { data, error } = await supabase
       .from('templates')
       .select('id,name,language,category,status,updated_at,created_at,parameter_format,components,header_location')
       .eq('id', id)
+      .eq('tenant_id', tenantCtx.tenantId)
       .limit(1)
 
     if (error) {
@@ -70,6 +75,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
   try {
+    const tenantCtx = await getTenantContext()
+    if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const json = await req.json()
     const patch = PatchDraftSchema.parse(json)
     const now = new Date().toISOString()
@@ -121,6 +129,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       .from('templates')
       .update(update as any)
       .eq('id', id)
+      .eq('tenant_id', tenantCtx.tenantId)
       .select('id,name,language,category,status,updated_at,created_at,parameter_format,components')
       .limit(1)
 
@@ -137,6 +146,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         .from('templates')
         .update(legacyUpdate)
         .eq('id', id)
+        .eq('tenant_id', tenantCtx.tenantId)
         .select('id,name,language,category,status,updated_at,created_at,components')
         .limit(1)
 
@@ -184,7 +194,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
   try {
-    const { error } = await supabase.from('templates').delete().eq('id', id)
+    const tenantCtx = await getTenantContext()
+    if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+    const { error } = await supabase
+      .from('templates')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantCtx.tenantId)
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }

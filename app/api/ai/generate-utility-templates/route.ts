@@ -4,7 +4,8 @@ import { validateBodyOrError } from '@/lib/api-validation'
 import { generateText, generateJSON } from '@/lib/ai'
 import { judgeTemplates } from '@/lib/ai/services/ai-judge'
 import { buildUtilityGenerationPrompt } from '@/lib/ai/prompts/utility-generator'
-import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
+import { settingsDb } from '@/lib/supabase-db'
 import { getAiPromptsConfig, isAiRouteEnabled } from '@/lib/ai/ai-center-config'
 
 // ============================================================================
@@ -351,6 +352,9 @@ async function generateWithUnifiedPrompt(
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const routeEnabled = await isAiRouteEnabled('generateUtilityTemplates')
     if (!routeEnabled) {
       return NextResponse.json(
@@ -370,12 +374,8 @@ export async function POST(request: NextRequest) {
     // Get API key from settings for both Agent and Judge
     let apiKey: string | null = null
     try {
-      const settingsResult = await supabase.admin
-        ?.from('settings')
-        .select('value')
-        .eq('key', 'google_api_key')
-        .single()
-      apiKey = settingsResult?.data?.value || process.env.GOOGLE_GENERATIVE_AI_API_KEY || null
+      const storedKey = await settingsDb.get(ctx.tenantId, 'google_api_key')
+      apiKey = storedKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY || null
     } catch {
       apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || null
     }

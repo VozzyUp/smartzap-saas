@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -27,6 +28,9 @@ function safeCount(x: any): number {
  * Útil para validar discrepâncias de delivered/read.
  */
 export async function GET(_req: Request, { params }: Params) {
+  const ctx = await getTenantContext()
+  if (!ctx?.isPlatformAdmin) return noStoreJson({ error: 'forbidden' }, { status: 403 })
+
   const { id: campaignId } = await params
 
   if (!campaignId) {

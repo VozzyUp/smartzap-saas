@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase, getSupabaseAdmin } from '@/lib/supabase'
 import { fetchWithTimeout } from '@/lib/server-http'
 import { getAppEnv } from '@/lib/app-env'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * GET /api/system
@@ -98,6 +99,9 @@ function buildVercelDashboardUrl(): string | null {
 // === MAIN HANDLER ===
 
 export async function GET() {
+  const ctx = await getTenantContext()
+  if (!ctx?.isPlatformAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
   const startTime = Date.now()
 
   // Initialize response structure

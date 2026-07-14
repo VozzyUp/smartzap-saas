@@ -5,8 +5,12 @@
 
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export async function GET(request: Request) {
+  const ctx = await getTenantContext()
+  if (!ctx?.isPlatformAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
   // Only allow in development
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json(

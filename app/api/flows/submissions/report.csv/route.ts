@@ -1,4 +1,6 @@
+import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,20 +54,30 @@ function isMissingColumn(error: unknown, column: string): boolean {
   return msg.toLowerCase().includes('column') && msg.toLowerCase().includes(column.toLowerCase())
 }
 
-async function resolveCampaignName(campaignId: string | null): Promise<string | null> {
+async function resolveCampaignName(tenantId: string, campaignId: string | null): Promise<string | null> {
   if (!campaignId) return null
   try {
-    const { data } = await supabase.from('campaigns').select('name').eq('id', campaignId).limit(1)
+    const { data } = await supabase
+      .from('campaigns')
+      .select('name')
+      .eq('id', campaignId)
+      .eq('tenant_id', tenantId)
+      .limit(1)
     return data?.[0]?.name ? String(data[0].name) : null
   } catch {
     return null
   }
 }
 
-async function resolveFlowName(flowId: string | null): Promise<string | null> {
+async function resolveFlowName(tenantId: string, flowId: string | null): Promise<string | null> {
   if (!flowId) return null
   try {
-    const { data } = await supabase.from('flows').select('name').eq('meta_flow_id', flowId).limit(1)
+    const { data } = await supabase
+      .from('flows')
+      .select('name')
+      .eq('meta_flow_id', flowId)
+      .eq('tenant_id', tenantId)
+      .limit(1)
     return data?.[0]?.name ? String(data[0].name) : null
   } catch {
     return null
@@ -80,6 +92,10 @@ async function resolveFlowName(flowId: string | null): Promise<string | null> {
  */
 export async function GET(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const { searchParams } = new URL(request.url)
     const flowId = searchParams.get('flowId')
     const campaignId = searchParams.get('campaignId')
@@ -91,6 +107,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('flow_submissions')
       .select('*')
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
 
     if (flowId) q = q.eq('flow_id', flowId)
@@ -151,8 +168,8 @@ export async function GET(request: Request) {
 
     const csv = `\ufeff${lines.join('\n')}\n`
 
-    const resolvedCampaignName = await resolveCampaignName(campaignId)
-    const resolvedFlowName = await resolveFlowName(flowId)
+    const resolvedCampaignName = await resolveCampaignName(tenantId, campaignId)
+    const resolvedFlowName = await resolveFlowName(tenantId, flowId)
     const fallbackFlowName = rows[0]?.flow_name ? String(rows[0].flow_name) : null
 
     const nameBase =

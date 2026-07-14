@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const CreateDraftSchema = z.object({
   name: z
@@ -24,11 +25,12 @@ function deriveContentFromSpec(spec: any): string {
 /**
  * Gera um nome único para o template, adicionando sufixo _2, _3, etc. se necessário
  */
-async function generateUniqueName(baseName: string, language: string): Promise<string> {
+async function generateUniqueName(tenantId: string, baseName: string, language: string): Promise<string> {
   // Verificar se já existe um template com esse nome e idioma
   const { data: existing } = await supabase
     .from('templates')
     .select('name')
+    .eq('tenant_id', tenantId)
     .eq('language', language)
     .like('name', `${baseName}%`)
 
@@ -54,10 +56,14 @@ async function generateUniqueName(baseName: string, language: string): Promise<s
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     // Tentativa 1: com filtro de source
     const attempt1 = await supabase
       .from('templates')
       .select('id,name,language,category,status,updated_at,created_at,parameter_format,components')
+      .eq('tenant_id', ctx.tenantId)
       .eq('status', 'DRAFT')
       .eq('source', 'manual')
       .order('updated_at', { ascending: false })
@@ -74,6 +80,7 @@ export async function GET() {
       const attempt2 = await supabase
         .from('templates')
         .select('id,name,language,category,status,updated_at,created_at,parameter_format,components')
+        .eq('tenant_id', ctx.tenantId)
         .eq('status', 'DRAFT')
         .order('updated_at', { ascending: false })
 
@@ -126,6 +133,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const json = await request.json()
     const parsed = CreateDraftSchema.parse(json)
 
@@ -133,7 +143,7 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString()
 
     // Gerar nome único para evitar conflitos
-    const uniqueName = await generateUniqueName(parsed.name, parsed.language)
+    const uniqueName = await generateUniqueName(ctx.tenantId, parsed.name, parsed.language)
 
     // Spec (compatível com CreateTemplateSchema/TemplateService)
     const spec = {
@@ -154,6 +164,7 @@ export async function POST(request: NextRequest) {
       .from('templates')
       .insert({
         id,
+        tenant_id: ctx.tenantId,
         name: uniqueName,
         language: parsed.language,
         category: parsed.category,
@@ -182,6 +193,7 @@ export async function POST(request: NextRequest) {
         .from('templates')
         .insert({
           id,
+          tenant_id: ctx.tenantId,
           name: uniqueName,
           language: parsed.language,
           category: parsed.category,

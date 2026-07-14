@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { getAppEnv } from '@/lib/app-env'
+import { getTenantContext } from '@/lib/tenant-context'
+import { isWhatsAppConnected } from '@/lib/whatsapp-credentials'
 
 // Self-hosted: não há dashboard da Vercel para linkar. Mantido como stub
 // (retorna sempre null) para não quebrar os consumidores de HealthCheckResult.vercel.
@@ -108,16 +110,36 @@ export async function GET() {
     result.overall = 'degraded'
   }
 
-  // 3. Check WhatsApp credentials
-  // Este é um health check público/infra (sem sessão), e credenciais WhatsApp
-  // agora são por tenant (Fase 2A). Sem um tenant específico para checar,
-  // não há como probar credenciais sem hardcodar um tenantId (proibido pelas
-  // convenções de multi-tenancy). Reportamos como não-aplicável até a Fase 2B
-  // trazer um checkup por tenant.
-  result.services.whatsapp = {
-    status: 'not_configured',
-    source: 'none',
-    message: 'Verificação por tenant não disponível neste health check multi-tenant (Fase 2B)',
+  // 3. Check WhatsApp credentials (por tenant, quando há sessão)
+  // Este endpoint atende dois usos: (a) health check de infra sem sessão
+  // (Docker HEALTHCHECK, Traefik) — aí não há tenant e reportamos not_configured;
+  // (b) chamada do DashboardShell com a sessão do usuário — aí resolvemos o
+  // tenant e probamos as credenciais dele (o DashboardShell usa este status
+  // para avançar o onboarding; sem isso, o wizard trava na tela de boas-vindas).
+  try {
+    const ctx = await getTenantContext()
+    if (ctx?.tenantId) {
+      const connected = await isWhatsAppConnected(ctx.tenantId)
+      result.services.whatsapp = {
+        status: connected ? 'ok' : 'not_configured',
+        source: connected ? 'db' : 'none',
+        message: connected
+          ? 'Credenciais WhatsApp configuradas para o tenant'
+          : 'Credenciais WhatsApp não configuradas para o tenant',
+      }
+    } else {
+      result.services.whatsapp = {
+        status: 'not_configured',
+        source: 'none',
+        message: 'Health check de infra (sem sessão) — verificação por tenant não aplicável',
+      }
+    }
+  } catch {
+    result.services.whatsapp = {
+      status: 'not_configured',
+      source: 'none',
+      message: 'Não foi possível verificar credenciais WhatsApp',
+    }
   }
 
   // 4. Check Webhook status (only if database is configured)

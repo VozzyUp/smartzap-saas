@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const tenantCtx = await getTenantContext()
     if (!tenantCtx) return unauthorizedResponse()
-    const tenantId = tenantCtx.tenant.id
+    const tenantId = tenantCtx.tenantId
 
     const { id } = await params
     const { searchParams } = new URL(request.url)

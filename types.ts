@@ -418,6 +418,7 @@ export interface RealtimeState {
 export type CampaignProgressBroadcastPhase =
   | 'batch_start'
   | 'batch_end'
+  | 'batch_error'
   | 'cancelled'
   | 'complete'
 

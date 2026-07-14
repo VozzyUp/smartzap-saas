@@ -2232,8 +2232,8 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
           // Verifica se o workflow foi cancelado/pausado
           const currentCampaign = await campaignDb.getById(tenantId, campaignId)
-          if (currentCampaign?.status === CampaignStatus.CANCELLED) return { stop: 'cancelled' }
-          if (currentCampaign?.status === CampaignStatus.PAUSED) return { stop: 'paused' }
+          if (currentCampaign?.status === CampaignStatus.CANCELLED) return { stop: 'cancelled' as const }
+          if (currentCampaign?.status === CampaignStatus.PAUSED) return { stop: 'paused' as const }
 
           return { stop: null }
         } catch (err) {

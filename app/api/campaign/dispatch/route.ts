@@ -824,7 +824,14 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('[Dispatch] Failed to persist pre-check results:', error)
-    const details = error instanceof Error ? error.message : String(error)
+    const detailsObj = {
+      message: error instanceof Error ? error.message : String(error),
+      supabaseCode: (error as any)?.code,
+      supabaseDetails: (error as any)?.details,
+      supabaseHint: (error as any)?.hint,
+      raw: error
+    }
+    const details = JSON.stringify(detailsObj)
     const tried = (error as any)?.__dispatch_on_conflict
     return NextResponse.json(
       {

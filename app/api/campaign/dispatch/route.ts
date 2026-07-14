@@ -703,6 +703,7 @@ export async function POST(request: NextRequest) {
       .filter((c) => !lockedContactIds.has(String(c.contactId)))
       .filter((c) => String(c.phone || '').trim().length > 0)
       .map(c => ({
+      tenant_id: tenantId,
       campaign_id: campaignId,
       contact_id: c.contactId || null,
       phone: String(c.phone).trim(),
@@ -720,6 +721,7 @@ export async function POST(request: NextRequest) {
     const rowsSkipped = skippedContacts
       .filter(({ contact }) => !lockedContactIds.has(String(contact.contactId || '')))
       .map(({ contact, code, reason, normalizedPhone }) => ({
+      tenant_id: tenantId,
       campaign_id: campaignId,
       contact_id: contact.contactId || null,
       // Nunca permitir null/undefined: campaign_contacts.phone é NOT NULL.

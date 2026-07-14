@@ -18,6 +18,7 @@ import { sendWhatsAppMessage, sendTypingIndicator } from '@/lib/whatsapp-send'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { redis } from '@/lib/redis'
 import type { AIAgent } from '@/types'
+import { isTenantTrialExpired } from '@/lib/trial'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -118,6 +119,11 @@ export async function POST(req: NextRequest) {
     if (!tenantId) {
       console.log(`❌ [AI-RESPOND] tenant_id not found for conversation: ${conversationId}`)
       return NextResponse.json({ error: 'Conversation tenant not found' }, { status: 404 })
+    }
+
+    if (await isTenantTrialExpired(tenantId)) {
+      console.log(`[AI-RESPOND] trial expirado para tenant ${tenantId} — resposta suprimida`)
+      return NextResponse.json({ success: true, skipped: 'trial_expired' })
     }
 
     // 3. Verifica se está em modo bot

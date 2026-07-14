@@ -229,12 +229,16 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
   }
 
   // Quando forceStep é passado no modo normal (ex: WhatsApp já conectado mas
-  // onboarding não completo), sincroniza o wizard para aquele step
+  // onboarding não completo), sincroniza o wizard para aquele step UMA VEZ.
+  // Usa ref para evitar loop: sem ref, o useEffect puxaria o usuário de volta
+  // ao forceStep toda vez que ele avançasse para o próximo step.
+  const forceStepApplied = React.useRef(false);
   React.useEffect(() => {
-    if (forceStep && !tutorialMode && isLoaded && progress.currentStep !== forceStep) {
+    if (forceStep && !tutorialMode && isLoaded && !forceStepApplied.current) {
+      forceStepApplied.current = true;
       goToStep(forceStep);
     }
-  }, [forceStep, tutorialMode, isLoaded, goToStep, progress.currentStep]);
+  }, [forceStep, tutorialMode, isLoaded, goToStep]);
 
   // ============================================================================
   // MODO ONBOARDING NORMAL: Fluxo completo com navegação

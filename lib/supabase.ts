@@ -107,11 +107,19 @@ export function getSupabaseBrowser(): SupabaseClient | null {
 
     if (!_supabaseBrowser) {
         // createBrowserClient (@supabase/ssr) lê a sessão dos cookies compartilhados
-        // com o server client, então o Realtime autentica com o token do usuário —
-        // necessário para receber postgres_changes em tabelas com RLS por tenant
-        // (Fase 2A). Com createClient puro o Realtime conectava como anon e a RLS
-        // barrava todos os eventos (inbox não atualizava sozinho).
-        _supabaseBrowser = createBrowserClient(url, key)
+        // com o server client. Mas o carregamento da sessão é assíncrono e os canais
+        // Realtime sobem no mount dos hooks — se o canal conecta antes do token
+        // chegar, entra como anon e a RLS por tenant (Fase 2A) barra TODOS os eventos
+        // de postgres_changes (inbox não atualizava ao vivo).
+        //
+        // Propagamos o access_token ao Realtime sempre que a sessão carrega/renova
+        // (INITIAL_SESSION, TOKEN_REFRESHED, SIGNED_IN/OUT). setAuth reautentica os
+        // canais já conectados, então a RLS passa a entregar os eventos do tenant.
+        const client = createBrowserClient(url, key)
+        client.auth.onAuthStateChange((_event, session) => {
+            client.realtime.setAuth(session?.access_token ?? null)
+        })
+        _supabaseBrowser = client
     }
     return _supabaseBrowser
 }

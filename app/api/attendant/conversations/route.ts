@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { resolveTenantByAttendantToken } from '@/lib/attendant-auth'
 import type { InboxConversation, Contact } from '@/types'
 
 // =============================================================================
@@ -103,6 +104,12 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
+    const token = searchParams.get('token')
+    const tenantId = await resolveTenantByAttendantToken(token)
+    if (!tenantId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+
     const status = searchParams.get('status') // 'open' | 'closed' | null (all)
     const search = searchParams.get('search')
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -115,6 +122,7 @@ export async function GET(request: Request) {
         contact:contacts(*),
         ai_agent:ai_agents(id, name)
       `)
+      .eq('tenant_id', tenantId)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(limit)
 

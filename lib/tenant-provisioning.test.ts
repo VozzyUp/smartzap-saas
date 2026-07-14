@@ -38,4 +38,18 @@ describe('provisionTenantForUser', () => {
     expect(r.created).toBe(true)
     expect(r.tenantId).toBe('new-t')
   })
+
+  it('grava trial_ends_at ~3 dias no futuro ao criar tenant novo', async () => {
+    const before = Date.now() + 3 * 24 * 60 * 60 * 1000 - 5000
+    const after = Date.now() + 3 * 24 * 60 * 60 * 1000 + 5000
+    selectMember.mockResolvedValueOnce({ data: null, error: null })
+    insertTenant.mockResolvedValueOnce({ data: { id: 'new-t' }, error: null })
+    insertMember.mockResolvedValueOnce({ data: null, error: null })
+    await provisionTenantForUser('u-novo', 'novo@empresa.com')
+    const payload = insertTenant.mock.calls[0][0]
+    expect(payload.trial_ends_at).toBeDefined()
+    const ts = new Date(payload.trial_ends_at).getTime()
+    expect(ts).toBeGreaterThan(before)
+    expect(ts).toBeLessThan(after)
+  })
 })

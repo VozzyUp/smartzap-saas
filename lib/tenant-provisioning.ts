@@ -16,6 +16,7 @@ export async function provisionTenantForUser(
   }
   const inserted = await db.from('tenants').insert({
     name: emailForName, slug: slugFromEmail(emailForName), status: 'trialing',
+    trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
   }).select('id').single()
   const tenantId = (inserted as any).data?.id
   await db.from('tenant_members').insert({ tenant_id: tenantId, user_id: userId, role: 'owner' })

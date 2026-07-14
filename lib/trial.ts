@@ -11,7 +11,8 @@ export async function isTenantTrialExpired(tenantId: string): Promise<boolean> {
     if (!db) return false
     const { data } = await db.from('tenants').select('trial_ends_at').eq('id', tenantId).maybeSingle()
     return isTrialExpired(data?.trial_ends_at ?? null)
-  } catch {
+  } catch (e) {
+    console.warn('[trial] falha ao ler trial_ends_at — tratando como não expirado:', e)
     return false
   }
 }

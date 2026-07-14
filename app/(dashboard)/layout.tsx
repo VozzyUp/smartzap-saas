@@ -7,7 +7,12 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const ctx = await getTenantContext()
+  let ctx = null
+  try {
+    ctx = await getTenantContext()
+  } catch {
+    redirect('/login')
+  }
   if (ctx?.trialExpired) redirect('/trial-expirado')
   return (
     <DashboardShell>

@@ -36,6 +36,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { ensureWorkflowRecord, getCompanyId } from '@/lib/builder/workflow-db'
 import { Client as WorkflowClient } from '@upstash/workflow'
 import { getPendingConversation } from '@/lib/builder/workflow-conversations'
+import { isTenantTrialExpired } from '@/lib/trial'
 
 // T046-T048: Inbox integration
 import {
@@ -588,6 +589,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ignored', reason: 'unknown_phone_number_id' })
   }
 
+  const trialExpired = await isTenantTrialExpired(tenantId)
+  if (trialExpired) {
+    console.log(`[WEBHOOK] trial expirado para tenant ${tenantId} — automações suprimidas`)
+  }
+
   // Evita logs gigantes: guardamos payload estruturado em DB (whatsapp_status_events)
   // e fazemos logs de alto nível aqui.
   console.log('📨 Webhook received:', JSON.stringify({
@@ -1002,59 +1008,61 @@ export async function POST(request: NextRequest) {
           // Workflow Builder (MVP): resume pending conversation if any
           // =================================================================
           const normalizedFrom = normalizePhoneNumber(from)
-          if (normalizedFrom && text) {
-            const pendingConversation = await getPendingConversation(
-              supabaseAdmin,
-              normalizedFrom
-            )
-            if (pendingConversation) {
-              try {
-                const origin = request.nextUrl.origin
-                await fetch(
-                  `${origin}/api/builder/workflow/${pendingConversation.workflow_id}/resume`,
-                  {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      workflowId: pendingConversation.workflow_id,
-                      conversationId: pendingConversation.id,
-                      input: { from: normalizedFrom, to: normalizedFrom, message: text },
-                    }),
-                  }
-                )
-                continue
-              } catch (e) {
-                console.error('[Webhook] Failed to resume conversation:', e)
+          if (!trialExpired) {
+            if (normalizedFrom && text) {
+              const pendingConversation = await getPendingConversation(
+                supabaseAdmin,
+                normalizedFrom
+              )
+              if (pendingConversation) {
+                try {
+                  const origin = request.nextUrl.origin
+                  await fetch(
+                    `${origin}/api/builder/workflow/${pendingConversation.workflow_id}/resume`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        workflowId: pendingConversation.workflow_id,
+                        conversationId: pendingConversation.id,
+                        input: { from: normalizedFrom, to: normalizedFrom, message: text },
+                      }),
+                    }
+                  )
+                  continue
+                } catch (e) {
+                  console.error('[Webhook] Failed to resume conversation:', e)
+                }
               }
             }
-          }
 
-          // =================================================================
-          // Workflow Builder (MVP): run keyword/default workflow
-          // =================================================================
-          const matchedWorkflowId = findMatchingWorkflow(keywordWorkflows, text)
-          const targetWorkflowId = matchedWorkflowId || defaultWorkflowId
+            // =================================================================
+            // Workflow Builder (MVP): run keyword/default workflow
+            // =================================================================
+            const matchedWorkflowId = findMatchingWorkflow(keywordWorkflows, text)
+            const targetWorkflowId = matchedWorkflowId || defaultWorkflowId
 
-          if (targetWorkflowId && text && from) {
-            try {
-              const companyId = await getCompanyId(supabaseAdmin, tenantId)
-              await ensureWorkflowRecord(supabaseAdmin, tenantId, targetWorkflowId, companyId)
+            if (targetWorkflowId && text && from) {
+              try {
+                const companyId = await getCompanyId(supabaseAdmin, tenantId)
+                await ensureWorkflowRecord(supabaseAdmin, tenantId, targetWorkflowId, companyId)
 
-              // Usa QStash Client para ter assinatura válida (evita SignatureError)
-              const baseUrl = getAppUrl(request.nextUrl.origin)
+                // Usa QStash Client para ter assinatura válida (evita SignatureError)
+                const baseUrl = getAppUrl(request.nextUrl.origin)
 
-              const workflowClient = new WorkflowClient({ token: process.env.QSTASH_TOKEN! })
+                const workflowClient = new WorkflowClient({ token: process.env.QSTASH_TOKEN! })
 
-              // Self-hosted: sem Deployment Protection da Vercel, sem header de bypass.
-              await workflowClient.trigger({
-                url: `${baseUrl}/api/builder/workflow/${targetWorkflowId}/execute`,
-                body: {
-                  workflowId: targetWorkflowId,
-                  input: { from, to: from, message: text },
-                },
-              })
-            } catch (e) {
-              console.error('[Webhook] Failed to trigger builder workflow:', e)
+                // Self-hosted: sem Deployment Protection da Vercel, sem header de bypass.
+                await workflowClient.trigger({
+                  url: `${baseUrl}/api/builder/workflow/${targetWorkflowId}/execute`,
+                  body: {
+                    workflowId: targetWorkflowId,
+                    input: { from, to: from, message: text },
+                  },
+                })
+              } catch (e) {
+                console.error('[Webhook] Failed to trigger builder workflow:', e)
+              }
             }
           }
 

@@ -189,13 +189,14 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
   } = useOnboardingProgress();
 
   // Se o modal está sendo exibido (banco diz não completo) mas o localStorage
-  // está em 'complete', significa que o banco foi resetado - volta para welcome
-  // Importante: só reseta se WhatsApp NÃO está conectado, senão é um estado legítimo
+  // está em 'complete', significa que o wizard local terminou mas o banco não marcou.
+  // Reseta APENAS se o wizard ficou em 'complete' sem path (estado inválido/orfão).
+  // NÃO reseta baseado em isConnected pois há race condition com health check.
   React.useEffect(() => {
-    if (isLoaded && progress.currentStep === 'complete' && !tutorialMode && !isConnected) {
+    if (isLoaded && progress.currentStep === 'complete' && !tutorialMode && progress.path === null) {
       resetOnboarding();
     }
-  }, [isLoaded, progress.currentStep, tutorialMode, resetOnboarding, isConnected]);
+  }, [isLoaded, progress.currentStep, tutorialMode, resetOnboarding, progress.path]);
 
   // ============================================================================
   // MODO TUTORIAL: Wizard com navegação sequencial pelos 9 passos
@@ -226,6 +227,14 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
       </Dialog>
     );
   }
+
+  // Quando forceStep é passado no modo normal (ex: WhatsApp já conectado mas
+  // onboarding não completo), sincroniza o wizard para aquele step
+  React.useEffect(() => {
+    if (forceStep && !tutorialMode && isLoaded && progress.currentStep !== forceStep) {
+      goToStep(forceStep);
+    }
+  }, [forceStep, tutorialMode, isLoaded, goToStep, progress.currentStep]);
 
   // ============================================================================
   // MODO ONBOARDING NORMAL: Fluxo completo com navegação
@@ -326,8 +335,8 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
             onNext={async () => {
               // Marca webhook como completo
               completeStep('configure-webhook');
-              // Mostra tela de conclusão (não marca como completo ainda)
-              goToStep('complete');
+              // Avança para o step de token permanente (que chama onMarkComplete)
+              nextStep();
             }}
             onBack={previousStep}
             stepNumber={6}

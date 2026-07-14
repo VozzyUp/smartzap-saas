@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { MessageStatus } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
+import { unauthorizedResponse } from '@/lib/auth'
 
 // Force dynamic rendering (no caching)
 export const dynamic = 'force-dynamic'
@@ -21,6 +23,10 @@ interface Params {
  */
 export async function GET(request: Request, { params }: Params) {
   try {
+    const tenantCtx = await getTenantContext()
+    if (!tenantCtx) return unauthorizedResponse()
+    const tenantId = tenantCtx.tenant.id
+
     const { id } = await params
     const { searchParams } = new URL(request.url)
 
@@ -33,7 +39,8 @@ export async function GET(request: Request, { params }: Params) {
 
     // 1. Get aggregated stats (single RPC call instead of 7 queries)
     const { data: statsData, error: statsError } = await supabase.rpc('get_campaign_contact_stats', {
-      p_campaign_id: id
+      p_campaign_id: id,
+      p_tenant_id: tenantId
     })
 
     if (statsError) {

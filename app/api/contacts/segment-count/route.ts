@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { getBrazilUfFromPhone } from '@/lib/br-geo'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const parseList = (value: string | null): string[] => {
   if (!value) return []
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
     const auth = await requireSessionOrApiKey(request as NextRequest)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const url = new URL(request.url)
     const tags = parseList(url.searchParams.get('tags'))
     const countries = parseList(url.searchParams.get('countries'))
@@ -49,6 +53,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from('contacts')
       .select('phone,tags', { count: 'exact' })
+      .eq('tenant_id', ctx.tenantId)
 
     // Validate tags to prevent PostgREST filter injection
     const safeTags = tags.filter(tag => /^[\w\s\-áàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]+$/i.test(tag))

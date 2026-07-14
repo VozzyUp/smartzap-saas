@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -24,7 +25,7 @@ const isValidTag = (tag: unknown): tag is string => {
  * Fallback in-memory: pagina todos os contatos e agrega tags no servidor.
  * Usado quando o RPC get_contact_tag_counts ainda não foi aplicado no banco.
  */
-async function aggregateTagCountsInMemory(): Promise<TagCount[]> {
+async function aggregateTagCountsInMemory(tenantId: string): Promise<TagCount[]> {
   const PAGE_SIZE = 1000
   const counts: Record<string, number> = {}
   let from = 0
@@ -33,6 +34,7 @@ async function aggregateTagCountsInMemory(): Promise<TagCount[]> {
     const { data, error } = await supabase
       .from('contacts')
       .select('tags')
+      .eq('tenant_id', tenantId)
       .not('tags', 'is', null)
       .order('id')
       .range(from, from + PAGE_SIZE - 1)
@@ -68,10 +70,13 @@ export async function GET(request: NextRequest) {
     const auth = await requireSessionOrApiKey(request)
     if (auth) return auth
 
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     let result: TagCount[]
 
     // Tenta RPC (mais eficiente, roda no banco)
-    const { data, error } = await supabase.rpc('get_contact_tag_counts')
+    const { data, error } = await supabase.rpc('get_contact_tag_counts', { p_tenant_id: ctx.tenantId })
 
     if (error) {
       // RPC não existe ainda — fallback para agregação in-memory
@@ -80,7 +85,7 @@ export async function GET(request: NextRequest) {
         error.message?.includes('Could not find the function') // PostgREST
       if (isRpcMissing) {
         console.warn('RPC get_contact_tag_counts not found, using in-memory fallback')
-        result = await aggregateTagCountsInMemory()
+        result = await aggregateTagCountsInMemory(ctx.tenantId)
       } else {
         throw error
       }

@@ -3,7 +3,8 @@ import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 import { getTenantContext } from '@/lib/tenant-context'
-import { upsertWhatsAppPhoneNumber, clearWhatsAppPhoneNumber } from '@/lib/whatsapp-phone-numbers'
+import { upsertWhatsAppPhoneNumber, clearWhatsAppPhoneNumber, resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
+import { canAddWhatsAppNumber, planLimitResponse } from '@/lib/plan-limits'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -134,6 +135,16 @@ export async function POST(request: NextRequest) {
     }
 
     const phoneData = await safeJson<any>(testResponse)
+
+    // Gate de plano: só bloqueia número genuinamente novo (reconexão-safe)
+    if (!ctx.isPlatformAdmin) {
+      const existingTenant = await resolveTenantByPhoneNumberId(phoneNumberId)
+      const isNewNumber = existingTenant !== ctx.tenantId
+      if (isNewNumber) {
+        const gate = await canAddWhatsAppNumber(ctx.tenantId)
+        if (!gate.allowed) return planLimitResponse('whatsapp_numbers', gate)
+      }
+    }
 
     // Save to Database (Persist across refreshes)
     await settingsDb.saveAll(ctx.tenantId, {

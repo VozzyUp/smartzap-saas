@@ -13,6 +13,7 @@ export default async function DashboardLayout({
   } catch {
     redirect('/login')
   }
+  if (ctx?.suspended) redirect('/conta-suspensa')
   if (ctx?.trialExpired) redirect('/trial-expirado')
   return (
     <DashboardShell>

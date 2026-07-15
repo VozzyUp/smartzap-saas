@@ -20,7 +20,7 @@ export const config = {
 }
 
 // Routes that don't require user authentication
-const PUBLIC_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password', '/trial-expirado', '/install', '/debug-auth', '/f', '/atendimento', '/docs']
+const PUBLIC_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password', '/trial-expirado', '/conta-suspensa', '/install', '/debug-auth', '/f', '/atendimento', '/docs']
 // Rotas que NÃO precisam de autenticação
 // CUIDADO: adicionar rotas aqui expõe elas publicamente!
 const PUBLIC_API_ROUTES = [

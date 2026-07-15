@@ -29,7 +29,7 @@ describe('getTenantContext', () => {
     rpcCurrent.mockResolvedValueOnce({ data: 't1', error: null })
     rpcAdmin.mockResolvedValueOnce({ data: false, error: null })
     const ctx = await getTenantContext()
-    expect(ctx).toEqual({ tenantId: 't1', userId: 'u1', isPlatformAdmin: false, trialExpired: false })
+    expect(ctx).toEqual({ tenantId: 't1', userId: 'u1', isPlatformAdmin: false, trialExpired: false, suspended: false })
     expect(rpcAdmin).toHaveBeenCalledWith({ uid: 'u1' })
   })
 })

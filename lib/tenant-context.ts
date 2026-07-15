@@ -6,6 +6,7 @@ export type TenantContext = {
   userId: string
   isPlatformAdmin: boolean
   trialExpired: boolean
+  suspended: boolean
 }
 
 export async function getTenantContext(): Promise<TenantContext | null> {
@@ -18,12 +19,14 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   ])
   const resolvedTenantId = (tenantId as string) ?? null
   let trialExpired = false
+  let suspended = false
   if (resolvedTenantId && !isAdmin) {
     const { data: tenantRow } = await supa
-      .from('tenants').select('trial_ends_at').eq('id', resolvedTenantId).maybeSingle()
+      .from('tenants').select('trial_ends_at, status').eq('id', resolvedTenantId).maybeSingle()
     trialExpired = isTrialExpired(tenantRow?.trial_ends_at ?? null)
+    suspended = tenantRow?.status === 'suspended'
   }
-  return { tenantId: resolvedTenantId, userId: user.id, isPlatformAdmin: !!isAdmin, trialExpired }
+  return { tenantId: resolvedTenantId, userId: user.id, isPlatformAdmin: !!isAdmin, trialExpired, suspended }
 }
 
 /**

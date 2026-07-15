@@ -5,6 +5,7 @@ import { Client as QStashClient } from '@upstash/qstash'
 import { fetchWithTimeout, safeText } from '@/lib/server-http'
 import { getAppUrl } from '@/lib/app-url'
 import { getTenantContext } from '@/lib/tenant-context'
+import { canStartCampaign, planLimitResponse } from '@/lib/plan-limits'
 
 // Force dynamic - NO caching at all
 export const dynamic = 'force-dynamic'
@@ -118,6 +119,11 @@ export async function POST(request: Request) {
     if (!validation.success) return validation.response
 
     const data = validation.data
+
+    if (!ctx.isPlatformAdmin) {
+      const gate = await canStartCampaign(ctx.tenantId)
+      if (!gate.allowed) return planLimitResponse('campaigns', gate)
+    }
 
     // Create campaign with template variables
     const campaign = await campaignDb.create(ctx.tenantId, {

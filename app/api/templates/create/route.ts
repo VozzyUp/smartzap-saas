@@ -12,11 +12,6 @@ export async function POST(request: NextRequest) {
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const tenantId = ctx.tenantId
 
-    if (!ctx.isPlatformAdmin) {
-      const gate = await canCreateTemplate(tenantId)
-      if (!gate.allowed) return planLimitResponse('templates', gate)
-    }
-
     const body = await request.json()
     console.log('[API CREATE TEMPLATE] Incoming Payload Category:', body.category);
 
@@ -29,6 +24,13 @@ export async function POST(request: NextRequest) {
       templatesData = body.templates
     } else {
       templatesData = [body]
+    }
+
+    // Gate de plano depois de conhecer o tamanho do lote — evita que um bulk
+    // (array de N) fure o teto criando N templates com apenas 1 slot livre.
+    if (!ctx.isPlatformAdmin) {
+      const gate = await canCreateTemplate(tenantId, templatesData.length)
+      if (!gate.allowed) return planLimitResponse('templates', gate)
     }
 
     // 2. Validação Inicial (Zod) e Processamento em PARALELO

@@ -62,9 +62,9 @@ export async function canAddContacts(tenantId: string, quantidade = 1): Promise<
   const plan = await getTenantPlan(tenantId)
   return gate(plan.max_contacts, await countRows('contacts', tenantId), quantidade)
 }
-export async function canCreateTemplate(tenantId: string): Promise<GateResult> {
+export async function canCreateTemplate(tenantId: string, quantidade = 1): Promise<GateResult> {
   const plan = await getTenantPlan(tenantId)
-  return gate(plan.max_templates, await countRows('templates', tenantId))
+  return gate(plan.max_templates, await countRows('templates', tenantId), quantidade)
 }
 export async function canStartCampaign(tenantId: string): Promise<GateResult> {
   const plan = await getTenantPlan(tenantId)

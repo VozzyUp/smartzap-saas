@@ -3,10 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const insertTenant = vi.fn()
 const insertMember = vi.fn()
 const selectMember = vi.fn()
+const selectPlan = vi.fn()
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: () => ({
     from: (t: string) => ({
-      select: () => ({ eq: () => ({ maybeSingle: selectMember }) }),
+      select: () => ({
+        eq: () => ({
+          maybeSingle: selectMember,
+          single: () => selectPlan(),
+        }),
+      }),
       insert: (row: any) => ({
         select: () => ({
           single: () => (t === 'tenants' ? insertTenant(row) : insertMember(row)),
@@ -21,6 +27,8 @@ import { provisionTenantForUser } from '@/lib/tenant-provisioning'
 describe('provisionTenantForUser', () => {
   beforeEach(() => {
     insertTenant.mockReset(); insertMember.mockReset(); selectMember.mockReset()
+    selectPlan.mockReset()
+    selectPlan.mockResolvedValue({ data: { id: 'plan-trial' } })
   })
 
   it('retorna o tenant existente se o usuário já é membro', async () => {
@@ -51,5 +59,15 @@ describe('provisionTenantForUser', () => {
     const ts = new Date(payload.trial_ends_at).getTime()
     expect(ts).toBeGreaterThan(before)
     expect(ts).toBeLessThan(after)
+  })
+
+  it('seta plan_id do plano trial ao criar tenant novo', async () => {
+    selectMember.mockResolvedValueOnce({ data: null, error: null })
+    selectPlan.mockResolvedValueOnce({ data: { id: 'plan-trial' } })
+    insertTenant.mockResolvedValueOnce({ data: { id: 'new-t' }, error: null })
+    insertMember.mockResolvedValueOnce({ data: null, error: null })
+    await provisionTenantForUser('u-plan', 'plan@empresa.com')
+    const payload = insertTenant.mock.calls[0][0]
+    expect(payload.plan_id).toBe('plan-trial')
   })
 })

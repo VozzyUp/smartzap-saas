@@ -4,6 +4,7 @@ import { requireSessionOrApiKey } from '@/lib/request-auth'
 import { ImportContactsSchema, validateBodyOrError } from '@/lib/api-validation'
 import { ContactStatus } from '@/types'
 import { getTenantContext } from '@/lib/tenant-context'
+import { canAddContacts, planLimitResponse } from '@/lib/plan-limits'
 
 /**
  * POST /api/contacts/import
@@ -32,6 +33,11 @@ export async function POST(request: Request) {
     if (!validation.success) return validation.response
 
     const { contacts } = validation.data
+
+    if (!ctx.isPlatformAdmin) {
+      const gate = await canAddContacts(ctx.tenantId, contacts.length)
+      if (!gate.allowed) return planLimitResponse('contacts', gate)
+    }
 
     // Map to proper format with default status
     const contactsWithDefaults = contacts.map(c => ({

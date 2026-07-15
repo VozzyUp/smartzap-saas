@@ -7,6 +7,7 @@ import {
   DeleteContactsSchema,
   validateBodyOrError,
 } from '@/lib/api-validation'
+import { canAddContacts, planLimitResponse } from '@/lib/plan-limits'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -103,6 +104,11 @@ export async function POST(request: Request) {
     const contactData = {
       ...validation.data,
       email: validation.data.email ?? undefined,
+    }
+
+    if (!ctx.isPlatformAdmin) {
+      const gate = await canAddContacts(ctx.tenantId, 1)
+      if (!gate.allowed) return planLimitResponse('contacts', gate)
     }
 
     const contact = await contactDb.add(ctx.tenantId, contactData)

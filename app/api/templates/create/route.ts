@@ -4,12 +4,18 @@ import { CreateTemplateSchema } from '@/lib/whatsapp/validators/template.schema'
 import { templateService } from '@/lib/whatsapp/template.service'
 import { MetaAPIError } from '@/lib/whatsapp/errors'
 import { getTenantContext } from '@/lib/tenant-context'
+import { canCreateTemplate, planLimitResponse } from '@/lib/plan-limits'
 
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantContext()
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const tenantId = ctx.tenantId
+
+    if (!ctx.isPlatformAdmin) {
+      const gate = await canCreateTemplate(tenantId)
+      if (!gate.allowed) return planLimitResponse('templates', gate)
+    }
 
     const body = await request.json()
     console.log('[API CREATE TEMPLATE] Incoming Payload Category:', body.category);

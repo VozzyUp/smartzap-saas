@@ -10,6 +10,23 @@ WORKDIR /app
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Variáveis NEXT_PUBLIC_* são embutidas no bundle do browser em TEMPO DE BUILD
+# (não lidas em runtime). Sem elas aqui, o client Supabase do browser nunca é
+# criado e o Realtime fica desligado (inbox não atualiza ao vivo).
+#
+# Os defaults abaixo são chaves PÚBLICAS por design (URL do projeto + publishable
+# key), expostas no bundle do browser de qualquer forma — a segurança do banco
+# vem da RLS por tenant, não do sigilo destas chaves. A service_role NUNCA entra
+# aqui (não é NEXT_PUBLIC, só existe no runtime server). Para trocar de projeto,
+# sobrescreva via --build-arg no docker build.
+ARG NEXT_PUBLIC_SUPABASE_URL=https://vdgudeijxxbaghqaxpip.supabase.co
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_hTuo4Zzj7tI-e6QXqITAaQ_bI4nQG83
+ARG NEXT_PUBLIC_APP_URL=https://app.vozzyup.com.br
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

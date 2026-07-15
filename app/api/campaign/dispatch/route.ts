@@ -15,7 +15,7 @@ import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
 import { getTenantContext } from '@/lib/tenant-context'
-import { isTenantTrialExpired } from '@/lib/trial'
+import { isTenantBlocked } from '@/lib/trial'
 
 interface DispatchContact {
   contactId?: string
@@ -217,8 +217,8 @@ export async function POST(request: NextRequest) {
   }
   const tenantId: string = campaignRow.tenant_id
 
-  if (await isTenantTrialExpired(tenantId)) {
-    return NextResponse.json({ error: 'trial_expired' }, { status: 403 })
+  if (await isTenantBlocked(tenantId)) {
+    return NextResponse.json({ error: 'tenant_blocked' }, { status: 403 })
   }
 
   const initialTemplate = await templateDb.getByName(tenantId, templateName)

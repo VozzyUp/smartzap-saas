@@ -36,7 +36,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { ensureWorkflowRecord, getCompanyId } from '@/lib/builder/workflow-db'
 import { Client as WorkflowClient } from '@upstash/workflow'
 import { getPendingConversation } from '@/lib/builder/workflow-conversations'
-import { isTenantTrialExpired } from '@/lib/trial'
+import { isTenantBlocked } from '@/lib/trial'
 
 // T046-T048: Inbox integration
 import {
@@ -589,9 +589,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ignored', reason: 'unknown_phone_number_id' })
   }
 
-  const trialExpired = await isTenantTrialExpired(tenantId)
+  const trialExpired = await isTenantBlocked(tenantId)
   if (trialExpired) {
-    console.log(`[WEBHOOK] trial expirado para tenant ${tenantId} — automações suprimidas`)
+    console.log(`[WEBHOOK] tenant ${tenantId} bloqueado (trial/suspensão) — automações suprimidas`)
   }
 
   // Evita logs gigantes: guardamos payload estruturado em DB (whatsapp_status_events)

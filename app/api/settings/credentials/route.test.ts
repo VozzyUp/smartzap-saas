@@ -16,9 +16,13 @@ vi.mock('@/lib/supabase-db', () => ({
 }))
 const upsertMock = vi.fn(async () => {})
 const clearMock = vi.fn(async () => {})
+// resolveTenantByPhoneNumberId devolve o próprio tenant → o número já é do tenant
+// (reconexão), então o gate de plano da Fase 3A não trata como número novo e não bloqueia.
+const resolveMock = vi.fn(async () => 't1')
 vi.mock('@/lib/whatsapp-phone-numbers', () => ({
   upsertWhatsAppPhoneNumber: (...a: any[]) => upsertMock(...a),
   clearWhatsAppPhoneNumber: (...a: any[]) => clearMock(...a),
+  resolveTenantByPhoneNumberId: (...a: any[]) => resolveMock(...a),
 }))
 vi.mock('@/lib/server-http', () => ({
   fetchWithTimeout: vi.fn(async () => ({

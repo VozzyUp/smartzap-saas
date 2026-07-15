@@ -15,6 +15,7 @@ import {
     MessageCircle,
     Sparkles,
     Workflow,
+    Shield,
 } from 'lucide-react'
 import React from 'react'
 import { HealthStatus } from '@/lib/health-check'
@@ -136,6 +137,20 @@ export function DashboardShell({
     })
 
     const companyName = authStatus?.company?.name || initialAuthStatus?.company?.name
+
+    // Consulta leve (nunca 403) pra saber se mostra o link "Admin" no menu.
+    const { data: adminStatus } = useQuery({
+        queryKey: ['adminStatus'],
+        queryFn: async () => {
+            const response = await fetch('/api/admin/me')
+            if (!response.ok) throw new Error('Failed to fetch admin status')
+            return response.json() as Promise<{ isPlatformAdmin: boolean }>
+        },
+        staleTime: 5 * 60 * 1000,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+    })
+    const isPlatformAdmin = !!adminStatus?.isPlatformAdmin
 
     // Logout handler
     const handleLogout = useCallback(async () => {
@@ -345,7 +360,8 @@ export function DashboardShell({
         { path: '/contacts', label: 'Contatos', icon: Users },
         { path: '/settings/ai', label: 'IA', icon: Sparkles },
         { path: '/settings', label: 'Configurações', icon: Settings },
-    ].filter(item => !item.hidden), [isDevMode])
+        { path: '/admin', label: 'Admin', icon: Shield, hidden: !isPlatformAdmin },
+    ].filter(item => !item.hidden), [isDevMode, isPlatformAdmin])
 
     const getPageTitle = (path: string) => {
         if (path === '/') return 'Dashboard'
@@ -367,6 +383,7 @@ export function DashboardShell({
         if (path === '/settings/ai') return 'Central de IA'
         if (path === '/settings/ai/agents') return 'Agentes IA'
         if (path.startsWith('/settings')) return 'Configurações'
+        if (path.startsWith('/admin')) return 'Admin'
         return 'App'
     }
 

@@ -40,18 +40,23 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   const tableColSpan = showSuppressionDetails ? 8 : 7;
 
   // Mobile: render cards instead of table
+  // Wrapper flex-1/min-h-0/overflow-auto igual ao desktop — sem ele, dentro do
+  // Container flex-col (flex-1 min-h-0) os cards ficam empurrados para fora da
+  // área visível e somem (com os filtros expandidos, a lista não aparecia).
   if (isMobile) {
     return (
-      <ContactCardList
-        contacts={contacts}
-        isLoading={isLoading}
-        showSuppressionDetails={showSuppressionDetails}
-        selectedIds={selectedIds}
-        onToggleSelect={onToggleSelect}
-        onEditContact={onEditContact}
-        onDeleteClick={onDeleteClick}
-        onUnsuppress={onUnsuppress}
-      />
+      <div className="flex-1 min-h-0 overflow-auto p-4">
+        <ContactCardList
+          contacts={contacts}
+          isLoading={isLoading}
+          showSuppressionDetails={showSuppressionDetails}
+          selectedIds={selectedIds}
+          onToggleSelect={onToggleSelect}
+          onEditContact={onEditContact}
+          onDeleteClick={onDeleteClick}
+          onUnsuppress={onUnsuppress}
+        />
+      </div>
     );
   }
 

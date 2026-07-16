@@ -1040,15 +1040,19 @@ export const contactDb = {
     deleteMany: async (tenantId: string, ids: string[]): Promise<number> => {
         if (ids.length === 0) return 0
 
-        const { error } = await supabase
+        // .select() retorna as linhas realmente removidas — antes retornávamos
+        // ids.length às cegas, então o front mostrava "sucesso" mesmo apagando 0
+        // (ex.: id que não pertence ao tenant). Agora a contagem é real.
+        const { data, error } = await supabase
             .from('contacts')
             .delete()
             .in('id', ids)
             .eq('tenant_id', tenantId)
+            .select('id')
 
         if (error) throw error
 
-        return ids.length
+        return data?.length ?? 0
     },
 
     bulkUpdateTags: async (

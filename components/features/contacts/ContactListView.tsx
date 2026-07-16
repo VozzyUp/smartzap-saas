@@ -241,7 +241,10 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
   }, [contacts, selectedIds]);
 
   return (
-    <Page className="flex flex-col h-full min-h-0">
+    // Mobile: a página inteira scrolla (overflow-y-auto) — os stats grandes
+    // empilhados não cabem junto com a lista numa viewport fixa. Desktop (lg):
+    // altura fixa com scroll interno na tabela (layout original).
+    <Page className="flex flex-col min-h-0 overflow-y-auto lg:h-full lg:overflow-hidden">
       {/* Page Header with Actions */}
       <PageHeader>
         <div>
@@ -315,8 +318,8 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
       {/* Stats Row */}
       <ContactStatsComponent stats={stats} />
 
-      {/* Main Content Panel */}
-      <Container variant="glass" padding="none" className="rounded-2xl flex-1 min-h-0 flex flex-col">
+      {/* Main Content Panel — no mobile altura natural (página scrolla); no desktop flex-1 com scroll interno */}
+      <Container variant="glass" padding="none" className="rounded-2xl flex flex-col lg:flex-1 lg:min-h-0">
         {/* Filters */}
         <ContactFilters
           searchTerm={searchTerm}

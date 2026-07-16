@@ -39,13 +39,12 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   const isMobile = useIsMobile();
   const tableColSpan = showSuppressionDetails ? 8 : 7;
 
-  // Mobile: render cards instead of table
-  // Wrapper flex-1/min-h-0/overflow-auto igual ao desktop — sem ele, dentro do
-  // Container flex-col (flex-1 min-h-0) os cards ficam empurrados para fora da
-  // área visível e somem (com os filtros expandidos, a lista não aparecia).
+  // Mobile: render cards. Sem scroll interno aqui — no mobile a PÁGINA inteira
+  // scrolla (ver Page/Container em ContactListView), então os cards fluem
+  // naturalmente. Um overflow interno espremeria a lista numa área de altura ~0.
   if (isMobile) {
     return (
-      <div className="flex-1 min-h-0 overflow-auto p-4">
+      <div className="p-4">
         <ContactCardList
           contacts={contacts}
           isLoading={isLoading}

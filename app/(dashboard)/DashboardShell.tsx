@@ -412,7 +412,8 @@ export function DashboardShell({
     // Determina se deve mostrar o modal de onboarding do WhatsApp
     // Mostra quando: infra OK, onboarding não completo no banco, E WhatsApp NÃO conectado ainda
     // Se WhatsApp já conectado, o useEffect acima cuida de auto-completar
-    const showWhatsAppOnboarding = !needsSetup && !isOnboardingStatusLoading && !isOnboardingCompletedInDb && !isWhatsAppConnected
+    // Guard: só mostra DEPOIS que health carregou (evita piscar o modal durante carregamento inicial)
+    const showWhatsAppOnboarding = !needsSetup && !isOnboardingStatusLoading && !isOnboardingCompletedInDb && !isWhatsAppConnected && healthStatus !== undefined && !isHealthFetching
 
     const isBuilderRoute = pathname?.startsWith('/builder') ?? false
     const isInboxRoute = pathname?.startsWith('/inbox') ?? false

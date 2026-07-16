@@ -241,10 +241,11 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
   }, [contacts, selectedIds]);
 
   return (
-    // Mobile: a página inteira scrolla (overflow-y-auto) — os stats grandes
-    // empilhados não cabem junto com a lista numa viewport fixa. Desktop (lg):
-    // altura fixa com scroll interno na tabela (layout original).
-    <Page className="flex flex-col min-h-0 overflow-y-auto lg:h-full lg:overflow-hidden">
+    // Mobile: altura natural — o conteúdo flui e o <main> (overflow-auto por
+    // default do PageLayout) scrolla a página inteira, revelando a lista abaixo
+    // dos stats. Desktop (lg): altura fixa da viewport com scroll interno na
+    // tabela (layout original que funciona).
+    <Page className="flex flex-col lg:h-full lg:min-h-0">
       {/* Page Header with Actions */}
       <PageHeader>
         <div>

@@ -44,13 +44,15 @@ const EMBEDDING_API_KEY_MAP: Record<EmbeddingProvider, { settingKey: string; env
  */
 async function getEmbeddingApiKey(
   supabase: SupabaseClient,
-  provider: EmbeddingProvider
+  provider: EmbeddingProvider,
+  tenantId: string
 ): Promise<{ apiKey: string | null; providerLabel: string }> {
   const config = EMBEDDING_API_KEY_MAP[provider] || EMBEDDING_API_KEY_MAP.google
 
   const { data: setting } = await supabase
     .from('settings')
     .select('value')
+    .eq('tenant_id', tenantId)
     .eq('key', config.settingKey)
     .maybeSingle()
 
@@ -171,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     // Get API key for the configured embedding provider
     const embeddingProvider = (agent.embedding_provider || 'google') as EmbeddingProvider
-    const { apiKey, providerLabel } = await getEmbeddingApiKey(supabase, embeddingProvider)
+    const { apiKey, providerLabel } = await getEmbeddingApiKey(supabase, embeddingProvider, ctx.tenantId)
 
     if (!apiKey) {
       return NextResponse.json(

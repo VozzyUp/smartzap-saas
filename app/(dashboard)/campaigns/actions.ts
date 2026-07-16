@@ -52,12 +52,14 @@ export const getCampaignsInitialData = cache(async (): Promise<CampaignListResul
     supabase
       .from('campaign_folders')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('name'),
 
     // Todas as tags (para filtros)
     supabase
       .from('campaign_tags')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('name')
   ])
 

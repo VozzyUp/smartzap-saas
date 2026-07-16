@@ -74,6 +74,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
     supabase
       .from('custom_field_definitions')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .eq('entity_type', 'contact')
       .order('name'),
 
@@ -81,6 +82,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
     supabase
       .from('phone_suppressions')
       .select('phone,reason,source,expires_at')
+      .eq('tenant_id', ctx.tenantId)
       .eq('is_active', true)
       .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
 

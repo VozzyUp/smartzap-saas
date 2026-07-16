@@ -863,13 +863,21 @@ describe('Storage functions', () => {
     })
 
     it('should return false when limits are exactly 1 hour old', () => {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-      const limitsAtBoundary = createAccountLimits({
-        lastFetched: oneHourAgo.toISOString(),
-      })
-
-      // At exactly 1 hour, lastFetched equals oneHourAgo (not less than)
-      expect(areLimitsStale(limitsAtBoundary)).toBe(false)
+      // Congela o relógio: sem fake timers, o Date.now() do teste e o de
+      // areLimitsStale diferem por alguns ms, e a borda exata de 1h vira stale
+      // (flaky no CI). Com o tempo congelado, "exatamente 1h" é determinístico.
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date('2026-01-01T12:00:00.000Z'))
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+        const limitsAtBoundary = createAccountLimits({
+          lastFetched: oneHourAgo.toISOString(),
+        })
+        // At exactly 1 hour, lastFetched equals oneHourAgo (not less than)
+        expect(areLimitsStale(limitsAtBoundary)).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('should return true when limits are 1 hour + 1 second old', () => {

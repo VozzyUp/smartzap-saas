@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { normalizePhoneNumber, validateAnyPhoneNumber } from '@/lib/phone-formatter'
+import { getTenantContext } from '@/lib/tenant-context'
+import { settingsDb } from '@/lib/supabase-db'
 
 /**
  * API Route: Test Contact Settings
@@ -14,29 +16,24 @@ const SETTING_KEY = 'test_contact'
 
 export async function GET() {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         if (!isSupabaseConfigured()) {
             return NextResponse.json(null)
         }
 
-        const { data, error } = await supabase
-            .from('settings')
-            .select('value')
-            .eq('key', SETTING_KEY)
-            .single()
+        const value = await settingsDb.get(ctx.tenantId, SETTING_KEY)
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-            throw error
-        }
-
-        if (data?.value) {
+        if (value) {
             // Parse JSON string to object (column is TEXT type)
-            if (typeof data.value === 'string') {
+            if (typeof value === 'string') {
                 try {
-                    const parsed = JSON.parse(data.value)
+                    const parsed = JSON.parse(value)
                     return NextResponse.json(parsed)
                 } catch {
                     // Compat: versões antigas podem ter salvo apenas o telefone em texto.
-                    const asText = String(data.value || '').trim()
+                    const asText = String(value || '').trim()
                     const normalized = normalizePhoneNumber(asText)
                     const validation = validateAnyPhoneNumber(normalized)
                     if (validation.isValid) {
@@ -46,7 +43,7 @@ export async function GET() {
                 }
             }
 
-            return NextResponse.json(data.value)
+            return NextResponse.json(value)
         }
 
         return NextResponse.json(null)
@@ -61,6 +58,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const body = await request.json()
         const { name, phone } = body
 
@@ -88,17 +88,8 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date().toISOString()
         }
 
-        // Upsert into settings table (stringify for TEXT column)
-        const { error } = await supabase
-            .from('settings')
-            .upsert({
-                key: SETTING_KEY,
-                value: JSON.stringify(testContact)
-            }, {
-                onConflict: 'key'
-            })
-
-        if (error) throw error
+        // Upsert into settings table using tenant-scoped wrapper
+        await settingsDb.set(ctx.tenantId, SETTING_KEY, JSON.stringify(testContact))
 
         return NextResponse.json({
             success: true,
@@ -115,9 +106,13 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
     try {
+        const ctx = await getTenantContext()
+        if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
         const { error } = await supabase
             .from('settings')
             .delete()
+            .eq('tenant_id', ctx.tenantId)
             .eq('key', SETTING_KEY)
 
         if (error) throw error

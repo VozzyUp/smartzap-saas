@@ -31,6 +31,7 @@ export async function getFormsInitialData(): Promise<FormsInitialData> {
     supabase
       .from('lead_forms')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false }),
 
     supabase

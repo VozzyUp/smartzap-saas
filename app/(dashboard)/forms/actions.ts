@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { getAppUrl } from '@/lib/app-url'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { LeadForm } from '@/types'
 
 export interface FormsInitialData {
@@ -14,6 +15,15 @@ export interface FormsInitialData {
  * Busca dados iniciais de formulários no servidor (RSC).
  */
 export async function getFormsInitialData(): Promise<FormsInitialData> {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) {
+    return {
+      forms: [],
+      tags: [],
+      publicBaseUrl: getAppUrl()
+    }
+  }
+
   const supabase = await createClient()
 
   // Buscar formulários e tags em paralelo
@@ -26,6 +36,7 @@ export async function getFormsInitialData(): Promise<FormsInitialData> {
     supabase
       .from('contacts')
       .select('tags')
+      .eq('tenant_id', ctx.tenantId)
       .not('tags', 'is', null)
   ])
 

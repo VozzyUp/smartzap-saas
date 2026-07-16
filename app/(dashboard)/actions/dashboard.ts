@@ -2,6 +2,7 @@
 
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase-server'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { DashboardStats, ChartDataPoint } from '@/services/dashboardService'
 import type { Campaign } from '@/types'
 
@@ -14,6 +15,20 @@ export const getDashboardData = cache(async (): Promise<{
   stats: DashboardStats
   recentCampaigns: Campaign[]
 }> => {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) {
+    return {
+      stats: {
+        sent24h: '0',
+        deliveryRate: '0%',
+        activeCampaigns: '0',
+        failedMessages: '0',
+        chartData: []
+      },
+      recentCampaigns: []
+    }
+  }
+
   const supabase = await createClient()
 
   // Buscar stats agregados e campanhas recentes em PARALELO
@@ -22,12 +37,14 @@ export const getDashboardData = cache(async (): Promise<{
     supabase
       .from('campaigns')
       .select('sent, delivered, read, failed, status')
+      .eq('tenant_id', ctx.tenantId)
       .not('status', 'eq', 'Rascunho'),
 
     // Campanhas recentes (top 5)
     supabase
       .from('campaigns')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .limit(5),
 
@@ -35,6 +52,7 @@ export const getDashboardData = cache(async (): Promise<{
     supabase
       .from('campaigns')
       .select('sent, delivered, read, failed, status, created_at, started_at, last_sent_at, total_recipients')
+      .eq('tenant_id', ctx.tenantId)
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
   ])
 

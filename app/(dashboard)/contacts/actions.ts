@@ -2,6 +2,7 @@
 
 import { cache } from 'react'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 import { ContactStatus } from '@/types'
 import type { Contact, CustomFieldDefinition } from '@/types'
 
@@ -31,6 +32,22 @@ const normalizePhone = (phone: string) => {
  * Usa cache() para deduplicação per-request.
  */
 export const getContactsInitialData = cache(async (): Promise<ContactsInitialData> => {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) {
+    return {
+      contacts: [],
+      total: 0,
+      stats: {
+        total: 0,
+        active: 0,
+        optOut: 0,
+        suppressed: 0
+      },
+      tags: [],
+      customFields: []
+    }
+  }
+
   const supabase = getSupabaseAdmin()
   if (!supabase) {
     throw new Error('Supabase não configurado')
@@ -42,6 +59,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
     supabase
       .from('contacts')
       .select('*', { count: 'exact' })
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .range(0, PAGE_SIZE - 1),
 
@@ -49,6 +67,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
     supabase
       .from('contacts')
       .select('tags')
+      .eq('tenant_id', ctx.tenantId)
       .not('tags', 'is', null),
 
     // Campos customizados
@@ -69,6 +88,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
     supabase
       .from('contacts')
       .select('phone,status')
+      .eq('tenant_id', ctx.tenantId)
   ])
 
   // Criar mapa de supressões indexado por telefone normalizado

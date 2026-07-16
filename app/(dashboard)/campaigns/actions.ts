@@ -2,6 +2,7 @@
 
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase-server'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { Campaign, CampaignFolder, CampaignTag } from '@/types'
 import type { CampaignListResult } from '@/services/campaignService'
 
@@ -16,6 +17,18 @@ export const getCampaignsInitialData = cache(async (): Promise<CampaignListResul
   folders: CampaignFolder[]
   tags: CampaignTag[]
 }> => {
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) {
+    return {
+      data: [],
+      total: 0,
+      limit: PAGE_SIZE,
+      offset: 0,
+      folders: [],
+      tags: []
+    }
+  }
+
   const supabase = await createClient()
 
   // Buscar campanhas (com folder e tags), folders e tags em PARALELO
@@ -31,6 +44,7 @@ export const getCampaignsInitialData = cache(async (): Promise<CampaignListResul
           tag:campaign_tags(id, name, color)
         )
       `, { count: 'exact' })
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .range(0, PAGE_SIZE - 1),
 

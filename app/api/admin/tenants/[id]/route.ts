@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAdmin } from '@/lib/admin-auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase-server'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePlatformAdmin()
@@ -8,9 +9,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const db = getSupabaseAdmin()
   if (!db) return NextResponse.json({ error: 'unavailable' }, { status: 503 })
+  // admin_tenant_users checa auth.uid() internamente → usar client de sessão
+  // (service role tem auth.uid() NULL e a RPC lançaria 'forbidden').
+  const supa = await createClient()
   const [{ data: tenant }, { data: users }] = await Promise.all([
     db.from('tenants').select('id, name, slug, status, trial_ends_at, suspended_at, plan_id').eq('id', id).maybeSingle(),
-    db.rpc('admin_tenant_users', { p_tenant_id: id }),
+    supa.rpc('admin_tenant_users', { p_tenant_id: id }),
   ])
   if (!tenant) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   return NextResponse.json({ tenant, users: users ?? [] })

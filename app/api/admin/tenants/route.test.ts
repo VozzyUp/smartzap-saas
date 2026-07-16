@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 const requireMock = vi.fn()
 vi.mock('@/lib/admin-auth', () => ({ requirePlatformAdmin: () => requireMock() }))
-vi.mock('@/lib/supabase', () => ({ getSupabaseAdmin: () => ({ rpc: async () => ({ data: [], error: null }) }) }))
+// A rota chama a RPC via client de sessão (createClient), não getSupabaseAdmin.
+vi.mock('@/lib/supabase-server', () => ({ createClient: async () => ({ rpc: async () => ({ data: [], error: null }) }) }))
 import { GET } from './route'
 import { NextResponse } from 'next/server'
 

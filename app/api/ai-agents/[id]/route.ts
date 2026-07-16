@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Helper to get admin client with null check
 function getClient() {
@@ -59,6 +60,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const supabase = getClient()
 
@@ -66,6 +70,7 @@ export async function GET(
       .from('ai_agents')
       .select('*')
       .eq('id', id)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (error || !agent) {
@@ -94,6 +99,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const supabase = getClient()
 
@@ -102,6 +110,7 @@ export async function PATCH(
       .from('ai_agents')
       .select('id, is_default')
       .eq('id', id)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (fetchError || !existing) {
@@ -130,6 +139,7 @@ export async function PATCH(
         .from('ai_agents')
         .update({ is_default: false })
         .eq('is_default', true)
+        .eq('tenant_id', ctx.tenantId)
     }
 
     // Update agent
@@ -140,6 +150,7 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .eq('tenant_id', ctx.tenantId)
       .select()
       .single()
 
@@ -170,6 +181,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const { id } = await params
     const supabase = getClient()
 
@@ -178,6 +192,7 @@ export async function DELETE(
       .from('ai_agents')
       .select('id, is_default, name')
       .eq('id', id)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (fetchError || !existing) {
@@ -200,6 +215,7 @@ export async function DELETE(
       .from('inbox_conversations')
       .select('id', { count: 'exact', head: true })
       .eq('ai_agent_id', id)
+      .eq('tenant_id', ctx.tenantId)
 
     // If agent has conversations, switch them to human mode and remove assignment
     if (assignedCount && assignedCount > 0) {
@@ -210,6 +226,7 @@ export async function DELETE(
           mode: 'human',
         })
         .eq('ai_agent_id', id)
+        .eq('tenant_id', ctx.tenantId)
 
       if (updateError) {
         console.error('[AI Agents] Failed to update conversations:', updateError)
@@ -227,6 +244,7 @@ export async function DELETE(
       .from('ai_agents')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', ctx.tenantId)
 
     if (deleteError) {
       console.error('[AI Agents] Failed to delete agent:', deleteError)

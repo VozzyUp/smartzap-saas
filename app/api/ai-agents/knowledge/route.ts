@@ -20,6 +20,7 @@ import {
   buildEmbeddingConfigFromAgent,
 } from '@/lib/ai/rag-store'
 import type { AIAgent, EmbeddingProvider } from '@/types'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Helper to get admin client with null check
 function getClient() {
@@ -78,6 +79,9 @@ function sanitizeContent(content: string): string {
 // GET - List knowledge base files for an agent
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabase = getClient()
     const { searchParams } = new URL(request.url)
     const agentId = searchParams.get('agent_id')
@@ -94,6 +98,7 @@ export async function GET(request: NextRequest) {
       .from('ai_agents')
       .select('id')
       .eq('id', agentId)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (agentError || !agent) {
@@ -108,6 +113,7 @@ export async function GET(request: NextRequest) {
       .from('ai_knowledge_files')
       .select('*')
       .eq('agent_id', agentId)
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -131,6 +137,9 @@ export async function GET(request: NextRequest) {
 // POST - Upload a new knowledge base file
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabase = getClient()
     const body = await request.json()
 
@@ -150,6 +159,7 @@ export async function POST(request: NextRequest) {
       .from('ai_agents')
       .select('*')
       .eq('id', agent_id)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (agentError || !agent) {
@@ -177,6 +187,7 @@ export async function POST(request: NextRequest) {
     const { data: file, error: insertError } = await supabase
       .from('ai_knowledge_files')
       .insert({
+        tenant_id: ctx.tenantId,
         agent_id,
         name,
         mime_type,
@@ -250,6 +261,7 @@ export async function POST(request: NextRequest) {
         chunks_count: chunksCount,
       })
       .eq('id', file.id)
+      .eq('tenant_id', ctx.tenantId)
 
     if (updateError) {
       console.error('[knowledge] Error updating file status:', updateError)
@@ -260,6 +272,7 @@ export async function POST(request: NextRequest) {
       .from('ai_knowledge_files')
       .select('*')
       .eq('id', file.id)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     return NextResponse.json({
@@ -279,6 +292,9 @@ export async function POST(request: NextRequest) {
 // DELETE - Remove a knowledge base file
 export async function DELETE(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabase = getClient()
     const { searchParams } = new URL(request.url)
     const fileId = searchParams.get('id')
@@ -295,6 +311,7 @@ export async function DELETE(request: NextRequest) {
       .from('ai_knowledge_files')
       .select('*')
       .eq('id', fileId)
+      .eq('tenant_id', ctx.tenantId)
       .single()
 
     if (fileError || !file) {
@@ -318,6 +335,7 @@ export async function DELETE(request: NextRequest) {
       .from('ai_knowledge_files')
       .delete()
       .eq('id', fileId)
+      .eq('tenant_id', ctx.tenantId)
 
     if (error) {
       console.error('[knowledge] Error deleting file:', error)

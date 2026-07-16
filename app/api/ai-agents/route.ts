@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
+import { getTenantContext } from '@/lib/tenant-context'
 
 // Helper to get admin client with null check
 function getClient() {
@@ -56,11 +57,15 @@ const createAgentSchema = z.object({
  */
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabase = getClient()
 
     const { data: agents, error } = await supabase
       .from('ai_agents')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: false })
 
@@ -88,6 +93,9 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const supabase = getClient()
 
     // Parse request body
@@ -107,6 +115,7 @@ export async function POST(request: NextRequest) {
     const { count } = await supabase
       .from('ai_agents')
       .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', ctx.tenantId)
 
     // count pode ser null quando não há registros
     const isFirstAgent = !count || count === 0
@@ -120,12 +129,14 @@ export async function POST(request: NextRequest) {
         .from('ai_agents')
         .update({ is_default: false })
         .eq('is_default', true)
+        .eq('tenant_id', ctx.tenantId)
     }
 
     // Create agent
     const { data: agent, error } = await supabase
       .from('ai_agents')
       .insert({
+        tenant_id: ctx.tenantId,
         name: data.name,
         system_prompt: data.system_prompt,
         model: data.model,

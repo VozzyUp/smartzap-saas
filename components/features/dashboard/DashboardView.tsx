@@ -7,6 +7,7 @@ import { formatDateFull } from '@/lib/date-formatter';
 import { Container } from '@/components/ui/container';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { PlanUsageCard } from '@/components/features/dashboard/PlanUsageCard';
 import { Send, TrendingUp, AlertCircle, CheckCircle2, MoreHorizontal, ArrowUpRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from '@/components/ui/lazy-charts';
 import { Campaign, CampaignStatus } from '../../../types';
@@ -89,7 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, recentCampa
       </PageHeader>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <StatCard
           title="Total Enviado"
           value={stats.sent24h}
@@ -118,6 +119,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, recentCampa
           color="red"
           loading={isLoading}
         />
+        <PlanUsageCard />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

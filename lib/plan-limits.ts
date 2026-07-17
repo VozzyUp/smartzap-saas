@@ -7,12 +7,13 @@ export type Plan = {
   max_contacts: number | null
   max_templates: number | null
   max_campaigns_per_month: number | null
+  price_cents: number | null
 }
 export type GateResult = { allowed: boolean; limit: number | null; current: number }
 
-const PLAN_COLS = 'id, slug, name, max_whatsapp_numbers, max_contacts, max_templates, max_campaigns_per_month'
+const PLAN_COLS = 'id, slug, name, max_whatsapp_numbers, max_contacts, max_templates, max_campaigns_per_month, price_cents'
 // Fail-closed máximo: se nem o trial resolver, nada é permitido.
-const ZERO_PLAN: Plan = { id: '', slug: 'trial', name: 'Trial', max_whatsapp_numbers: 0, max_contacts: 0, max_templates: 0, max_campaigns_per_month: 0 }
+const ZERO_PLAN: Plan = { id: '', slug: 'trial', name: 'Trial', max_whatsapp_numbers: 0, max_contacts: 0, max_templates: 0, max_campaigns_per_month: 0, price_cents: null }
 
 export async function getTenantPlan(tenantId: string): Promise<Plan> {
   try {
@@ -46,6 +47,23 @@ async function countRows(table: string, tenantId: string, thisMonth = false): Pr
   } catch (e) {
     console.warn(`[plan-limits] contagem de ${table} falhou, fail-closed:`, e)
     return Number.MAX_SAFE_INTEGER
+  }
+}
+
+export async function getUsageCounts(tenantId: string): Promise<{ contacts: number; templates: number; campaignsMonth: number; whatsappNumbers: number }> {
+  try {
+    const [contacts, templates, campaignsMonth, whatsappNumbers] = await Promise.all([
+      countRows('contacts', tenantId),
+      countRows('templates', tenantId),
+      countRows('campaigns', tenantId, true),
+      countRows('whatsapp_phone_numbers', tenantId),
+    ])
+    // countRows retorna MAX_SAFE_INTEGER em erro (fail-closed p/ gate);
+    // para exibição, normaliza número irreal para 0.
+    const norm = (n: number) => (n >= Number.MAX_SAFE_INTEGER ? 0 : n)
+    return { contacts: norm(contacts), templates: norm(templates), campaignsMonth: norm(campaignsMonth), whatsappNumbers: norm(whatsappNumbers) }
+  } catch {
+    return { contacts: 0, templates: 0, campaignsMonth: 0, whatsappNumbers: 0 }
   }
 }
 

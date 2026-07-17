@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { BatchSubmission, GeneratedTemplateWithStatus } from '../types';
 import { GeneratedTemplate } from '../services/templateService';
 import { templateService } from '../services/templateService';
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message';
 
 // Mock storage key
 const STORAGE_KEY = 'smartzap_batch_submissions';
@@ -144,7 +145,14 @@ export const useBatchTemplates = () => {
             return newSubmission.id;
         } catch (error) {
             console.error('Error creating submission:', error);
-            toast.error('Erro ao criar submissão em lote');
+            const planLimit = getPlanLimitBody(error);
+            if (planLimit) {
+                toast.error(formatPlanLimit(planLimit), {
+                    action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+                });
+            } else {
+                toast.error('Erro ao criar submissão em lote');
+            }
             throw error;
         } finally {
             setIsLoading(false);

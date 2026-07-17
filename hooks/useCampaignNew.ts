@@ -24,6 +24,8 @@ import {
   extractFlowFromTemplate,
   fetchJson,
 } from '@/lib/campaign-wizard'
+import { toast } from 'sonner'
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message'
 
 // Re-exporta para consumidores externos (backward compatibility)
 export type { Contact, CustomField, TemplateVar } from '@/lib/campaign-wizard'
@@ -716,6 +718,12 @@ export const useCampaignNewController = () => {
 
       router.push(`/campaigns/${campaign.id}`)
     } catch (error) {
+      const planLimit = getPlanLimitBody(error)
+      if (planLimit) {
+        toast.error(formatPlanLimit(planLimit), {
+          action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+        })
+      }
       setLaunchError((error as Error)?.message || 'Falha ao lancar campanha.')
     } finally {
       setIsLaunching(false)
@@ -761,6 +769,12 @@ export const useCampaignNewController = () => {
       // Redireciona para a lista de campanhas (não para os detalhes)
       router.push('/campaigns')
     } catch (error) {
+      const planLimit = getPlanLimitBody(error)
+      if (planLimit) {
+        toast.error(formatPlanLimit(planLimit), {
+          action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+        })
+      }
       setLaunchError((error as Error)?.message || 'Falha ao salvar rascunho.')
     } finally {
       setIsSavingDraft(false)

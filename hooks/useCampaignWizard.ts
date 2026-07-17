@@ -4,6 +4,7 @@ import { useNavigate } from '@/lib/navigation';
 import { toast } from 'sonner';
 import { campaignService, contactService, templateService } from '../services';
 import { settingsService } from '../services/settingsService';
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message';
 import { CampaignStatus, ContactStatus, MessageStatus, Template, TestContact } from '../types';
 import { useAccountLimits } from './useAccountLimits';
 import { CampaignValidation } from '../lib/meta-limits';
@@ -284,13 +285,20 @@ export const useCampaignWizardController = () => {
         }
       }
     },
-    onError: (_error, _input, context) => {
+    onError: (error, _input, context) => {
       // Clean up temp cache on error
       if (context?.tempId) {
         queryClient.removeQueries({ queryKey: ['campaign', context.tempId] });
         queryClient.removeQueries({ queryKey: ['campaignMessages', context.tempId] });
       }
-      toast.error('Erro ao criar campanha.');
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        toast.error(formatPlanLimit(planLimit), {
+          action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+        });
+      } else {
+        toast.error('Erro ao criar campanha.');
+      }
       navigate('/campaigns');
     }
   });

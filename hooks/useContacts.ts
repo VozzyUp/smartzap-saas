@@ -3,6 +3,7 @@ import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { contactService } from '../services';
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message';
 import { Contact, ContactStatus } from '../types';
 import { customFieldService } from '../services/customFieldService';
 import { PAGINATION, CACHE } from '@/lib/constants';
@@ -29,6 +30,13 @@ interface ContactsQueryParams {
  * Creates a normalized query key for contacts list
  * Ensures consistent cache hits regardless of parameter order
  */
+/** Mostra toast amigável de limite de plano com CTA para a tela "Meu Plano". */
+function notifyPlanLimit(body: NonNullable<ReturnType<typeof getPlanLimitBody>>) {
+  toast.error(formatPlanLimit(body), {
+    action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+  });
+}
+
 const createContactsQueryKey = (params: ContactsQueryParams) => [
   'contacts',
   {
@@ -150,6 +158,11 @@ export const useContactsController = (initialData?: ContactsInitialData) => {
       toast.success('Contato adicionado com sucesso!');
     },
     onError: (error: any) => {
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        notifyPlanLimit(planLimit);
+        return;
+      }
       toast.error(error.message || 'Erro ao adicionar contato');
     }
   });
@@ -297,7 +310,14 @@ export const useContactsController = (initialData?: ContactsInitialData) => {
       if (result.updated > 0) parts.push(`${result.updated} atualizados`);
       toast.success(`Importação concluída: ${parts.join(', ') || '0 contatos'}`);
     },
-    onError: () => toast.error('Erro ao importar contatos')
+    onError: (error: any) => {
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        notifyPlanLimit(planLimit);
+        return;
+      }
+      toast.error('Erro ao importar contatos');
+    }
   });
 
   // New: Import from file with validation report
@@ -313,7 +333,12 @@ export const useContactsController = (initialData?: ContactsInitialData) => {
         toast.warning(`${result.failed} contatos inválidos (ver relatório)`);
       }
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        notifyPlanLimit(planLimit);
+        return;
+      }
       toast.error(error.message || 'Erro ao importar contatos');
     }
   });

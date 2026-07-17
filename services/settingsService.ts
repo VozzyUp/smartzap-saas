@@ -174,8 +174,11 @@ export const settingsService = {
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to save credentials');
+          const body = await response.json().catch(() => ({}));
+          const err: any = new Error(body.error || 'Failed to save credentials');
+          err.status = response.status;
+          err.body = body;
+          throw err;
         }
 
         const result = await response.json();

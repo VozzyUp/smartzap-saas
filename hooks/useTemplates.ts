@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { templateService, UtilityCategory, GeneratedTemplate, GenerateUtilityParams } from '../services/templateService';
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message';
 import { manualDraftsService } from '../services/manualDraftsService';
 import { Template } from '../types';
 import {
@@ -514,7 +515,14 @@ export const useTemplatesController = () => {
       }
 
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao criar templates');
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        toast.error(formatPlanLimit(planLimit), {
+          action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+        });
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Erro ao criar templates');
+      }
     } finally {
       setIsCreatingInMeta(false);
     }

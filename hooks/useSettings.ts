@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { settingsService } from '../services/settingsService';
+import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message';
 import type {
   AppSettings,
   WorkflowExecutionConfig,
@@ -550,7 +551,14 @@ export const useSettingsController = () => {
       // 5. Atualiza estado local para refletir conexão
       setFormSettings(finalSettings);
     } catch (error) {
-      toast.error('Erro ao conectar com a Meta API. Verifique as credenciais.');
+      const planLimit = getPlanLimitBody(error);
+      if (planLimit) {
+        toast.error(formatPlanLimit(planLimit), {
+          action: { label: 'Ver meu plano', onClick: () => { window.location.href = '/settings/plano' } },
+        });
+      } else {
+        toast.error('Erro ao conectar com a Meta API. Verifique as credenciais.');
+      }
       console.error(error);
       throw error; // Re-throw para o caller saber que falhou
     }

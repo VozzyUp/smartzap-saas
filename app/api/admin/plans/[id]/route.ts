@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAdmin } from '@/lib/admin-auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-const FIELDS = ['max_contacts', 'max_templates', 'max_campaigns_per_month', 'max_whatsapp_numbers'] as const
+const FIELDS = ['max_contacts', 'max_templates', 'max_campaigns_per_month', 'max_whatsapp_numbers', 'price_cents'] as const
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePlatformAdmin()

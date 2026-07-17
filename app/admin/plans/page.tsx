@@ -17,6 +17,7 @@ type Plan = {
   max_templates: number | null
   max_campaigns_per_month: number | null
   max_whatsapp_numbers: number | null
+  price_cents: number | null
 }
 
 const FIELDS: { key: keyof Plan; label: string }[] = [
@@ -47,6 +48,7 @@ async function patchPlan(id: string, body: Record<string, number | null>) {
 function PlanCard({ plan }: { plan: Plan }) {
   const queryClient = useQueryClient()
   const [values, setValues] = useState<Record<string, string>>({})
+  const [priceValue, setPriceValue] = useState('')
 
   useEffect(() => {
     setValues({
@@ -55,6 +57,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       max_campaigns_per_month: plan.max_campaigns_per_month === null ? '' : String(plan.max_campaigns_per_month),
       max_whatsapp_numbers: plan.max_whatsapp_numbers === null ? '' : String(plan.max_whatsapp_numbers),
     })
+    setPriceValue(plan.price_cents === null ? '' : (plan.price_cents / 100).toFixed(2).replace('.', ','))
   }, [plan])
 
   const mutation = useMutation({
@@ -72,6 +75,8 @@ function PlanCard({ plan }: { plan: Plan }) {
       const raw = values[f.key]?.trim() ?? ''
       body[f.key] = raw === '' ? null : Number(raw)
     }
+    const rawPrice = priceValue.trim()
+    body.price_cents = rawPrice === '' ? null : Math.round(parseFloat(rawPrice.replace(',', '.')) * 100)
     mutation.mutate(body)
   }
 
@@ -92,6 +97,17 @@ function PlanCard({ plan }: { plan: Plan }) {
             />
           </div>
         ))}
+        <div className="space-y-1">
+          <Label htmlFor={`${plan.id}-price_cents`}>Preço mensal (R$)</Label>
+          <Input
+            id={`${plan.id}-price_cents`}
+            type="text"
+            inputMode="decimal"
+            placeholder="Grátis"
+            value={priceValue}
+            onChange={(e) => setPriceValue(e.target.value)}
+          />
+        </div>
       </div>
       <Button onClick={handleSave} disabled={mutation.isPending}>
         {mutation.isPending && <Loader2 size={14} className="animate-spin mr-2" aria-hidden="true" />}

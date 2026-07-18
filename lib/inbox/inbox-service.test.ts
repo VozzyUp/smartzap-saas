@@ -1,22 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
-import { syncCampaignTemplateToInbox } from './inbox-service'
+import { syncCampaignTemplateToInbox, sendMessage } from './inbox-service'
 
 // Mock das dependências do inbox-db
 vi.mock('./inbox-db', () => ({
   findMessageByWhatsAppId: vi.fn(),
   getOrCreateConversation: vi.fn(),
   createMessage: vi.fn(),
+  getConversationById: vi.fn(),
+  updateMessageDeliveryStatus: vi.fn(),
+}))
+
+vi.mock('@/lib/whatsapp-send', () => ({
+  sendWhatsAppMessage: vi.fn(),
+}))
+
+vi.mock('@/lib/whatsapp-credentials', () => ({
+  getWhatsAppCredentialsForNumber: vi.fn(),
 }))
 
 import {
   findMessageByWhatsAppId,
   getOrCreateConversation,
   createMessage,
+  getConversationById,
+  updateMessageDeliveryStatus,
 } from './inbox-db'
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
 
 const mockFindMessageByWhatsAppId = findMessageByWhatsAppId as Mock
 const mockGetOrCreateConversation = getOrCreateConversation as Mock
 const mockCreateMessage = createMessage as Mock
+const mockGetConversationById = getConversationById as Mock
+const mockUpdateMessageDeliveryStatus = updateMessageDeliveryStatus as Mock
+const mockSendWhatsAppMessage = sendWhatsAppMessage as Mock
+const mockGetWhatsAppCredentialsForNumber = getWhatsAppCredentialsForNumber as Mock
 
 describe('syncCampaignTemplateToInbox', () => {
   const baseParams = {
@@ -206,6 +224,74 @@ describe('syncCampaignTemplateToInbox', () => {
     expect(createMessageCall.payload.synced_at).toBeDefined()
     expect(new Date(createMessageCall.payload.synced_at).getTime()).toBeGreaterThanOrEqual(
       new Date(beforeTest).getTime()
+    )
+  })
+})
+
+describe('sendMessage (Fase 4: reply pelo numero da conversa)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockCreateMessage.mockResolvedValue({ id: 'msg_1' })
+    mockSendWhatsAppMessage.mockResolvedValue({ messageId: 'wamid_1' })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('conversa com whatsapp_number_id -> getWhatsAppCredentialsForNumber(tenantId, numero_da_conversa)', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_1',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_2',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_2',
+      businessAccountId: 'ba_2',
+      accessToken: 'tok_2',
+    })
+
+    await sendMessage('tenant_1', 'conv_1', 'oi')
+
+    expect(mockGetWhatsAppCredentialsForNumber).toHaveBeenCalledWith('tenant_1', 'pn_2')
+    expect(mockSendWhatsAppMessage).toHaveBeenCalledWith(
+      'tenant_1',
+      expect.objectContaining({
+        to: '5511999999999',
+        credentials: { phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok_2' },
+      })
+    )
+  })
+
+  it('conversa antiga sem whatsapp_number_id -> passa null (delega ao numero ativo/legado)', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_2',
+      phone: '5511988888888',
+      whatsapp_number_id: null,
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+
+    await sendMessage('tenant_1', 'conv_2', 'oi')
+
+    expect(mockGetWhatsAppCredentialsForNumber).toHaveBeenCalledWith('tenant_1', null)
+  })
+
+  it('sem credenciais para o numero da conversa -> lanca erro', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_3',
+      phone: '5511977777777',
+      whatsapp_number_id: 'pn_x',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue(null)
+
+    await expect(sendMessage('tenant_1', 'conv_3', 'oi')).rejects.toThrow(
+      'WhatsApp credentials not configured'
     )
   })
 })

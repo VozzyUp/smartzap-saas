@@ -248,7 +248,8 @@ export async function getOrCreateConversation(
   tenantId: string,
   phone: string,
   contactId?: string,
-  aiAgentId?: string
+  aiAgentId?: string,
+  whatsappNumberId?: string | null
 ): Promise<InboxConversation> {
   const supabase = getClient()
 
@@ -293,6 +294,7 @@ export async function getOrCreateConversation(
       ai_agent_id: agentId,
       status: 'open',
       mode,
+      whatsapp_number_id: whatsappNumberId ?? null,
     })
     .select()
     .single()
@@ -310,7 +312,13 @@ export async function getOrCreateConversation(
 export async function createConversation(
   dto: CreateInboxConversationDTO
 ): Promise<InboxConversation> {
-  return getOrCreateConversation(dto.tenant_id, dto.phone, dto.contact_id, dto.ai_agent_id)
+  return getOrCreateConversation(
+    dto.tenant_id,
+    dto.phone,
+    dto.contact_id,
+    dto.ai_agent_id,
+    dto.whatsapp_number_id
+  )
 }
 
 /**

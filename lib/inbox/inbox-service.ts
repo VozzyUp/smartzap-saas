@@ -27,7 +27,7 @@ import {
   type MessageFilters,
 } from './inbox-db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
-import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
 import type {
   InboxConversation,
   InboxMessage,
@@ -126,8 +126,12 @@ export async function sendMessage(
     throw new Error('Conversation not found')
   }
 
-  // Get WhatsApp credentials
-  const credentials = await getWhatsAppCredentials(tenantId)
+  // Get WhatsApp credentials — responde pelo número da própria conversa (Fase 4);
+  // conversas antigas (whatsapp_number_id null) caem no número ativo/legado.
+  const credentials = await getWhatsAppCredentialsForNumber(
+    tenantId,
+    conversation.whatsapp_number_id ?? null
+  )
   if (!credentials) {
     throw new Error('WhatsApp credentials not configured')
   }

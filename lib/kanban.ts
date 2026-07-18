@@ -108,12 +108,48 @@ export async function createBoard(tenantId: string, name: string): Promise<Kanba
 }
 
 export async function renameBoard(tenantId: string, boardId: string, name: string): Promise<void> {
+  // Carrega o nome antigo antes do update: as tags espelhadas usam o nome do
+  // board (`funil/<board>: <fase>`), então renomear o board precisa migrar as
+  // tags dos contatos do quadro (senão o filtro de campanha quebra em silêncio).
+  const { data: board } = await db()
+    .from('kanban_boards')
+    .select('name')
+    .eq('tenant_id', tenantId)
+    .eq('id', boardId)
+    .maybeSingle()
+  if (!board) throw new KanbanError('not_found')
+  const oldName = (board as any).name as string
+
   const { error } = await db()
     .from('kanban_boards')
     .update({ name })
     .eq('tenant_id', tenantId)
     .eq('id', boardId)
   if (error) throw error
+
+  if (oldName === name) return
+
+  // Migra as tags: remove `funil/<antigo>: <fase>` e adiciona `funil/<novo>: <fase>`
+  // por card (best-effort, como todo syncStageTag).
+  const { data: stages } = await db()
+    .from('kanban_stages')
+    .select('id, name')
+    .eq('tenant_id', tenantId)
+    .eq('board_id', boardId)
+  const stageNameById = new Map(((stages ?? []) as any[]).map((s) => [s.id, s.name as string]))
+
+  const { data: cards } = await db()
+    .from('kanban_cards')
+    .select('contact_id, stage_id')
+    .eq('tenant_id', tenantId)
+    .eq('board_id', boardId)
+
+  for (const card of (cards ?? []) as any[]) {
+    const stageName = stageNameById.get(card.stage_id)
+    if (!stageName) continue
+    await syncStageTag(tenantId, card.contact_id, oldName, stageName, null)
+    await syncStageTag(tenantId, card.contact_id, name, null, stageName)
+  }
 }
 
 export async function deleteBoard(tenantId: string, boardId: string): Promise<void> {
@@ -308,6 +344,17 @@ export async function addCardToBoard(
     .eq('id', boardId)
     .maybeSingle()
   if (!board) throw new KanbanError('not_found')
+
+  // Guard de posse: o contato precisa ser DESTE tenant. Sem isso, um contactId
+  // de outro tenant entraria no quadro e o join de getBoardData exporia
+  // nome/telefone alheios (service role bypassa RLS).
+  const { data: contact } = await db()
+    .from('contacts')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('id', contactId)
+    .maybeSingle()
+  if (!contact) throw new KanbanError('not_found')
 
   let targetStageId = stageId
   let targetStageName: string

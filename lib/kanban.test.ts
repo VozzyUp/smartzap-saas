@@ -110,7 +110,7 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }))
 
-import { createBoard, addCardToBoard, moveCard, removeCard, deleteStage, getContactStages, syncStageTag, KanbanError } from '@/lib/kanban'
+import { createBoard, renameBoard, addCardToBoard, moveCard, removeCard, deleteStage, getContactStages, syncStageTag, KanbanError } from '@/lib/kanban'
 
 describe('kanban', () => {
   beforeEach(() => {
@@ -143,6 +143,8 @@ describe('kanban', () => {
 
   it('addCardToBoard usa a fase de menor position por padrão e sincroniza a tag', async () => {
     boardsSelectFn.mockReturnValueOnce({ data: { id: 'b1', tenant_id: 't1', name: 'Vendas', position: 0 }, error: null })
+    // guard de posse do contato (novo select em contacts antes do fluxo)
+    contactsSelectFn.mockReturnValueOnce({ data: { id: 'ct1' }, error: null })
     stagesSelectFn.mockReturnValueOnce({ data: { id: 's1', tenant_id: 't1', board_id: 'b1', name: 'Novo', color: '#3b82f6', position: 0 }, error: null })
     cardsInsertFn.mockReturnValueOnce({ data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 }, error: null })
     contactsSelectFn.mockReturnValueOnce({ data: { tags: [] }, error: null })
@@ -163,11 +165,39 @@ describe('kanban', () => {
 
   it('addCardToBoard lança card_exists quando o contato já está no board (unique violation)', async () => {
     boardsSelectFn.mockReturnValueOnce({ data: { id: 'b1', tenant_id: 't1', name: 'Vendas', position: 0 }, error: null })
+    contactsSelectFn.mockReturnValueOnce({ data: { id: 'ct1' }, error: null })
     stagesSelectFn.mockReturnValueOnce({ data: { id: 's1', tenant_id: 't1', board_id: 'b1', name: 'Novo', color: '#3b82f6', position: 0 }, error: null })
     cardsInsertFn.mockReturnValueOnce({ data: null, error: { code: '23505', message: 'duplicate key' } })
 
     await expect(addCardToBoard('t1', 'b1', 'ct1')).rejects.toMatchObject({ code: 'card_exists' })
     expect(contactsUpdateFn).not.toHaveBeenCalled()
+  })
+
+  it('addCardToBoard lança not_found para contato de OUTRO tenant (guard de posse)', async () => {
+    boardsSelectFn.mockReturnValueOnce({ data: { id: 'b1', tenant_id: 't1', name: 'Vendas', position: 0 }, error: null })
+    contactsSelectFn.mockReturnValueOnce({ data: null, error: null }) // contato não é do tenant
+    await expect(addCardToBoard('t1', 'b1', 'ct_de_outro_tenant')).rejects.toMatchObject({ code: 'not_found' })
+    expect(cardsInsertFn).not.toHaveBeenCalled()
+  })
+
+  it('renameBoard migra as tags funil/<antigo> para funil/<novo> nos contatos do board', async () => {
+    boardsSelectFn.mockReturnValueOnce({ data: { name: 'Vendas' }, error: null }) // nome antigo
+    boardsUpdateFn.mockReturnValueOnce({ error: null })
+    stagesSelectFn.mockReturnValueOnce({ data: [{ id: 's1', name: 'Novo' }], error: null })
+    cardsSelectFn.mockReturnValueOnce({ data: [{ contact_id: 'ct1', stage_id: 's1' }], error: null })
+    // syncStageTag 1 (remove antiga): read + update
+    contactsSelectFn.mockReturnValueOnce({ data: { tags: ['funil/Vendas: Novo', 'vip'] }, error: null })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+    // syncStageTag 2 (adiciona nova): read + update
+    contactsSelectFn.mockReturnValueOnce({ data: { tags: ['vip'] }, error: null })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await renameBoard('t1', 'b1', 'Comercial')
+
+    expect(contactsUpdateFn).toHaveBeenNthCalledWith(1,
+      { tags: ['vip'] }, expect.objectContaining({ tenant_id: 't1', id: 'ct1' }))
+    expect(contactsUpdateFn).toHaveBeenNthCalledWith(2,
+      { tags: ['vip', 'funil/Comercial: Novo'] }, expect.objectContaining({ tenant_id: 't1', id: 'ct1' }))
   })
 
   it('moveCard atualiza o card e troca a tag da fase antiga pela nova', async () => {

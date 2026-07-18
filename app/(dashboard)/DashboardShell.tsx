@@ -18,6 +18,7 @@ import {
     Shield,
     CreditCard,
     Smartphone,
+    KanbanSquare,
 } from 'lucide-react'
 import React from 'react'
 import { HealthStatus } from '@/lib/health-check'
@@ -356,6 +357,7 @@ export function DashboardShell({
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/campaigns', label: 'Campanhas', icon: MessageSquare },
         { path: '/inbox', label: 'Inbox', icon: MessageCircle }, // Badge dinâmico renderizado no DashboardSidebar
+        { path: '/kanban', label: 'Funil', icon: KanbanSquare },
         { path: '/workflows', label: 'Workflow', icon: Workflow, badge: 'beta', disabled: true, hidden: !isDevMode },
         { path: '/conversations', label: 'Conversas', icon: MessageCircle, hidden: true },
         { path: '/templates', label: 'Templates', icon: FileText },
@@ -375,6 +377,7 @@ export function DashboardShell({
         if (path === '/workflows') return 'Workflows'
         if (path === '/inbox') return 'Inbox'
         if (path.startsWith('/inbox/')) return 'Conversa'
+        if (path === '/kanban') return 'Funil'
         if (path === '/conversations') return 'Conversas'
         if (path.startsWith('/conversations/')) return 'Conversa'
         if (path.startsWith('/builder')) return 'Workflow'

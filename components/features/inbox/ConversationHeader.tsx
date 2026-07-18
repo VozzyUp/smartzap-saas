@@ -66,6 +66,7 @@ import type {
   ConversationPriority,
 } from '@/types'
 import { ContactMemoriesSheet } from './ContactMemoriesSheet'
+import { FunnelStageChip } from './FunnelStageChip'
 import { formatPhoneNumberDisplay } from '@/lib/phone-formatter'
 
 export interface ConversationHeaderProps {
@@ -136,7 +137,7 @@ export function ConversationHeader({
   isResuming,
   isDeleting,
 }: ConversationHeaderProps) {
-  const { phone, contact, mode, status, priority, labels: conversationLabels, automation_paused_until, human_mode_expires_at, ai_agent } = conversation
+  const { phone, contact, contact_id, mode, status, priority, labels: conversationLabels, automation_paused_until, human_mode_expires_at, ai_agent } = conversation
 
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -236,7 +237,10 @@ export function ConversationHeader({
               </Tooltip>
             )}
           </div>
-          <span className="text-[10px] text-[var(--ds-text-muted)]">{formatPhoneNumberDisplay(phone, 'e164')}</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[10px] text-[var(--ds-text-muted)]">{formatPhoneNumberDisplay(phone, 'e164')}</span>
+            <FunnelStageChip contactId={contact_id} />
+          </div>
         </div>
       </div>
 

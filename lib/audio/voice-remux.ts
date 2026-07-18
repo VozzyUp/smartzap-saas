@@ -10,16 +10,20 @@ const REMUX_TIMEOUT_MS = 15_000
 const TARGET_MIME = 'audio/ogg'
 
 /**
- * Remux de áudio para OGG/Opus via ffmpeg (spawn em pipes, sem arquivos temporários).
+ * Normaliza áudio para o formato de NOTA DE VOZ do WhatsApp: OGG/Opus **mono**,
+ * 48kHz, perfil `voip`. É esse formato que o WhatsApp renderiza como nota de voz
+ * tocável (PTT); Opus estéreo ou com params fora do padrão chega como um arquivo
+ * de áudio que o destinatário não consegue reproduzir.
+ *
+ * IMPORTANTE: normaliza SEMPRE (via ffmpeg), inclusive quando o input já é
+ * `audio/ogg` — o navegador (ex.: Firefox) pode gravar ogg estéreo/não-compatível.
  *
  * Fail-safe: NUNCA rejeita. Qualquer falha (ffmpeg ausente, exit code != 0,
- * timeout) degrada para o buffer/mime originais com `remuxed: false`.
+ * timeout) degrada para o buffer/mime originais com `remuxed: false` — se o
+ * original já for ogg, ainda envia (só não normalizado); se for webm, a whitelist
+ * da rota rejeita como antes.
  */
 export async function remuxToOggOpus(input: Buffer, inputMime: string): Promise<RemuxResult> {
-  if (inputMime.startsWith('audio/ogg')) {
-    return { buffer: input, mime: 'audio/ogg', remuxed: false }
-  }
-
   return new Promise<RemuxResult>((resolve) => {
     let settled = false
     const fallback = (reason: string) => {
@@ -31,14 +35,24 @@ export async function remuxToOggOpus(input: Buffer, inputMime: string): Promise<
 
     let child: ReturnType<typeof spawn>
     try {
+      // Nota de voz do WhatsApp: Opus mono (-ac 1), 48kHz (-ar 48000), perfil voip.
       child = spawn('ffmpeg', [
         '-hide_banner',
         '-loglevel',
         'error',
         '-i',
         'pipe:0',
+        '-vn',
+        '-ac',
+        '1',
+        '-ar',
+        '48000',
         '-c:a',
         'libopus',
+        '-b:a',
+        '32k',
+        '-application',
+        'voip',
         '-f',
         'ogg',
         'pipe:1',

@@ -32,15 +32,48 @@ describe('remuxToOggOpus', () => {
     vi.mocked(spawn).mockReset()
   })
 
-  it('input audio/ogg: retorna sem remuxar e não chama spawn', async () => {
-    const input = Buffer.from('ogg-original')
-    const result = await remuxToOggOpus(input, 'audio/ogg')
+  // Formato de nota de voz do WhatsApp: Opus mono, 48kHz, perfil voip.
+  const VOICE_ARGS = [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    'pipe:0',
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '48000',
+    '-c:a',
+    'libopus',
+    '-b:a',
+    '32k',
+    '-application',
+    'voip',
+    '-f',
+    'ogg',
+    'pipe:1',
+  ]
 
-    expect(result).toEqual({ buffer: input, mime: 'audio/ogg', remuxed: false })
-    expect(spawn).not.toHaveBeenCalled()
+  it('input audio/ogg (ex.: Firefox): TAMBÉM normaliza via ffmpeg (mono/48k), não pula', async () => {
+    const fakeChild = createFakeChild()
+    vi.mocked(spawn).mockReturnValue(fakeChild as any)
+
+    const input = Buffer.from('ogg-estereo-original')
+    const promise = remuxToOggOpus(input, 'audio/ogg')
+
+    const outputChunk = Buffer.from('ogg-mono-normalizado')
+    queueMicrotask(() => {
+      fakeChild.stdout.emit('data', outputChunk)
+      fakeChild.emit('close', 0)
+    })
+
+    const result = await promise
+    expect(spawn).toHaveBeenCalledWith('ffmpeg', VOICE_ARGS)
+    expect(result).toEqual({ buffer: outputChunk, mime: 'audio/ogg', remuxed: true })
   })
 
-  it('input audio/webm com sucesso: chama ffmpeg com os args corretos e retorna ogg remuxado', async () => {
+  it('input audio/webm com sucesso: chama ffmpeg com os args de voz e retorna ogg remuxado', async () => {
     const fakeChild = createFakeChild()
     vi.mocked(spawn).mockReturnValue(fakeChild as any)
 
@@ -55,18 +88,7 @@ describe('remuxToOggOpus', () => {
 
     const result = await promise
 
-    expect(spawn).toHaveBeenCalledWith('ffmpeg', [
-      '-hide_banner',
-      '-loglevel',
-      'error',
-      '-i',
-      'pipe:0',
-      '-c:a',
-      'libopus',
-      '-f',
-      'ogg',
-      'pipe:1',
-    ])
+    expect(spawn).toHaveBeenCalledWith('ffmpeg', VOICE_ARGS)
     expect(fakeChild.stdin.write).toHaveBeenCalledWith(input)
     expect(fakeChild.stdin.end).toHaveBeenCalled()
     expect(result).toEqual({ buffer: outputChunk, mime: 'audio/ogg', remuxed: true })

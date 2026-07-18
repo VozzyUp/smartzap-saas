@@ -12,7 +12,7 @@
  */
 
 import React, { memo, useMemo } from 'react'
-import { Check, CheckCheck, Clock, AlertCircle, Sparkles, ArrowRightLeft } from 'lucide-react'
+import { Check, CheckCheck, Clock, AlertCircle, Sparkles, ArrowRightLeft, Loader2, FileText, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatTime } from '@/lib/date-utils'
 import {
@@ -307,6 +307,106 @@ function TemplateMessageContent({ parsed, time, deliveryStatus }: {
   )
 }
 
+// ========== Media Content Renderer (Fase 5A) ==========
+
+const MEDIA_MESSAGE_TYPES = new Set(['image', 'video', 'audio', 'document'])
+
+function formatFileSize(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatDuration(seconds?: number | null): string {
+  if (!seconds || seconds <= 0) return ''
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+/**
+ * Renderiza a mídia da mensagem (imagem/vídeo/áudio/documento) de acordo com
+ * `message_type` e `media_status`. A `src` é sempre a rota escopada por
+ * tenant `/api/inbox/media/[messageId]` (302 → signed URL curta).
+ */
+function MediaContent({ message }: { message: InboxMessage }) {
+  const { id, message_type, media_status, media_filename, media_size, media_duration } = message
+  const src = `/api/inbox/media/${id}`
+
+  if (media_status === 'pending') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-black/10 px-3 py-2.5 text-sm text-[var(--ds-text-muted)]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
+        <span>Recebendo mídia…</span>
+      </div>
+    )
+  }
+
+  if (media_status === 'failed') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-black/10 px-3 py-2.5 text-sm text-[var(--ds-text-muted)]">
+        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-red-400" />
+        <span>Mídia indisponível</span>
+      </div>
+    )
+  }
+
+  if (message_type === 'image') {
+    return (
+      <a href={src} target="_blank" rel="noopener noreferrer" className="block max-w-full">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={media_filename || 'Imagem'}
+          className="max-h-72 max-w-full rounded-lg object-cover cursor-zoom-in"
+          loading="lazy"
+        />
+      </a>
+    )
+  }
+
+  if (message_type === 'video') {
+    return (
+      <video controls className="max-h-72 max-w-full rounded-lg" preload="metadata">
+        <source src={src} />
+      </video>
+    )
+  }
+
+  if (message_type === 'audio') {
+    const duration = formatDuration(media_duration)
+    return (
+      <div className="flex flex-col gap-1 max-w-full">
+        <audio controls className="max-w-full" preload="metadata">
+          <source src={src} />
+        </audio>
+        {duration && <span className="text-[10px] text-[var(--ds-text-muted)]">{duration}</span>}
+      </div>
+    )
+  }
+
+  if (message_type === 'document') {
+    const size = formatFileSize(media_size)
+    return (
+      <a
+        href={src}
+        download={media_filename || undefined}
+        className="flex items-center gap-2.5 rounded-lg bg-black/10 px-3 py-2.5 hover:bg-black/20 transition-colors max-w-full"
+      >
+        <FileText className="h-5 w-5 flex-shrink-0 opacity-80" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm truncate">{media_filename || 'Documento'}</p>
+          {size && <p className="text-[10px] text-[var(--ds-text-muted)]">{size}</p>}
+        </div>
+        <Download className="h-4 w-4 flex-shrink-0 opacity-60" />
+      </a>
+    )
+  }
+
+  return null
+}
+
 // Check if message is a handoff/system message
 function isHandoffMessage(content: string): boolean {
   return content.includes('**Transferência') || content.includes('**Motivo:**')
@@ -352,6 +452,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [content, isInbound])
 
   const isTemplate = parsedTemplate !== null
+  const isMediaMessage = MEDIA_MESSAGE_TYPES.has(message.message_type)
 
   // Format time
   const time = formatTime(created_at)
@@ -448,10 +549,18 @@ export const MessageBubble = memo(function MessageBubble({
             />
           ) : (
             <>
-              {/* Regular message content with WhatsApp formatting */}
-              <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
-                <WhatsAppFormattedText text={content} />
-              </p>
+              {/* Media content (image/video/audio/document) - Fase 5A */}
+              {isMediaMessage && <MediaContent message={message} />}
+
+              {/* Regular message content with WhatsApp formatting (legenda, quando mídia) */}
+              {(!isMediaMessage || content) && (
+                <p className={cn(
+                  'text-base leading-relaxed whitespace-pre-wrap break-words',
+                  isMediaMessage && content && 'mt-1.5'
+                )}>
+                  <WhatsAppFormattedText text={content} />
+                </p>
+              )}
 
               {/* AI Sources - inline, minimal */}
               {isAIResponse && ai_sources && ai_sources.length > 0 && isLastInGroup && (

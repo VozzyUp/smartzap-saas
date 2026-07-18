@@ -3,7 +3,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 import { getTenantContext } from '@/lib/tenant-context'
-import { addWhatsAppNumber, mirrorActiveToSettings, clearWhatsAppPhoneNumber, resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
+import { addWhatsAppNumber, mirrorActiveToSettings, getActiveWhatsAppNumber, removeWhatsAppNumber, listWhatsAppNumbers, resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
 import { canAddWhatsAppNumber, planLimitResponse } from '@/lib/plan-limits'
 
 export const dynamic = 'force-dynamic'
@@ -176,25 +176,30 @@ export async function DELETE() {
     const ctx = await getTenantContext()
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    // Remove credenciais principais
-    await settingsDb.saveAll(ctx.tenantId, {
-      phoneNumberId: '',
-      businessAccountId: '',
-      accessToken: '',
-      isConnected: false
-    })
+    // Fase 4: "Disconnect" desta tela legada remove apenas o número ATIVO (o
+    // que esta tela mostra) e promove o próximo, se houver — NUNCA apaga todos
+    // os números do tenant (a gestão de vários números vive em /settings/numeros).
+    const active = await getActiveWhatsAppNumber(ctx.tenantId)
+    if (active) {
+      await removeWhatsAppNumber(ctx.tenantId, active.phone_number_id)
+    }
+    // Espelha o novo ativo em settings (ou zera isConnected se não sobrar nenhum).
+    await mirrorActiveToSettings(ctx.tenantId)
 
-    // Remove também o Meta App ID/Secret
-    await Promise.all([
-      settingsDb.set(ctx.tenantId, 'metaAppId', ''),
-      settingsDb.set(ctx.tenantId, 'metaAppSecret', ''),
-    ])
-
-    await clearWhatsAppPhoneNumber(ctx.tenantId)
+    // Meta App ID/Secret são credenciais do app no nível do tenant — só as
+    // limpa quando NÃO sobra nenhum número (senão quebraria os demais números).
+    const remaining = await listWhatsAppNumbers(ctx.tenantId)
+    if (remaining.length === 0) {
+      await Promise.all([
+        settingsDb.set(ctx.tenantId, 'metaAppId', ''),
+        settingsDb.set(ctx.tenantId, 'metaAppSecret', ''),
+      ])
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Credentials removed from database.'
+      message: 'Número ativo desconectado.',
+      remaining: remaining.length,
     })
   } catch (error) {
     console.error('Error deleting credentials:', error)

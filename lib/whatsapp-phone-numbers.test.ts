@@ -101,6 +101,13 @@ function makeDeleteChain() {
   return chain
 }
 
+const saveAllMock = vi.fn(async () => {})
+vi.mock('@/lib/supabase-db', () => ({
+  settingsDb: {
+    saveAll: (...a: any[]) => saveAllMock(...a),
+  },
+}))
+
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: () => ({
     from: (table: string) => {
@@ -135,6 +142,7 @@ import {
   addWhatsAppNumber,
   setActiveWhatsAppNumber,
   removeWhatsAppNumber,
+  mirrorActiveToSettings,
 } from '@/lib/whatsapp-phone-numbers'
 
 describe('whatsapp-phone-numbers', () => {
@@ -145,6 +153,7 @@ describe('whatsapp-phone-numbers', () => {
     selectByPhoneIdFn.mockReset(); listFn.mockReset(); promoteFn.mockReset()
     updateFn.mockReset(); deactivateFn.mockReset(); activateFn.mockReset()
     deleteFn.mockReset(); deleteByPhoneFn.mockReset()
+    saveAllMock.mockClear()
   })
 
   it('upsertWhatsAppPhoneNumber faz upsert com onConflict phone_number_id', async () => {
@@ -343,5 +352,30 @@ describe('whatsapp-phone-numbers', () => {
     await removeWhatsAppNumber('t1', 'pn_1')
     expect(promoteFn).toHaveBeenCalledWith('t1')
     expect(activateFn).not.toHaveBeenCalled()
+  })
+
+  it('mirrorActiveToSettings espelha as credenciais do ativo com isConnected=true', async () => {
+    selectActiveFn.mockResolvedValueOnce({
+      data: { phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', access_token: 'tok', display_label: null, is_active: true },
+      error: null,
+    })
+    await mirrorActiveToSettings('t1')
+    expect(saveAllMock).toHaveBeenCalledWith('t1', {
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok',
+      isConnected: true,
+    })
+  })
+
+  it('mirrorActiveToSettings zera settings com isConnected=false quando não há ativo', async () => {
+    selectActiveFn.mockResolvedValueOnce({ data: null, error: null })
+    await mirrorActiveToSettings('t1')
+    expect(saveAllMock).toHaveBeenCalledWith('t1', {
+      phoneNumberId: '',
+      businessAccountId: '',
+      accessToken: '',
+      isConnected: false,
+    })
   })
 })

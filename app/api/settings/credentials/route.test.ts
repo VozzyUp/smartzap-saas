@@ -14,13 +14,15 @@ vi.mock('@/lib/supabase-db', () => ({
     set: (...a: any[]) => setMock(...a),
   },
 }))
-const upsertMock = vi.fn(async () => {})
+const addMock = vi.fn(async () => {})
+const mirrorMock = vi.fn(async () => {})
 const clearMock = vi.fn(async () => {})
 // resolveTenantByPhoneNumberId devolve o próprio tenant → o número já é do tenant
 // (reconexão), então o gate de plano da Fase 3A não trata como número novo e não bloqueia.
 const resolveMock = vi.fn(async () => 't1')
 vi.mock('@/lib/whatsapp-phone-numbers', () => ({
-  upsertWhatsAppPhoneNumber: (...a: any[]) => upsertMock(...a),
+  addWhatsAppNumber: (...a: any[]) => addMock(...a),
+  mirrorActiveToSettings: (...a: any[]) => mirrorMock(...a),
   clearWhatsAppPhoneNumber: (...a: any[]) => clearMock(...a),
   resolveTenantByPhoneNumberId: (...a: any[]) => resolveMock(...a),
 }))
@@ -37,16 +39,17 @@ import { POST, DELETE } from './route'
 
 describe('settings/credentials write-through', () => {
   beforeEach(() => {
-    upsertMock.mockClear(); clearMock.mockClear(); saveAllMock.mockClear(); setMock.mockClear()
+    addMock.mockClear(); mirrorMock.mockClear(); clearMock.mockClear(); saveAllMock.mockClear(); setMock.mockClear()
   })
 
-  it('POST faz upsert em whatsapp_phone_numbers após salvar credenciais', async () => {
+  it('POST grava o token na tabela via addWhatsAppNumber e espelha em settings', async () => {
     const req = new NextRequest('http://localhost/api/settings/credentials', {
       method: 'POST',
       body: JSON.stringify({ phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' }),
     })
     await POST(req)
-    expect(upsertMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1' })
+    expect(addMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' })
+    expect(mirrorMock).toHaveBeenCalledWith('t1')
   })
 
   it('DELETE limpa whatsapp_phone_numbers', async () => {

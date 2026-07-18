@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { settingsDb } from '@/lib/supabase-db'
 import { randomUUID } from 'crypto'
 
 export async function upsertWhatsAppPhoneNumber(
@@ -143,6 +144,29 @@ export async function setActiveWhatsAppNumber(tenantId: string, phoneNumberId: s
     .update({ is_active: true, updated_at: new Date().toISOString() })
     .eq('tenant_id', tenantId).eq('phone_number_id', phoneNumberId)
   if (on.error) throw on.error
+}
+
+// Espelha o número ativo do tenant em `settings`, mantendo compat com os 47
+// call-sites legados de getWhatsAppCredentials/isWhatsAppConnected que ainda
+// leem de lá. Sem número ativo, zera settings (isConnected=false) — nunca
+// deixa credenciais obsoletas de um número removido/desativado em settings.
+export async function mirrorActiveToSettings(tenantId: string): Promise<void> {
+  const active = await getActiveWhatsAppNumber(tenantId)
+  if (active && active.phone_number_id && active.access_token) {
+    await settingsDb.saveAll(tenantId, {
+      phoneNumberId: active.phone_number_id,
+      businessAccountId: active.business_account_id ?? '',
+      accessToken: active.access_token,
+      isConnected: true,
+    })
+  } else {
+    await settingsDb.saveAll(tenantId, {
+      phoneNumberId: '',
+      businessAccountId: '',
+      accessToken: '',
+      isConnected: false,
+    })
+  }
 }
 
 export async function removeWhatsAppNumber(tenantId: string, phoneNumberId: string): Promise<void> {

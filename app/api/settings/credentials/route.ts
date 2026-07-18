@@ -3,7 +3,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 import { getTenantContext } from '@/lib/tenant-context'
-import { upsertWhatsAppPhoneNumber, clearWhatsAppPhoneNumber, resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
+import { addWhatsAppNumber, mirrorActiveToSettings, clearWhatsAppPhoneNumber, resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
 import { canAddWhatsAppNumber, planLimitResponse } from '@/lib/plan-limits'
 
 export const dynamic = 'force-dynamic'
@@ -146,18 +146,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save to Database (Persist across refreshes)
-    await settingsDb.saveAll(ctx.tenantId, {
-      phoneNumberId,
-      businessAccountId,
-      accessToken,
-      isConnected: true
-    })
-
-    await upsertWhatsAppPhoneNumber(ctx.tenantId, {
-      phoneNumberId,
-      businessAccountId,
-    })
+    // Save to Database (Persist across refreshes). O token vai para a tabela
+    // whatsapp_phone_numbers (fonte de verdade); settings é apenas espelhado
+    // a partir do número ativo, para os call-sites legados.
+    await addWhatsAppNumber(ctx.tenantId, { phoneNumberId, businessAccountId, accessToken })
+    await mirrorActiveToSettings(ctx.tenantId)
 
     return NextResponse.json({
       success: true,

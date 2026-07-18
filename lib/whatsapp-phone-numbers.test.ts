@@ -273,7 +273,18 @@ describe('whatsapp-phone-numbers', () => {
     expect(r).toEqual(inserted)
   })
 
+  it('setActiveWhatsAppNumber lança se o número não é do tenant (não desliga o ativo)', async () => {
+    selectByPhoneIdFn.mockResolvedValueOnce({ data: null, error: null })
+    await expect(setActiveWhatsAppNumber('t1', 'pn_de_outro')).rejects.toThrow()
+    expect(deactivateFn).not.toHaveBeenCalled()
+    expect(activateFn).not.toHaveBeenCalled()
+  })
+
   it('setActiveWhatsAppNumber zera o ativo atual do tenant e liga o escolhido', async () => {
+    selectByPhoneIdFn.mockResolvedValueOnce({
+      data: { phone_number_id: 'pn_2', tenant_id: 't1', business_account_id: null, access_token: 'tok', display_label: null, is_active: false },
+      error: null,
+    })
     deactivateFn.mockReturnValueOnce({ error: null })
     activateFn.mockReturnValueOnce({ error: null })
     await setActiveWhatsAppNumber('t1', 'pn_2')
@@ -307,6 +318,11 @@ describe('whatsapp-phone-numbers', () => {
     })
     deleteByPhoneFn.mockReturnValueOnce({ error: null })
     promoteFn.mockResolvedValueOnce({ data: { phone_number_id: 'pn_2' }, error: null })
+    // o setActive aninhado revalida o alvo (guard de posse)
+    selectByPhoneIdFn.mockResolvedValueOnce({
+      data: { phone_number_id: 'pn_2', tenant_id: 't1', business_account_id: null, access_token: 'tok', display_label: null, is_active: false },
+      error: null,
+    })
     deactivateFn.mockReturnValueOnce({ error: null })
     activateFn.mockReturnValueOnce({ error: null })
     await removeWhatsAppNumber('t1', 'pn_1')

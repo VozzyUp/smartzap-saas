@@ -128,6 +128,13 @@ export async function addWhatsAppNumber(
 
 export async function setActiveWhatsAppNumber(tenantId: string, phoneNumberId: string): Promise<void> {
   const db = getSupabaseAdmin()!
+  // Guard de posse: só desliga o ativo se o número-alvo existe e é deste tenant.
+  // Sem isso, um phone_number_id inválido/de outro tenant desligaria tudo e não
+  // ligaria nada — deixando o tenant sem número ativo silenciosamente.
+  const target = await getWhatsAppNumberByPhoneId(tenantId, phoneNumberId)
+  if (!target) {
+    throw new Error(`whatsapp number ${phoneNumberId} não encontrado para o tenant ${tenantId}`)
+  }
   const off = await db.from('whatsapp_phone_numbers')
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq('tenant_id', tenantId).eq('is_active', true)

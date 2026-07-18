@@ -39,6 +39,10 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
+# ffmpeg: remux de nota de voz (webm/opus -> ogg/opus) no envio do inbox (Fase 5B).
+# Usado só em runtime; o binário do sistema (Alpine/musl) — nao usar ffmpeg-static (glibc).
+RUN apk add --no-cache ffmpeg
+
 # Artefatos do standalone
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

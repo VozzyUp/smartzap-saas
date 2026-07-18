@@ -411,8 +411,16 @@ export async function getMessagesByConversation(
   const messages = data || []
   const hasMore = messages.length > limit
 
+  // media_path é caminho interno do Storage — nunca vai ao client (a UI usa a
+  // rota /api/inbox/media/[messageId], que assina URLs). Removemos da projeção
+  // aqui (a query é select('*')) para honrar a constraint de não expor o path.
+  const page = (hasMore ? messages.slice(0, limit) : messages).reverse().map((m) => {
+    const { media_path: _mediaPath, ...rest } = m as Record<string, unknown>
+    return rest
+  })
+
   return {
-    messages: (hasMore ? messages.slice(0, limit) : messages).reverse() as InboxMessage[],
+    messages: page as unknown as InboxMessage[],
     hasMore,
   }
 }

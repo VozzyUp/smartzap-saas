@@ -10,6 +10,16 @@
 -- Não-destrutivo: p_phone_number_id é opcional (DEFAULT NULL); chamadas
 -- antigas sem esse parâmetro continuam funcionando (whatsapp_number_id fica
 -- null, igual ao comportamento anterior à Fase 4).
+--
+-- IMPORTANTE (overload): adicionar um 9º parâmetro cria uma NOVA assinatura em
+-- vez de substituir a de 8 args. Se as duas coexistissem, uma chamada com 8
+-- args (imagem atualmente em produção) casaria com ambas → "function is not
+-- unique", quebrando o recebimento. Por isso dropamos a de 8 args primeiro; a
+-- de 9 args com DEFAULT NULL atende as chamadas de 8 args sem ambiguidade.
+-- Grants: funções novas recebem EXECUTE de PUBLIC por padrão (cobre
+-- service_role/authenticated/anon/postgres), então não é preciso re-conceder.
+DROP FUNCTION IF EXISTS public.process_inbound_message(uuid,text,text,text,text,text,jsonb,text);
+
 CREATE OR REPLACE FUNCTION public.process_inbound_message(
   p_tenant_id uuid,
   p_phone text,

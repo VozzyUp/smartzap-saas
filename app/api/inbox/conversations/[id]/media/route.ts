@@ -21,6 +21,7 @@ import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
 import { uploadMediaToMeta } from '@/lib/whatsapp/media'
 import { sendWhatsAppMedia } from '@/lib/whatsapp-send'
 import { storeOutboundMedia } from '@/lib/inbox/inbox-media'
+import { remuxToOggOpus } from '@/lib/audio/voice-remux'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import type { InboxMessageType } from '@/types'
 
@@ -105,16 +106,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const file = formData.get('file')
     const captionRaw = formData.get('caption')
     const caption = typeof captionRaw === 'string' ? captionRaw : ''
+    const voiceRaw = formData.get('voice')
+    const isVoice = voiceRaw === 'true'
 
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 })
     }
 
-    const mime = file.type || 'application/octet-stream'
-    const messageType = messageTypeFromMime(mime)
-    const filename = 'name' in file && typeof (file as File).name === 'string' && (file as File).name
+    const originalMime = file.type || 'application/octet-stream'
+    const messageType = messageTypeFromMime(originalMime)
+    const originalFilename = 'name' in file && typeof (file as File).name === 'string' && (file as File).name
       ? (file as File).name
       : `arquivo.${messageType === 'document' ? 'bin' : messageType}`
+
+    let buffer: Buffer = Buffer.from(await file.arrayBuffer())
+    let mime = originalMime
+    let filename = originalFilename
+
+    // Fase 5B: nota de voz — remux para OGG/Opus antes de qualquer validação
+    // de whitelist/tamanho, pois o áudio gravado no navegador (ex.: webm/opus)
+    // não está na whitelist de mimes aceitos pela Cloud API. Fail-safe: se o
+    // remux degradar (ffmpeg ausente/erro), `remuxed:false` e seguimos com o
+    // áudio original (pode falhar a whitelist normalmente, como antes da 5B).
+    if (isVoice && originalMime.startsWith('audio/')) {
+      const r = await remuxToOggOpus(buffer, originalMime)
+      buffer = r.buffer
+      mime = r.mime
+      filename = r.mime === 'audio/ogg' ? 'voice.ogg' : originalFilename
+    }
 
     if (!ALLOWED_MIME_BY_TYPE[messageType].includes(mime)) {
       return NextResponse.json(
@@ -123,10 +142,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    if (file.size > MAX_SIZE_BY_TYPE[messageType]) {
+    if (buffer.length > MAX_SIZE_BY_TYPE[messageType]) {
       return NextResponse.json(
         {
-          error: `File too large for ${messageType}: ${file.size} bytes (max ${MAX_SIZE_BY_TYPE[messageType]})`,
+          error: `File too large for ${messageType}: ${buffer.length} bytes (max ${MAX_SIZE_BY_TYPE[messageType]})`,
         },
         { status: 400 }
       )
@@ -149,8 +168,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 409 }
       )
     }
-
-    const buffer = Buffer.from(await file.arrayBuffer())
 
     // Upload à Meta → media_id
     const uploaded = await uploadMediaToMeta({
@@ -205,7 +222,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         media_status: 'ready',
         media_mime: mime,
         media_filename: filename,
-        media_size: file.size,
+        media_size: buffer.length,
         media_path: mediaPath,
       })
     } catch (storageError) {
@@ -214,7 +231,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         media_status: 'failed',
         media_mime: mime,
         media_filename: filename,
-        media_size: file.size,
+        media_size: buffer.length,
       })
     }
 

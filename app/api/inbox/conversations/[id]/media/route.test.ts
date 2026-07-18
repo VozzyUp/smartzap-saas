@@ -39,6 +39,11 @@ vi.mock('@/lib/inbox/inbox-media', () => ({
   storeOutboundMedia: (...args: unknown[]) => storeOutboundMediaMock(...args),
 }))
 
+const remuxToOggOpusMock = vi.fn()
+vi.mock('@/lib/audio/voice-remux', () => ({
+  remuxToOggOpus: (...args: unknown[]) => remuxToOggOpusMock(...args),
+}))
+
 const updateEqEqMock = vi.fn()
 const supabaseAdminMock = {
   from: vi.fn(() => ({
@@ -230,5 +235,78 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
     const res = await POST(makeRequest(fd), makeParams('conv_1'))
     expect(res.status).toBe(200)
     expect(updateEqEqMock).toHaveBeenCalled()
+  })
+
+  it('voice=true remuxa para ogg/opus antes de enviar como nota de voz (Fase 5B)', async () => {
+    remuxToOggOpusMock.mockResolvedValue({
+      buffer: Buffer.from('ogg-bytes'),
+      mime: 'audio/ogg',
+      remuxed: true,
+    })
+    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_voice' })
+    sendWhatsAppMediaMock.mockResolvedValue({ success: true, messageId: 'wamid.voice' })
+    createMessageMock.mockResolvedValue({ id: 'msg_voice' })
+    storeOutboundMediaMock.mockResolvedValue('t1/conv_1/msg_voice.ogg')
+
+    const fd = new FormData()
+    fd.set('file', new File(['webm-bytes'], 'voice.webm', { type: 'audio/webm' }))
+    fd.set('voice', 'true')
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({ success: true })
+
+    expect(remuxToOggOpusMock).toHaveBeenCalledTimes(1)
+    expect(remuxToOggOpusMock).toHaveBeenCalledWith(expect.any(Buffer), 'audio/webm')
+
+    expect(uploadMediaToMetaMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: 'audio/ogg',
+        filename: 'voice.ogg',
+      })
+    )
+
+    expect(sendWhatsAppMediaMock).toHaveBeenCalledWith(
+      't1',
+      expect.objectContaining({
+        type: 'audio',
+        mediaId: 'media_voice',
+        filename: 'voice.ogg',
+      })
+    )
+
+    expect(createMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message_type: 'audio' })
+    )
+
+    expect(storeOutboundMediaMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mime: 'audio/ogg',
+        filename: 'voice.ogg',
+      })
+    )
+  })
+
+  it('sem voice: audio comum da 5A nao aciona remux (sem regressao)', async () => {
+    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_1' })
+    sendWhatsAppMediaMock.mockResolvedValue({ success: true, messageId: 'wamid.audio' })
+    createMessageMock.mockResolvedValue({ id: 'msg_audio' })
+    storeOutboundMediaMock.mockResolvedValue('t1/conv_1/msg_audio.mp3')
+
+    const fd = new FormData()
+    fd.set('file', new File(['mp3-bytes'], 'audio.mp3', { type: 'audio/mpeg' }))
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    expect(res.status).toBe(200)
+
+    expect(remuxToOggOpusMock).not.toHaveBeenCalled()
+    expect(uploadMediaToMetaMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: 'audio/mpeg', filename: 'audio.mp3' })
+    )
+    expect(createMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message_type: 'audio' })
+    )
   })
 })

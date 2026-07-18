@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { Send, Loader2, Sparkles, Paperclip, X, FileText, Music } from 'lucide-react'
+import { Send, Loader2, Sparkles, Paperclip, X, FileText, Music, Mic, Square, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Textarea } from '@/components/ui/textarea'
@@ -69,6 +69,14 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+function formatDuration(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
+  const s = (totalSeconds % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+type VoiceRecordingState = 'idle' | 'recording' | 'preview' | 'sending'
 
 export function MessageInput({
   onSend,
@@ -175,6 +183,180 @@ export function MessageInput({
       setIsUploadingAttachment(false)
     }
   }, [attachedFile, attachmentCaption, conversationId, isUploadingAttachment, disabled, clearAttachment])
+
+  // Voice recording (Fase 5B - Task 4)
+  const [voiceState, setVoiceState] = useState<VoiceRecordingState>('idle')
+  const [voiceSeconds, setVoiceSeconds] = useState(0)
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null)
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const voiceChunksRef = useRef<Blob[]>([])
+  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const voiceCancelledRef = useRef(false)
+  // Guard síncrono contra duplo-clique: voiceState só vira 'recording' após o
+  // await getUserMedia, então dois cliques rápidos abririam dois streams e o
+  // primeiro ficaria órfão (mic preso). Este ref fecha essa janela.
+  const isStartingVoiceRef = useRef(false)
+
+  const stopMediaStream = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+    mediaStreamRef.current = null
+  }, [])
+
+  const clearVoiceTimer = useCallback(() => {
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current)
+      voiceTimerRef.current = null
+    }
+  }, [])
+
+  // Revoke the voice preview object URL when it changes or the component unmounts
+  useEffect(() => {
+    return () => {
+      if (voicePreviewUrl) {
+        URL.revokeObjectURL(voicePreviewUrl)
+      }
+    }
+  }, [voicePreviewUrl])
+
+  // Rigorous cleanup: stop mic tracks and clear timer on unmount regardless of state
+  useEffect(() => {
+    return () => {
+      clearVoiceTimer()
+      stopMediaStream()
+    }
+  }, [clearVoiceTimer, stopMediaStream])
+
+  const startVoiceRecording = useCallback(async () => {
+    if (disabled || !conversationId || voiceState !== 'idle') return
+    if (isStartingVoiceRef.current) return
+    isStartingVoiceRef.current = true
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (error) {
+      isStartingVoiceRef.current = false
+      console.error('[MessageInput] Erro ao acessar microfone:', error)
+      toast.error('Não foi possível acessar o microfone')
+      return
+    }
+
+    // Defesa extra: nunca deixe um stream anterior órfão ao assumir o novo.
+    stopMediaStream()
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+      ? 'audio/ogg;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : undefined
+
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+    voiceChunksRef.current = []
+    voiceCancelledRef.current = false
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) voiceChunksRef.current.push(e.data)
+    }
+
+    recorder.onstop = () => {
+      stopMediaStream()
+      clearVoiceTimer()
+      const cancelled = voiceCancelledRef.current
+      const chunks = voiceChunksRef.current
+      voiceChunksRef.current = []
+      setVoiceSeconds(0)
+
+      if (cancelled || chunks.length === 0) {
+        setVoiceState('idle')
+        return
+      }
+
+      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
+      setVoiceBlob(blob)
+      setVoicePreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return URL.createObjectURL(blob)
+      })
+      setVoiceState('preview')
+    }
+
+    mediaRecorderRef.current = recorder
+    mediaStreamRef.current = stream
+    setVoiceSeconds(0)
+    setVoiceState('recording')
+    recorder.start()
+    isStartingVoiceRef.current = false
+
+    voiceTimerRef.current = setInterval(() => {
+      setVoiceSeconds((s) => s + 1)
+    }, 1000)
+  }, [disabled, conversationId, voiceState, stopMediaStream, clearVoiceTimer])
+
+  const stopVoiceRecording = useCallback(() => {
+    voiceCancelledRef.current = false
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+  }, [])
+
+  const cancelVoiceRecording = useCallback(() => {
+    voiceCancelledRef.current = true
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop()
+    } else {
+      // Recorder já inativo (ex.: clique duplo): garante limpeza e volta ao idle.
+      stopMediaStream()
+      clearVoiceTimer()
+      setVoiceSeconds(0)
+      setVoiceState('idle')
+    }
+  }, [stopMediaStream, clearVoiceTimer])
+
+  const discardVoicePreview = useCallback(() => {
+    setVoicePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setVoiceBlob(null)
+    setVoiceState('idle')
+  }, [])
+
+  const handleSendVoice = useCallback(async () => {
+    if (!voiceBlob || !conversationId || voiceState !== 'preview') return
+
+    setVoiceState('sending')
+    try {
+      const isOgg = voiceBlob.type.includes('ogg')
+      const filename = isOgg ? 'voice.ogg' : 'voice.webm'
+      const formData = new FormData()
+      formData.append('file', voiceBlob, filename)
+      formData.append('voice', 'true')
+
+      const response = await fetch(`/api/inbox/conversations/${conversationId}/media`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao enviar nota de voz')
+      }
+
+      toast.success('Nota de voz enviada')
+      setVoicePreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setVoiceBlob(null)
+      setVoiceState('idle')
+    } catch (error) {
+      console.error('[MessageInput] Erro ao enviar nota de voz:', error)
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar nota de voz')
+      setVoiceState('preview')
+    }
+  }, [voiceBlob, conversationId, voiceState])
 
   // Detect shortcut pattern: /word at start or after space
   const shortcutMatch = useMemo(() => {
@@ -452,6 +634,92 @@ export function MessageInput({
         </div>
       )}
 
+      {/* Voice recording / preview - Fase 5B (Task 4) */}
+      {voiceState !== 'idle' && (
+        <div className="px-3 pt-3 border-b border-[var(--ds-border-subtle)] pb-3">
+          <div className="flex items-center gap-3 bg-[var(--ds-bg-surface)]/50 rounded-lg p-2.5">
+            {voiceState === 'recording' ? (
+              <>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                  <span className="text-sm font-mono text-[var(--ds-text-primary)]">
+                    {formatDuration(voiceSeconds)}
+                  </span>
+                  <span className="text-xs text-[var(--ds-text-muted)]">Gravando...</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={cancelVoiceRecording}
+                    className={cn(
+                      'h-8 w-8 rounded-md flex items-center justify-center',
+                      'text-[var(--ds-text-muted)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]',
+                      'transition-colors'
+                    )}
+                    title="Cancelar"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopVoiceRecording}
+                    className={cn(
+                      'h-8 w-8 rounded-md flex items-center justify-center',
+                      'bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95',
+                      'transition-all'
+                    )}
+                    title="Parar"
+                  >
+                    <Square className="h-3.5 w-3.5" fill="currentColor" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {voicePreviewUrl && (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <audio controls src={voicePreviewUrl} className="flex-1 min-w-0 h-9" />
+                )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={discardVoicePreview}
+                    disabled={voiceState === 'sending'}
+                    className={cn(
+                      'h-8 w-8 rounded-md flex items-center justify-center',
+                      'text-[var(--ds-text-muted)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]',
+                      'transition-colors',
+                      voiceState === 'sending' && 'opacity-40 cursor-not-allowed'
+                    )}
+                    title="Cancelar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendVoice}
+                    disabled={voiceState === 'sending'}
+                    className={cn(
+                      'h-8 w-8 rounded-md flex items-center justify-center',
+                      'bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95',
+                      'transition-all',
+                      voiceState === 'sending' && 'opacity-50 cursor-not-allowed'
+                    )}
+                    title="Enviar"
+                  >
+                    {voiceState === 'sending' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end gap-2 p-3">
         {/* Quick replies */}
         <QuickRepliesPopover
@@ -475,11 +743,11 @@ export function MessageInput({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || !conversationId}
+              disabled={disabled || !conversationId || voiceState !== 'idle'}
               className={cn(
                 'h-9 w-9 shrink-0 rounded-lg flex items-center justify-center',
                 'transition-all duration-150',
-                disabled || !conversationId
+                disabled || !conversationId || voiceState !== 'idle'
                   ? 'text-[var(--ds-text-muted)] cursor-not-allowed'
                   : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]'
               )}
@@ -489,6 +757,29 @@ export function MessageInput({
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">
             Anexar arquivo
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Voice recording button - Fase 5B (Task 4) */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={startVoiceRecording}
+              disabled={disabled || !conversationId || !!attachedFile || voiceState !== 'idle'}
+              className={cn(
+                'h-9 w-9 shrink-0 rounded-lg flex items-center justify-center',
+                'transition-all duration-150',
+                disabled || !conversationId || !!attachedFile || voiceState !== 'idle'
+                  ? 'text-[var(--ds-text-muted)] cursor-not-allowed'
+                  : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]'
+              )}
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Gravar áudio
           </TooltipContent>
         </Tooltip>
 

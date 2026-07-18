@@ -194,6 +194,10 @@ export function MessageInput({
   const voiceChunksRef = useRef<Blob[]>([])
   const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const voiceCancelledRef = useRef(false)
+  // Guard síncrono contra duplo-clique: voiceState só vira 'recording' após o
+  // await getUserMedia, então dois cliques rápidos abririam dois streams e o
+  // primeiro ficaria órfão (mic preso). Este ref fecha essa janela.
+  const isStartingVoiceRef = useRef(false)
 
   const stopMediaStream = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
@@ -226,15 +230,21 @@ export function MessageInput({
 
   const startVoiceRecording = useCallback(async () => {
     if (disabled || !conversationId || voiceState !== 'idle') return
+    if (isStartingVoiceRef.current) return
+    isStartingVoiceRef.current = true
 
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (error) {
+      isStartingVoiceRef.current = false
       console.error('[MessageInput] Erro ao acessar microfone:', error)
       toast.error('Não foi possível acessar o microfone')
       return
     }
+
+    // Defesa extra: nunca deixe um stream anterior órfão ao assumir o novo.
+    stopMediaStream()
 
     const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
       ? 'audio/ogg;codecs=opus'
@@ -277,6 +287,7 @@ export function MessageInput({
     setVoiceSeconds(0)
     setVoiceState('recording')
     recorder.start()
+    isStartingVoiceRef.current = false
 
     voiceTimerRef.current = setInterval(() => {
       setVoiceSeconds((s) => s + 1)
@@ -285,13 +296,23 @@ export function MessageInput({
 
   const stopVoiceRecording = useCallback(() => {
     voiceCancelledRef.current = false
-    mediaRecorderRef.current?.stop()
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
   }, [])
 
   const cancelVoiceRecording = useCallback(() => {
     voiceCancelledRef.current = true
-    mediaRecorderRef.current?.stop()
-  }, [])
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop()
+    } else {
+      // Recorder já inativo (ex.: clique duplo): garante limpeza e volta ao idle.
+      stopMediaStream()
+      clearVoiceTimer()
+      setVoiceSeconds(0)
+      setVoiceState('idle')
+    }
+  }, [stopMediaStream, clearVoiceTimer])
 
   const discardVoicePreview = useCallback(() => {
     setVoicePreviewUrl((prev) => {

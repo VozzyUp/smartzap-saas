@@ -19,6 +19,7 @@ import { createCampaignProgressBroadcaster, broadcastCampaignPhase } from '@/lib
 import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { uploadMediaToMeta } from '@/lib/whatsapp/media'
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
@@ -726,45 +727,6 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
           const hashHeaderMediaSource = (value: string): string => {
             return createHash('sha256').update(value).digest('hex').slice(0, 32)
-          }
-
-          const uploadMediaToMeta = async (params: {
-            phoneNumberId: string
-            accessToken: string
-            buffer: Buffer
-            contentType?: string
-            filename: string
-          }): Promise<{ ok: boolean; status: number; id?: string; error?: string }> => {
-            try {
-              const form = new FormData()
-              const contentType = params.contentType || 'application/octet-stream'
-              form.append('messaging_product', 'whatsapp')
-              form.append('type', contentType)
-              const bytes = new Uint8Array(params.buffer)
-              form.append('file', new Blob([bytes], { type: contentType }), params.filename)
-
-              const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${params.accessToken}` },
-                body: form,
-              })
-              const body = await safeJson<any>(res)
-              if (!res.ok) {
-                return {
-                  ok: false,
-                  status: res.status,
-                  error: body?.error?.message || `HTTP ${res.status}`,
-                }
-              }
-              const id = String(body?.id || '').trim()
-              if (!id) {
-                return { ok: false, status: res.status, error: 'Resposta sem media_id' }
-              }
-              return { ok: true, status: res.status, id }
-            } catch (e) {
-              const msg = e instanceof Error ? e.message : String(e)
-              return { ok: false, status: 0, error: msg }
-            }
           }
 
           const ensureHeaderMediaIdForBatch = async (templateCandidate?: any): Promise<string | null> => {

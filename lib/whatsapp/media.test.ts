@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   buildImageMessage,
   buildVideoMessage,
@@ -8,6 +8,8 @@ import {
   buildLocationMessage,
   buildReactionMessage,
   buildCarouselMessage,
+  uploadMediaToMeta,
+  downloadMetaMedia,
 } from './media'
 
 // =============================================================================
@@ -470,5 +472,215 @@ describe('buildCarouselMessage', () => {
     const cards = [makeCard('image', 0), makeCard('image', 1)]
     const result = buildCarouselMessage({ to: '+5511999999999', cards })
     expect(result.context).toBeUndefined()
+  })
+})
+
+// =============================================================================
+// uploadMediaToMeta
+// =============================================================================
+describe('uploadMediaToMeta', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('deve montar multipart certo e chamar /media, retornando {ok:true,id}', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'media_abc123' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('fake-bytes'),
+      contentType: 'image/jpeg',
+      filename: 'foto.jpg',
+    })
+
+    expect(result).toEqual({ ok: true, id: 'media_abc123' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://graph.facebook.com/v24.0/phone123/media')
+    expect(init.method).toBe('POST')
+    expect(init.headers).toEqual({ Authorization: 'Bearer token123' })
+    expect(init.body).toBeInstanceOf(FormData)
+    const form = init.body as FormData
+    expect(form.get('messaging_product')).toBe('whatsapp')
+    expect(form.get('type')).toBe('image/jpeg')
+    const file = form.get('file') as File
+    expect(file).toBeTruthy()
+    expect(file.name).toBe('foto.jpg')
+    expect(file.type).toBe('image/jpeg')
+  })
+
+  it('deve usar "file" como filename padrão quando não informado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'media_xyz' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('bytes'),
+      contentType: 'application/pdf',
+    })
+
+    const form = fetchMock.mock.calls[0][1].body as FormData
+    const file = form.get('file') as File
+    expect(file.name).toBe('file')
+  })
+
+  it('deve retornar {ok:false,status,error} quando !res.ok', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Invalid parameter' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('bytes'),
+      contentType: 'image/jpeg',
+    })
+
+    expect(result).toEqual({ ok: false, status: 400, error: 'Invalid parameter' })
+  })
+
+  it('deve retornar {ok:false} quando a resposta não tem id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('bytes'),
+      contentType: 'image/jpeg',
+    })
+
+    expect(result.ok).toBe(false)
+    expect((result as any).error).toBe('Resposta sem media_id')
+  })
+
+  it('deve retornar {ok:false,status:0,error} quando fetch lança exceção', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('bytes'),
+      contentType: 'image/jpeg',
+    })
+
+    expect(result).toEqual({ ok: false, status: 0, error: 'network down' })
+  })
+})
+
+// =============================================================================
+// downloadMetaMedia
+// =============================================================================
+describe('downloadMetaMedia', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('deve baixar metadata e depois os bytes, retornando {ok:true,buffer,mime,size}', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          url: 'https://lookaside.fbsbx.com/whatsapp_business/attachments/xyz',
+          mime_type: 'image/jpeg',
+          file_size: 12345,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new TextEncoder().encode('fake-image-bytes').buffer,
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await downloadMetaMedia({ mediaId: 'mid_1', accessToken: 'token123' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://graph.facebook.com/v24.0/mid_1')
+    expect(fetchMock.mock.calls[0][1]).toEqual({ headers: { Authorization: 'Bearer token123' } })
+    expect(fetchMock.mock.calls[1][0]).toBe('https://lookaside.fbsbx.com/whatsapp_business/attachments/xyz')
+    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { Authorization: 'Bearer token123' } })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.mime).toBe('image/jpeg')
+      expect(result.size).toBe(12345)
+      expect(Buffer.isBuffer(result.buffer)).toBe(true)
+      expect(result.buffer.toString()).toBe('fake-image-bytes')
+    }
+  })
+
+  it('deve retornar {ok:false} quando a metadata falha', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: { message: 'Media not found' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await downloadMetaMedia({ mediaId: 'mid_bad', accessToken: 'token123' })
+
+    expect(result).toEqual({ ok: false, status: 404, error: 'Media not found' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('deve retornar {ok:false} quando a metadata não tem url', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ mime_type: 'image/jpeg' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await downloadMetaMedia({ mediaId: 'mid_1', accessToken: 'token123' })
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('deve retornar {ok:false} quando o download dos bytes falha', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ url: 'https://lookaside.fbsbx.com/attachments/xyz', mime_type: 'image/jpeg' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await downloadMetaMedia({ mediaId: 'mid_1', accessToken: 'token123' })
+
+    expect(result).toEqual({ ok: false, status: 500, error: 'download HTTP 500' })
+  })
+
+  it('deve retornar {ok:false,status:0,error} quando fetch lança exceção', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await downloadMetaMedia({ mediaId: 'mid_1', accessToken: 'token123' })
+
+    expect(result).toEqual({ ok: false, status: 0, error: 'network down' })
   })
 })

@@ -5,6 +5,12 @@
 
 import { getWhatsAppCredentials, type WhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { buildTextMessage } from '@/lib/whatsapp/text'
+import {
+  buildImageMessage,
+  buildVideoMessage,
+  buildAudioMessage,
+  buildDocumentMessage,
+} from '@/lib/whatsapp/media'
 import { fetchWithTimeout, safeJson, safeText } from '@/lib/server-http'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 
@@ -105,6 +111,130 @@ export async function sendWhatsAppMessage(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to send message',
+    }
+  }
+}
+
+// =============================================================================
+// MEDIA MESSAGE (Fase 5A — envio de mídia no inbox)
+// =============================================================================
+
+export interface SendWhatsAppMediaOptions {
+  /** Recipient phone number */
+  to: string
+  /** Media type — decide qual builder de `lib/whatsapp/media.ts` usar */
+  type: 'image' | 'audio' | 'video' | 'document'
+  /** media_id já enviado à Meta via uploadMediaToMeta (T2) */
+  mediaId: string
+  /** Legenda opcional (ignorada para audio, que não suporta caption) */
+  caption?: string
+  /** Nome do arquivo — obrigatório para document */
+  filename?: string
+  replyToMessageId?: string
+  /** Credentials override (optional - will fetch from settings if not provided) */
+  credentials?: WhatsAppCredentials
+}
+
+/**
+ * Send a WhatsApp media message (image/audio/video/document) a partir de um
+ * `media_id` já enviado à Meta.
+ *
+ * Implementado como função separada (em vez de estender o union `type` de
+ * `sendWhatsAppMessage`) para não tocar o caminho existente de text/template
+ * — este é o caminho de menor risco, já que `SendWhatsAppMessageOptions` é
+ * consumida por múltiplos call-sites que não esperam campos de mídia.
+ * Reusa o mesmo transport HTTP (fetchWithTimeout + safeJson/safeText) e os
+ * builders de `lib/whatsapp/media.ts`, que já produzem o payload correto
+ * (media_id + caption/filename).
+ */
+export async function sendWhatsAppMedia(
+  tenantId: string,
+  options: SendWhatsAppMediaOptions
+): Promise<SendWhatsAppMessageResult> {
+  const credentials = options.credentials || (await getWhatsAppCredentials(tenantId))
+  if (!credentials?.accessToken || !credentials?.phoneNumberId) {
+    return { success: false, error: 'WhatsApp credentials not configured' }
+  }
+
+  const normalizedTo = normalizePhoneNumber(options.to)
+  if (!normalizedTo || !/^\+\d{8,15}$/.test(normalizedTo)) {
+    return { success: false, error: `Invalid phone number: ${options.to}` }
+  }
+
+  let payload: Record<string, unknown>
+  switch (options.type) {
+    case 'image':
+      payload = buildImageMessage({
+        to: normalizedTo,
+        mediaId: options.mediaId,
+        caption: options.caption,
+        replyToMessageId: options.replyToMessageId,
+      }) as unknown as Record<string, unknown>
+      break
+    case 'video':
+      payload = buildVideoMessage({
+        to: normalizedTo,
+        mediaId: options.mediaId,
+        caption: options.caption,
+        replyToMessageId: options.replyToMessageId,
+      }) as unknown as Record<string, unknown>
+      break
+    case 'audio':
+      payload = buildAudioMessage({
+        to: normalizedTo,
+        mediaId: options.mediaId,
+        replyToMessageId: options.replyToMessageId,
+      }) as unknown as Record<string, unknown>
+      break
+    case 'document':
+      payload = buildDocumentMessage({
+        to: normalizedTo,
+        mediaId: options.mediaId,
+        filename: options.filename || 'file',
+        caption: options.caption,
+        replyToMessageId: options.replyToMessageId,
+      }) as unknown as Record<string, unknown>
+      break
+    default:
+      return { success: false, error: `Unsupported media type: ${options.type}` }
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${credentials.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        timeoutMs: 15000,
+      }
+    )
+
+    const data = await safeJson(response)
+
+    if (!response.ok) {
+      const details = data ?? (await safeText(response))
+      const metaError =
+        typeof details === 'object' && details !== null && 'error' in details
+          ? (details as { error?: { message?: string; code?: number } }).error
+          : undefined
+
+      return {
+        success: false,
+        error: metaError?.message || 'WhatsApp media send failed',
+        details,
+      }
+    }
+
+    const messageId = extractMessageId(data)
+    return { success: true, messageId }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send media message',
     }
   }
 }

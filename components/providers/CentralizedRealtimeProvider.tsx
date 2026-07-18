@@ -135,11 +135,22 @@ export function CentralizedRealtimeProvider({
         'postgres_changes',
         { event: '*', schema: 'public', table },
         (payload) => {
+          // media_path é caminho interno do Storage; o app nunca o usa (a UI
+          // busca a mídia via /api/inbox/media/[messageId]). Removemos do
+          // evento entregue aos subscribers para alinhar com o tipo InboxMessage
+          // e não propagar o path internamente.
+          const sanitize = (row: Record<string, unknown> | null | undefined) => {
+            if (row && table === 'inbox_messages' && 'media_path' in row) {
+              const { media_path: _mediaPath, ...rest } = row
+              return rest
+            }
+            return (row ?? null) as Record<string, unknown> | null
+          }
           const event: RealtimeEvent = {
             table,
             eventType: payload.eventType as RealtimeEventType,
-            new: payload.new as Record<string, unknown> | null,
-            old: payload.old as Record<string, unknown> | null,
+            new: sanitize(payload.new as Record<string, unknown> | null),
+            old: sanitize(payload.old as Record<string, unknown> | null),
           }
 
           // Notify subscribers

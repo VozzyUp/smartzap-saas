@@ -580,6 +580,13 @@ export interface InboxMessage {
   content: string;
   message_type: InboxMessageType;
   media_url: string | null;
+  // Fase 5A: mídia no inbox (media_path NÃO é exposto ao client — a UI usa
+  // GET /api/inbox/media/[messageId] para obter a signed URL).
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_size?: number | null;
+  media_duration?: number | null;
+  media_status?: 'ready' | 'pending' | 'failed' | null;
   whatsapp_message_id: string | null;
   delivery_status: DeliveryStatus;
   ai_response_id: string | null;

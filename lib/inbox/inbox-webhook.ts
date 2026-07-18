@@ -67,8 +67,16 @@ export interface InboundMessagePayload {
   text: string
   /** Raw message timestamp from Meta */
   timestamp?: string
-  /** Media URL if applicable */
+  /** Media URL if applicable (legado — Meta não envia URL direta; mantido por compat) */
   mediaUrl?: string | null
+  /** Meta media_id (message.<type>.id) para mensagens de mídia (image/audio/video/document/sticker) */
+  mediaId?: string | null
+  /** MIME type da mídia (message.<type>.mime_type) */
+  mediaMime?: string | null
+  /** Nome do arquivo (apenas document: message.document.filename) */
+  mediaFilename?: string | null
+  /** Legenda da mídia (message.<type>.caption, quando houver) */
+  caption?: string | null
   /** Phone number ID that received the message */
   phoneNumberId?: string
 }
@@ -106,6 +114,12 @@ export async function handleInboundMessage(
   const normalizedPhone = normalizePhoneNumber(payload.from)
   const supabase = getSupabaseAdmin()
 
+  // Para mensagens de mídia, o "conteúdo" é a legenda (caption), se houver —
+  // nunca o placeholder "[image]" etc. Sem mídia, mantém o comportamento atual.
+  const content = payload.mediaId
+    ? (payload.caption || '')
+    : (payload.text || `[${payload.type}]`)
+
   // Tenta usar RPC otimizada (V2)
   // Fix aplicado em 20260203000000_fix_process_inbound_message_types.sql
   if (supabase) {
@@ -113,7 +127,7 @@ export async function handleInboundMessage(
       const { data, error } = await supabase.rpc('process_inbound_message', {
         p_tenant_id: payload.tenantId,
         p_phone: normalizedPhone,
-        p_content: payload.text || `[${payload.type}]`,
+        p_content: content,
         p_whatsapp_message_id: payload.messageId || null,
         p_message_type: mapMessageType(payload.type),
         p_media_url: payload.mediaUrl || null,
@@ -166,6 +180,19 @@ export async function handleInboundMessage(
 
             triggeredAI = await triggerAIProcessing(conversationForTrigger, messageForTrigger)
           }
+        }
+
+        // Mídia (image/audio/video/document/sticker): a RPC (schema fixo) não
+        // grava media_mime/media_filename/media_status — UPDATE pós-RPC,
+        // escopado por tenant+id, em vez de alterar a função SQL.
+        if (payload.mediaId) {
+          await persistMediaPending(payload, result.message_id)
+          await enqueueMediaIngest({
+            tenantId: payload.tenantId,
+            conversationId: result.conversation_id,
+            messageId: result.message_id,
+            mediaId: payload.mediaId,
+          })
         }
 
         return {
@@ -237,12 +264,15 @@ async function handleInboundMessageLegacy(
     }
   }
 
-  // 2. Cria mensagem
+  // 2. Cria mensagem (mídia: content = legenda, nunca o placeholder "[type]")
+  const legacyContent = payload.mediaId
+    ? (payload.caption || '')
+    : (payload.text || `[${payload.type}]`)
   const message = await inboxDb.createMessage({
     tenant_id: payload.tenantId,
     conversation_id: conversation.id,
     direction: 'inbound',
-    content: payload.text || `[${payload.type}]`,
+    content: legacyContent,
     message_type: mapMessageType(payload.type),
     whatsapp_message_id: payload.messageId || undefined,
     media_url: payload.mediaUrl || undefined,
@@ -253,6 +283,18 @@ async function handleInboundMessageLegacy(
       phone_number_id: payload.phoneNumberId,
     },
   })
+
+  // Mídia: mesmo caminho de persistência pós-insert usado na RPC, para não
+  // depender de CreateInboxMessageDTO expor os campos novos.
+  if (payload.mediaId) {
+    await persistMediaPending(payload, message.id)
+    await enqueueMediaIngest({
+      tenantId: payload.tenantId,
+      conversationId: conversation.id,
+      messageId: message.id,
+      mediaId: payload.mediaId,
+    })
+  }
 
   // 3. Trigger AI
   let triggeredAI = false
@@ -545,8 +587,98 @@ export async function handleDeliveryStatus(
 }
 
 // =============================================================================
-// Helper Functions
+// Mídia recebida (Fase 5A): marca pending + enfileira download (T4)
 // =============================================================================
+
+/**
+ * Marca a mensagem recém-persistida com os metadados de mídia recebida e
+ * `media_status='pending'`. `media_path` NÃO é gravado aqui — só depois do
+ * download bem-sucedido (job de ingest, T5).
+ *
+ * A RPC `process_inbound_message` tem assinatura fixa e não conhece esses
+ * campos; em vez de alterar a função SQL, fazemos um UPDATE pós-insert
+ * escopado por tenant+id (mesmo caminho serve o fallback legacy, que também
+ * não expõe esses campos em `CreateInboxMessageDTO`).
+ */
+async function persistMediaPending(payload: InboundMessagePayload, messageId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return
+  try {
+    const { error } = await supabase
+      .from('inbox_messages')
+      .update({
+        media_status: 'pending',
+        media_mime: payload.mediaMime || null,
+        media_filename: payload.mediaFilename || null,
+      })
+      .eq('tenant_id', payload.tenantId)
+      .eq('id', messageId)
+    if (error) {
+      console.error('[InboxMedia] Falha ao marcar media_status=pending:', error.message)
+    }
+  } catch (e) {
+    console.error('[InboxMedia] Erro inesperado ao marcar media_status=pending:', e)
+  }
+}
+
+/**
+ * Enfileira o download da mídia recebida via QStash (`/api/inbox/media/ingest`,
+ * T5), fora do caminho síncrono do webhook (a Meta re-tenta se o webhook
+ * demora). Nunca lança — o recebimento da mensagem não pode falhar por causa
+ * da mídia.
+ *
+ * Fallback dev: sem `QSTASH_TOKEN` (ou falha ao publicar), processa o
+ * download inline (best-effort), reusando `storeInboundMedia` (T3) com o
+ * access_token do tenant.
+ */
+async function enqueueMediaIngest(params: {
+  tenantId: string
+  conversationId: string
+  messageId: string
+  mediaId: string
+}): Promise<void> {
+  const { tenantId, conversationId, messageId, mediaId } = params
+  const qstash = getQStashClient()
+
+  if (qstash) {
+    try {
+      const baseUrl = getAppUrl()
+      const ingestUrl = `${baseUrl}/api/inbox/media/ingest`
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      const apiKey = process.env.SMARTZAP_API_KEY
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
+      await qstash.publishJSON({
+        url: ingestUrl,
+        body: { tenantId, conversationId, messageId, mediaId },
+        headers,
+        retries: 2,
+        // Dedup: evita reprocessar a mesma mensagem em retries do QStash.
+        deduplicationId: `inbox_media_${messageId}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+      })
+      console.log(`[InboxMedia] Enfileirado download da mídia ${mediaId} (msg=${messageId})`)
+      return
+    } catch (e) {
+      console.error('[InboxMedia] Falha ao enfileirar via QStash, tentando fallback inline (dev):', e)
+    }
+  }
+
+  // Fallback dev (sem QSTASH_TOKEN, ou publish falhou): baixa inline.
+  try {
+    const [{ storeInboundMedia }, { getWhatsAppCredentials }] = await Promise.all([
+      import('@/lib/inbox/inbox-media'),
+      import('@/lib/whatsapp-credentials'),
+    ])
+    const creds = await getWhatsAppCredentials(tenantId)
+    if (!creds?.accessToken) {
+      console.warn('[InboxMedia] Sem credenciais WhatsApp para baixar mídia inline (dev fallback)')
+      return
+    }
+    await storeInboundMedia({ tenantId, conversationId, messageId, mediaId, accessToken: creds.accessToken })
+  } catch (e) {
+    console.error('[InboxMedia] Fallback inline de ingest de mídia falhou:', e)
+  }
+}
 
 /**
  * Find contact ID by phone number

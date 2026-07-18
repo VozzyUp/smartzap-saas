@@ -985,6 +985,16 @@ export async function POST(request: NextRequest) {
           const phoneNumberId = change?.value?.metadata?.phone_number_id || null
           console.log(`📩 Incoming message from ${from}: ${messageType}${text ? ` | text="${text}"` : ''}`)
 
+          // Mídia (Fase 5A): a Meta manda `message.<type> = { id, mime_type,
+          // sha256, caption?, filename? (document) }` — NUNCA uma `.url`
+          // direta. Extrai só para os tipos de mídia suportados.
+          const MEDIA_MESSAGE_TYPES = ['image', 'audio', 'video', 'document', 'sticker']
+          const isMediaMessage = MEDIA_MESSAGE_TYPES.includes(messageType)
+          const mediaId: string | null = isMediaMessage ? (message[messageType]?.id ?? null) : null
+          const mediaMime: string | null = isMediaMessage ? (message[messageType]?.mime_type ?? null) : null
+          const mediaFilename: string | null = messageType === 'document' ? (message.document?.filename ?? null) : null
+          const caption: string | null = isMediaMessage ? (message[messageType]?.caption ?? null) : null
+
           // =================================================================
           // T046-T047: Persist to Inbox and trigger AI if mode=bot
           // =================================================================
@@ -996,7 +1006,10 @@ export async function POST(request: NextRequest) {
               type: messageType,
               text,
               timestamp: message.timestamp,
-              mediaUrl: message.image?.url || message.video?.url || message.audio?.url || message.document?.url || null,
+              mediaId,
+              mediaMime,
+              mediaFilename,
+              caption,
               phoneNumberId: phoneNumberId || undefined,
             })
             console.log(`📥 Inbox: conversation=${inboxResult.conversationId}, message=${inboxResult.messageId}, ai=${inboxResult.triggeredAI}`)

@@ -270,6 +270,76 @@ export function buildReactionMessage(options: BuildReactionMessageOptions): Reac
 }
 
 // =============================================================================
+// META MEDIA UPLOAD / DOWNLOAD (transport)
+// =============================================================================
+
+/**
+ * Faz upload de um buffer de mídia para a Meta (WhatsApp Cloud API),
+ * retornando o media_id a ser usado nos builders acima (mediaId).
+ */
+export async function uploadMediaToMeta(params: {
+  phoneNumberId: string
+  accessToken: string
+  buffer: Buffer | Uint8Array
+  contentType: string
+  filename?: string
+}): Promise<{ ok: true; id: string } | { ok: false; status: number; error: string }> {
+  try {
+    const form = new FormData()
+    form.append('messaging_product', 'whatsapp')
+    form.append('type', params.contentType)
+    const bytes = new Uint8Array(params.buffer)
+    form.append('file', new Blob([bytes], { type: params.contentType }), params.filename ?? 'file')
+    const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+      body: form,
+    })
+    const body = (await res.json().catch(() => null)) as any
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: body?.error?.message || `HTTP ${res.status}` }
+    }
+    const id = String(body?.id || '').trim()
+    if (!id) return { ok: false, status: res.status, error: 'Resposta sem media_id' }
+    return { ok: true, id }
+  } catch (e) {
+    return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/**
+ * Baixa uma mídia recebida da Meta: resolve a URL temporária via metadata
+ * e então baixa os bytes com o mesmo token.
+ */
+export async function downloadMetaMedia(params: {
+  mediaId: string
+  accessToken: string
+}): Promise<
+  { ok: true; buffer: Buffer; mime: string; size: number } | { ok: false; status: number; error: string }
+> {
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v24.0/${params.mediaId}`, {
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+    })
+    const meta = (await metaRes.json().catch(() => null)) as any
+    if (!metaRes.ok || !meta?.url) {
+      return { ok: false, status: metaRes.status, error: meta?.error?.message || 'sem url de mídia' }
+    }
+    const binRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${params.accessToken}` } })
+    if (!binRes.ok) return { ok: false, status: binRes.status, error: `download HTTP ${binRes.status}` }
+    const buffer = Buffer.from(await binRes.arrayBuffer())
+    return {
+      ok: true,
+      buffer,
+      mime: meta.mime_type || 'application/octet-stream',
+      size: Number(meta.file_size) || buffer.length,
+    }
+  } catch (e) {
+    return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// =============================================================================
 // MEDIA CAROUSEL (2-10 cards)
 // =============================================================================
 

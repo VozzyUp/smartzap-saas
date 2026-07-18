@@ -12,7 +12,8 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { Send, Loader2, Sparkles } from 'lucide-react'
+import { Send, Loader2, Sparkles, Paperclip, X, FileText, Music } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -32,10 +33,41 @@ export interface MessageInputProps {
   quickRepliesLoading?: boolean
   /** Callback to refresh quick replies after CRUD operations */
   onRefreshQuickReplies?: () => void
-  /** Conversation ID for AI suggestions */
+  /** Conversation ID for AI suggestions and for sending attachments */
   conversationId?: string | null
   /** Whether to show AI suggest button */
   showAISuggest?: boolean
+}
+
+type AttachmentKind = 'image' | 'video' | 'audio' | 'document'
+
+const MAX_SIZE_BY_KIND: Record<AttachmentKind, number> = {
+  image: 5 * 1024 * 1024,
+  video: 16 * 1024 * 1024,
+  audio: 16 * 1024 * 1024,
+  document: 100 * 1024 * 1024,
+}
+
+const ACCEPTED_FILE_TYPES =
+  'image/*,video/*,audio/*,application/pdf,application/msword,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
+  'application/vnd.ms-excel,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,' +
+  'application/vnd.ms-powerpoint,' +
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation,' +
+  'text/plain,text/csv'
+
+function attachmentKindFromMime(mime: string): AttachmentKind {
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function MessageInput({
@@ -57,6 +89,92 @@ export function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autocompleteRef = useRef<HTMLDivElement>(null)
   const wasSendingRef = useRef(false)
+
+  // Attachment (Fase 5A - Task 9)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null)
+  const [attachmentCaption, setAttachmentCaption] = useState('')
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const attachmentKind = useMemo(
+    () => (attachedFile ? attachmentKindFromMime(attachedFile.type || '') : null),
+    [attachedFile]
+  )
+
+  // Revoke the object URL when the attachment changes or the component unmounts
+  useEffect(() => {
+    return () => {
+      if (attachmentPreviewUrl) {
+        URL.revokeObjectURL(attachmentPreviewUrl)
+      }
+    }
+  }, [attachmentPreviewUrl])
+
+  const clearAttachment = useCallback(() => {
+    setAttachmentPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setAttachedFile(null)
+    setAttachmentCaption('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [])
+
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const kind = attachmentKindFromMime(file.type || '')
+    const maxSize = MAX_SIZE_BY_KIND[kind]
+    if (file.size > maxSize) {
+      toast.error(
+        `Arquivo muito grande para ${kind} (máx. ${formatFileSize(maxSize)})`
+      )
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    setAttachmentPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return kind === 'image' || kind === 'video' ? URL.createObjectURL(file) : null
+    })
+    setAttachedFile(file)
+    setAttachmentCaption('')
+  }, [])
+
+  const handleSendAttachment = useCallback(async () => {
+    if (!attachedFile || !conversationId || isUploadingAttachment || disabled) return
+
+    setIsUploadingAttachment(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', attachedFile)
+      if (attachmentCaption.trim()) {
+        formData.append('caption', attachmentCaption.trim())
+      }
+
+      const response = await fetch(`/api/inbox/conversations/${conversationId}/media`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao enviar arquivo')
+      }
+
+      toast.success('Arquivo enviado')
+      clearAttachment()
+    } catch (error) {
+      console.error('[MessageInput] Erro ao enviar anexo:', error)
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar arquivo')
+    } finally {
+      setIsUploadingAttachment(false)
+    }
+  }, [attachedFile, attachmentCaption, conversationId, isUploadingAttachment, disabled, clearAttachment])
 
   // Detect shortcut pattern: /word at start or after space
   const shortcutMatch = useMemo(() => {
@@ -249,6 +367,91 @@ export function MessageInput({
         </div>
       )}
 
+      {/* Attachment preview - Fase 5A (Task 9) */}
+      {attachedFile && (
+        <div className="px-3 pt-3 border-b border-[var(--ds-border-subtle)] pb-3">
+          <div className="flex items-start gap-3 bg-[var(--ds-bg-surface)]/50 rounded-lg p-2.5">
+            {/* Thumbnail / icon */}
+            <div className="shrink-0 h-14 w-14 rounded-md overflow-hidden bg-[var(--ds-bg-hover)] flex items-center justify-center">
+              {attachmentKind === 'image' && attachmentPreviewUrl ? (
+                <img
+                  src={attachmentPreviewUrl}
+                  alt={attachedFile.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : attachmentKind === 'video' && attachmentPreviewUrl ? (
+                <video src={attachmentPreviewUrl} className="h-full w-full object-cover" muted />
+              ) : attachmentKind === 'audio' ? (
+                <Music className="h-5 w-5 text-[var(--ds-text-muted)]" />
+              ) : (
+                <FileText className="h-5 w-5 text-[var(--ds-text-muted)]" />
+              )}
+            </div>
+
+            {/* File info + caption */}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-[var(--ds-text-primary)] truncate">
+                {attachedFile.name}
+              </p>
+              <p className="text-[10px] text-[var(--ds-text-muted)] mb-1.5">
+                {formatFileSize(attachedFile.size)}
+              </p>
+              <input
+                type="text"
+                value={attachmentCaption}
+                onChange={(e) => setAttachmentCaption(e.target.value)}
+                placeholder="Adicionar legenda (opcional)"
+                disabled={isUploadingAttachment}
+                className={cn(
+                  'w-full text-xs px-2 py-1.5 rounded-md',
+                  'bg-[var(--ds-bg-surface)] border border-[var(--ds-border-subtle)]',
+                  'text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]',
+                  'focus:outline-none focus:border-[var(--ds-border-strong)]',
+                  isUploadingAttachment && 'opacity-50'
+                )}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={clearAttachment}
+                disabled={isUploadingAttachment}
+                className={cn(
+                  'h-8 w-8 rounded-md flex items-center justify-center',
+                  'text-[var(--ds-text-muted)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]',
+                  'transition-colors',
+                  isUploadingAttachment && 'opacity-40 cursor-not-allowed'
+                )}
+                title="Cancelar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleSendAttachment}
+                disabled={isUploadingAttachment || !conversationId || disabled}
+                className={cn(
+                  'h-8 w-8 rounded-md flex items-center justify-center',
+                  'bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95',
+                  'transition-all',
+                  (isUploadingAttachment || !conversationId || disabled) &&
+                    'opacity-50 cursor-not-allowed'
+                )}
+                title="Enviar"
+              >
+                {isUploadingAttachment ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end gap-2 p-3">
         {/* Quick replies */}
         <QuickRepliesPopover
@@ -257,6 +460,37 @@ export function MessageInput({
           isLoading={quickRepliesLoading}
           onRefresh={onRefreshQuickReplies}
         />
+
+        {/* Attachment button - Fase 5A (Task 9) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          hidden
+          accept={ACCEPTED_FILE_TYPES}
+          onChange={handleFileSelected}
+          disabled={disabled}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || !conversationId}
+              className={cn(
+                'h-9 w-9 shrink-0 rounded-lg flex items-center justify-center',
+                'transition-all duration-150',
+                disabled || !conversationId
+                  ? 'text-[var(--ds-text-muted)] cursor-not-allowed'
+                  : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]'
+              )}
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Anexar arquivo
+          </TooltipContent>
+        </Tooltip>
 
         {/* AI Suggest button */}
         {showAISuggest && (

@@ -92,4 +92,12 @@ async function handler(request: NextRequest): Promise<Response> {
   return NextResponse.json({ success: true }, { status: 200 })
 }
 
-export const POST = verifySignatureAppRouter(handler)
+// IMPORTANTE: construir o verificador DENTRO do POST (não no escopo do módulo).
+// `verifySignatureAppRouter` lê QSTASH_CURRENT_SIGNING_KEY/NEXT no momento em
+// que é chamado; no escopo do módulo isso rodaria durante o `next build` (que
+// não tem os secrets de runtime) e quebraria o build. Diferindo para o request,
+// o build só importa a rota sem executar a verificação; em produção as chaves
+// existem em runtime e a verificação roda normalmente.
+export async function POST(request: NextRequest): Promise<Response> {
+  return verifySignatureAppRouter(handler)(request as any)
+}

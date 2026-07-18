@@ -17,6 +17,7 @@ import {
     Workflow,
     Shield,
     CreditCard,
+    Smartphone,
 } from 'lucide-react'
 import React from 'react'
 import { HealthStatus } from '@/lib/health-check'
@@ -361,6 +362,7 @@ export function DashboardShell({
         { path: '/contacts', label: 'Contatos', icon: Users },
         { path: '/settings/ai', label: 'IA', icon: Sparkles },
         { path: '/settings/plano', label: 'Meu Plano', icon: CreditCard },
+        { path: '/settings/numeros', label: 'Números de WhatsApp', icon: Smartphone },
         { path: '/settings', label: 'Configurações', icon: Settings },
         { path: '/admin', label: 'Admin', icon: Shield, hidden: !isPlatformAdmin },
     ].filter(item => !item.hidden), [isDevMode, isPlatformAdmin])
@@ -385,6 +387,7 @@ export function DashboardShell({
         if (path === '/settings/ai') return 'Central de IA'
         if (path === '/settings/ai/agents') return 'Agentes IA'
         if (path === '/settings/plano') return 'Meu Plano'
+        if (path === '/settings/numeros') return 'Números de WhatsApp'
         if (path.startsWith('/settings')) return 'Configurações'
         if (path.startsWith('/admin')) return 'Admin'
         return 'App'

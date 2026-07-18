@@ -51,6 +51,10 @@ Identificador em todas estas funções é o `phoneNumberId` (a PK text), não um
 - `getWhatsAppCredentials(tenantId)` (assinatura inalterada): tenta `getActiveWhatsAppNumber(tenantId)`; se existir, retorna suas credenciais; **senão**, cai no comportamento atual (lê `settings`). Fail-safe.
 - **Novo** `getWhatsAppCredentialsForNumber(tenantId, whatsappNumberId): Promise<WhatsAppCredentials | null>` — credenciais de um número específico (para o reply do inbox); se `whatsappNumberId` for null, delega ao ativo/legado.
 
+**Espelho ativo → `settings` (compat obrigatória):** `isWhatsAppConnected` e o GET `/api/settings/credentials` leem `settings.isConnected/phoneNumberId/accessToken` diretamente — é o que alimenta o health-check e o loop de onboarding. Portanto, sempre que o número ativo muda (add do 1º, `setActive`, `remove` que promove outro), espelhar as credenciais do ativo em `settings` (`phoneNumberId/businessAccountId/accessToken/isConnected=true`); se ficar sem nenhum número, `isConnected=false`. Helper `mirrorActiveToSettings(tenantId)` chamado por add/setActive/remove. Assim toda leitura legada continua correta sem tocar nos 47 call-sites.
+
+**Flows webhook token:** `getOrCreateFlowsWebhookToken(tenantId)` hoje faz `.eq('tenant_id').maybeSingle()` (assume 1 linha) — com N linhas isso lança. Passa a operar sobre a linha **ativa** (`.eq('tenant_id').eq('is_active', true).maybeSingle()`).
+
 ### 4. Recebimento e resposta do inbox
 - **Webhook (recebimento):** ao criar/obter a conversa, resolver a linha de `whatsapp_phone_numbers` pelo `phone_number_id` que recebeu e gravar `whatsapp_number_id` na conversa (via `getOrCreateConversation`/`createConversation` — adicionar o parâmetro).
 - **Reply (`lib/inbox/inbox-service.ts`):** em vez de `getWhatsAppCredentials(tenantId)`, usar `getWhatsAppCredentialsForNumber(tenantId, conversation.whatsapp_number_id)` (o `whatsapp_number_id` é o `phone_number_id` da conversa). Se null (conversa antiga), usa o ativo/legado.

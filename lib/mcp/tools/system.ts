@@ -266,6 +266,7 @@ export function registerSystemTools(server: McpServer) {
             automation_paused_by: null,
             handoff_summary: null,
             human_mode_expires_at: null,
+            whatsapp_number_id: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }

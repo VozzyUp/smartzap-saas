@@ -561,6 +561,8 @@ export interface InboxConversation {
   handoff_summary: string | null;
   /** When human mode should auto-expire back to bot mode. NULL = never expires. */
   human_mode_expires_at: string | null;
+  /** phone_number_id (whatsapp_phone_numbers) que recebeu a mensagem. NULL = conversa antiga, cai para o número ativo. */
+  whatsapp_number_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined fields
@@ -701,6 +703,7 @@ export interface CreateInboxConversationDTO {
   contact_id?: string;
   ai_agent_id?: string;
   mode?: ConversationMode;
+  whatsapp_number_id?: string | null;
 }
 
 export interface UpdateInboxConversationDTO {
@@ -709,6 +712,7 @@ export interface UpdateInboxConversationDTO {
   priority?: ConversationPriority;
   ai_agent_id?: string;
   labels?: string[]; // label IDs
+  whatsapp_number_id?: string | null;
 }
 
 export interface CreateInboxMessageDTO {

@@ -14,14 +14,20 @@ vi.mock('@/lib/supabase-db', () => ({
     set: (...a: any[]) => setMock(...a),
   },
 }))
-const upsertMock = vi.fn(async () => {})
-const clearMock = vi.fn(async () => {})
+const addMock = vi.fn(async () => {})
+const mirrorMock = vi.fn(async () => {})
+const getActiveMock = vi.fn(async () => ({ phone_number_id: 'pn_ativo', tenant_id: 't1', business_account_id: 'ba', access_token: 'tok', display_label: null, is_active: true }))
+const removeMock = vi.fn(async () => {})
+const listMock = vi.fn(async () => [] as any[])
 // resolveTenantByPhoneNumberId devolve o próprio tenant → o número já é do tenant
 // (reconexão), então o gate de plano da Fase 3A não trata como número novo e não bloqueia.
 const resolveMock = vi.fn(async () => 't1')
 vi.mock('@/lib/whatsapp-phone-numbers', () => ({
-  upsertWhatsAppPhoneNumber: (...a: any[]) => upsertMock(...a),
-  clearWhatsAppPhoneNumber: (...a: any[]) => clearMock(...a),
+  addWhatsAppNumber: (...a: any[]) => addMock(...a),
+  mirrorActiveToSettings: (...a: any[]) => mirrorMock(...a),
+  getActiveWhatsAppNumber: (...a: any[]) => getActiveMock(...a),
+  removeWhatsAppNumber: (...a: any[]) => removeMock(...a),
+  listWhatsAppNumbers: (...a: any[]) => listMock(...a),
   resolveTenantByPhoneNumberId: (...a: any[]) => resolveMock(...a),
 }))
 vi.mock('@/lib/server-http', () => ({
@@ -37,20 +43,38 @@ import { POST, DELETE } from './route'
 
 describe('settings/credentials write-through', () => {
   beforeEach(() => {
-    upsertMock.mockClear(); clearMock.mockClear(); saveAllMock.mockClear(); setMock.mockClear()
+    addMock.mockClear(); mirrorMock.mockClear(); saveAllMock.mockClear(); setMock.mockClear()
+    getActiveMock.mockClear(); removeMock.mockClear(); listMock.mockClear()
+    getActiveMock.mockResolvedValue({ phone_number_id: 'pn_ativo', tenant_id: 't1', business_account_id: 'ba', access_token: 'tok', display_label: null, is_active: true })
+    listMock.mockResolvedValue([])
   })
 
-  it('POST faz upsert em whatsapp_phone_numbers após salvar credenciais', async () => {
+  it('POST grava o token na tabela via addWhatsAppNumber e espelha em settings', async () => {
     const req = new NextRequest('http://localhost/api/settings/credentials', {
       method: 'POST',
       body: JSON.stringify({ phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' }),
     })
     await POST(req)
-    expect(upsertMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1' })
+    expect(addMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' })
+    expect(mirrorMock).toHaveBeenCalledWith('t1')
   })
 
-  it('DELETE limpa whatsapp_phone_numbers', async () => {
+  it('DELETE remove só o número ativo (não apaga todos) e espelha', async () => {
     await DELETE()
-    expect(clearMock).toHaveBeenCalledWith('t1')
+    expect(removeMock).toHaveBeenCalledWith('t1', 'pn_ativo')
+    expect(mirrorMock).toHaveBeenCalledWith('t1')
+  })
+
+  it('DELETE limpa metaApp só quando não sobra número', async () => {
+    listMock.mockResolvedValueOnce([]) // nenhum número restante
+    await DELETE()
+    expect(setMock).toHaveBeenCalledWith('t1', 'metaAppId', '')
+    expect(setMock).toHaveBeenCalledWith('t1', 'metaAppSecret', '')
+  })
+
+  it('DELETE NÃO limpa metaApp quando ainda sobram números', async () => {
+    listMock.mockResolvedValueOnce([{ phone_number_id: 'pn_2' }]) // sobra um
+    await DELETE()
+    expect(setMock).not.toHaveBeenCalledWith('t1', 'metaAppId', '')
   })
 })

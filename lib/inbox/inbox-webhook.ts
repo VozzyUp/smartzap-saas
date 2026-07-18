@@ -22,6 +22,7 @@ import type {
   InboxConversation,
   InboxMessage,
   AIAgent,
+  UpdateInboxConversationDTO,
 } from '@/types'
 
 // Tipo para conversa lightweight (retorno otimizado do webhook)
@@ -122,6 +123,7 @@ export async function handleInboundMessage(
           phone_number_id: payload.phoneNumberId,
         },
         p_contact_id: null, // Contact lookup done inside RPC if needed
+        p_phone_number_id: payload.phoneNumberId || null,
       })
 
       if (!error && data) {
@@ -210,6 +212,7 @@ async function handleInboundMessageLegacy(
       phone: normalizedPhone,
       contact_id: contactId || undefined,
       mode: 'bot',
+      whatsapp_number_id: payload.phoneNumberId || null,
     })
     conversation = {
       id: fullConversation.id,
@@ -223,8 +226,15 @@ async function handleInboundMessageLegacy(
       total_messages: fullConversation.total_messages,
       unread_count: fullConversation.unread_count,
     }
-  } else if (conversation.status === 'closed') {
-    await inboxDb.updateConversation(conversation.id, { status: 'open' })
+  } else {
+    // Conversa existente: reabre se fechada e atualiza o número que recebeu
+    // a mensagem mais recente (a resposta do inbox sai por esse número).
+    const updates: { status?: 'open'; whatsapp_number_id?: string | null } = {}
+    if (conversation.status === 'closed') updates.status = 'open'
+    if (payload.phoneNumberId) updates.whatsapp_number_id = payload.phoneNumberId
+    if (Object.keys(updates).length > 0) {
+      await inboxDb.updateConversation(conversation.id, updates as UpdateInboxConversationDTO)
+    }
   }
 
   // 2. Cria mensagem

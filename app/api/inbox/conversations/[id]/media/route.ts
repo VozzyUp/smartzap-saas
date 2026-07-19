@@ -130,7 +130,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // áudio original (pode falhar a whitelist normalmente, como antes da 5B).
     if (isVoice && originalMime.startsWith('audio/')) {
       const r = await remuxToOggOpus(buffer, originalMime)
-      if (!r.remuxed || r.mime !== 'audio/ogg') {
+      const remuxedBaseMime = r.mime.toLowerCase().split(';')[0].trim()
+      if (!r.remuxed || remuxedBaseMime !== 'audio/ogg') {
         return NextResponse.json(
           {
             error: 'Não foi possível converter a gravação para OGG/Opus. Tente gravar novamente.',
@@ -140,10 +141,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       buffer = r.buffer
       mime = r.mime
-      filename = r.mime === 'audio/ogg' ? 'voice.ogg' : originalFilename
+      filename = remuxedBaseMime === 'audio/ogg' ? 'voice.ogg' : originalFilename
     }
 
-    if (!ALLOWED_MIME_BY_TYPE[messageType].includes(mime)) {
+    const baseMime = mime.toLowerCase().split(';')[0].trim()
+    if (!ALLOWED_MIME_BY_TYPE[messageType].includes(baseMime)) {
       return NextResponse.json(
         { error: `Unsupported mime type for ${messageType}: ${mime}` },
         { status: 400 }

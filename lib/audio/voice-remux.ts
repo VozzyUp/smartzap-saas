@@ -7,7 +7,9 @@ export interface RemuxResult {
 }
 
 const REMUX_TIMEOUT_MS = 15_000
-const TARGET_MIME = 'audio/ogg'
+// A Meta rejeita o MIME base `audio/ogg` para voz; o codec Opus precisa estar
+// declarado explicitamente no upload, além de existir de fato no container.
+const TARGET_MIME = 'audio/ogg; codecs=opus'
 
 /**
  * Normaliza áudio para o formato de NOTA DE VOZ do WhatsApp: OGG/Opus **mono**,

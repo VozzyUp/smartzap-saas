@@ -70,7 +70,11 @@ describe('remuxToOggOpus', () => {
 
     const result = await promise
     expect(spawn).toHaveBeenCalledWith('ffmpeg', VOICE_ARGS)
-    expect(result).toEqual({ buffer: outputChunk, mime: 'audio/ogg', remuxed: true })
+    expect(result).toEqual({
+      buffer: outputChunk,
+      mime: 'audio/ogg; codecs=opus',
+      remuxed: true,
+    })
   })
 
   it('input audio/webm com sucesso: chama ffmpeg com os args de voz e retorna ogg remuxado', async () => {
@@ -91,7 +95,11 @@ describe('remuxToOggOpus', () => {
     expect(spawn).toHaveBeenCalledWith('ffmpeg', VOICE_ARGS)
     expect(fakeChild.stdin.write).toHaveBeenCalledWith(input)
     expect(fakeChild.stdin.end).toHaveBeenCalled()
-    expect(result).toEqual({ buffer: outputChunk, mime: 'audio/ogg', remuxed: true })
+    expect(result).toEqual({
+      buffer: outputChunk,
+      mime: 'audio/ogg; codecs=opus',
+      remuxed: true,
+    })
   })
 
   it('ffmpeg ausente (erro ENOENT): degrada para o áudio original sem lançar', async () => {

@@ -240,7 +240,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
   it('voice=true remuxa para ogg/opus antes de enviar como nota de voz (Fase 5B)', async () => {
     remuxToOggOpusMock.mockResolvedValue({
       buffer: Buffer.from('ogg-bytes'),
-      mime: 'audio/ogg',
+      mime: 'audio/ogg; codecs=opus',
       remuxed: true,
     })
     uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_voice' })
@@ -263,7 +263,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
 
     expect(uploadMediaToMetaMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        contentType: 'audio/ogg',
+        contentType: 'audio/ogg; codecs=opus',
         filename: 'voice.ogg',
       })
     )
@@ -284,7 +284,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
 
     expect(storeOutboundMediaMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        mime: 'audio/ogg',
+        mime: 'audio/ogg; codecs=opus',
         filename: 'voice.ogg',
       })
     )

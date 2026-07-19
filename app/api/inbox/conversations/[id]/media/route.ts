@@ -18,11 +18,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getTenantContext } from '@/lib/tenant-context'
 import { getConversationById, createMessage } from '@/lib/inbox/inbox-db'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
-import { downloadMetaMedia, uploadMediaToMeta } from '@/lib/whatsapp/media'
+import { uploadMediaToMeta } from '@/lib/whatsapp/media'
 import { sendWhatsAppMedia } from '@/lib/whatsapp-send'
 import { storeOutboundMedia } from '@/lib/inbox/inbox-media'
 import { remuxToOggOpus } from '@/lib/audio/voice-remux'
-import { validateOggOpusVoice } from '@/lib/audio/voice-validation'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import type { InboxMessageType } from '@/types'
 
@@ -140,14 +139,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { status: 422 }
         )
       }
-      const voiceValidation = validateOggOpusVoice(r.buffer)
-      if (!voiceValidation.valid) {
-        console.error('[InboxMediaSend] Remux de voz inválido:', voiceValidation.reason)
-        return NextResponse.json(
-          { error: 'Não foi possível validar a gravação como OGG/Opus mono. Tente gravar novamente.' },
-          { status: 422 }
-        )
-      }
       buffer = r.buffer
       mime = r.mime
       filename = remuxedBaseMime === 'audio/ogg' ? 'voice.ogg' : originalFilename
@@ -201,41 +192,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { error: `Failed to upload media to Meta: ${uploaded.error}` },
         { status: 502 }
       )
-    }
-
-    // A resposta 200 do upload só confirma que a Meta aceitou a requisição.
-    // Para notas de voz, buscamos o arquivo recém-hospedado e conferimos seu
-    // cabeçalho antes de criar uma mensagem que o cliente não conseguirá tocar.
-    if (isVoice) {
-      const storedVoice = await downloadMetaMedia({
-        mediaId: uploaded.id,
-        accessToken: credentials.accessToken,
-      })
-      if (!storedVoice.ok) {
-        console.error('[InboxMediaSend] Não foi possível validar mídia de voz na Meta:', {
-          mediaId: uploaded.id,
-          status: storedVoice.status,
-          error: storedVoice.error,
-        })
-        return NextResponse.json(
-          { error: 'A Meta não disponibilizou a nota de voz para validação. Tente novamente.' },
-          { status: 502 }
-        )
-      }
-
-      const storedVoiceValidation = validateOggOpusVoice(storedVoice.buffer)
-      if (!storedVoiceValidation.valid) {
-        console.error('[InboxMediaSend] Meta armazenou uma nota de voz inválida:', {
-          mediaId: uploaded.id,
-          mime: storedVoice.mime,
-          size: storedVoice.size,
-          reason: storedVoiceValidation.reason,
-        })
-        return NextResponse.json(
-          { error: 'A Meta armazenou uma nota de voz inválida. Tente gravar novamente.' },
-          { status: 502 }
-        )
-      }
     }
 
     // Envio via WhatsApp (builder do tipo + media_id), pelo número resolvido

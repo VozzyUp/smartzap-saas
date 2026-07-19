@@ -308,6 +308,10 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
         filename: 'voice.ogg',
       })
     )
+
+    // Perf: o envio não deve re-baixar a mídia da Meta para "validar" — isso
+    // era um round-trip inteiro a mais por nota de voz (andaime de diagnóstico).
+    expect(downloadMetaMediaMock).not.toHaveBeenCalled()
   })
 
   it('voice=true não envia o áudio original quando a normalização para OGG/Opus falha', async () => {
@@ -327,37 +331,6 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
     expect(res.status).toBe(422)
     expect(body.error).toContain('OGG/Opus')
     expect(uploadMediaToMetaMock).not.toHaveBeenCalled()
-    expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
-  })
-
-  it('voice=true não envia uma mídia que a Meta armazenou sem OGG/Opus válido', async () => {
-    remuxToOggOpusMock.mockResolvedValue({
-      buffer: oggOpusMono(),
-      mime: 'audio/ogg; codecs=opus',
-      remuxed: true,
-    })
-    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_voice_invalid' })
-    downloadMetaMediaMock.mockResolvedValue({
-      ok: true,
-      buffer: Buffer.from('invalid-media'),
-      mime: 'audio/ogg',
-      size: 13,
-    })
-    sendWhatsAppMediaMock.mockResolvedValue({ success: true, messageId: 'wamid.voice' })
-
-    const fd = new FormData()
-    fd.set('file', new File(['webm-bytes'], 'voice.webm', { type: 'audio/webm' }))
-    fd.set('voice', 'true')
-
-    const res = await POST(makeRequest(fd), makeParams('conv_1'))
-    const body = await res.json()
-
-    expect(res.status).toBe(502)
-    expect(body.error).toContain('Meta armazenou uma nota de voz inválida')
-    expect(downloadMetaMediaMock).toHaveBeenCalledWith({
-      mediaId: 'media_voice_invalid',
-      accessToken: 'token_abc',
-    })
     expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
   })
 

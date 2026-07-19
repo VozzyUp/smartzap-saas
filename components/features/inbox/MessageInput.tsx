@@ -355,7 +355,7 @@ export function MessageInput({
         throw new Error(data?.error || 'Erro ao enviar nota de voz')
       }
 
-      toast.success('Nota de voz enviada')
+      // Sem toast de sucesso: a bolha aparecendo via realtime já é o feedback.
       setVoicePreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev)
         return null

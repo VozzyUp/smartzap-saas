@@ -5,10 +5,12 @@ vi.mock('@/lib/tenant-context', () => ({ getTenantContext: () => getTenantContex
 
 const orderMock = vi.fn(async () => ({ data: [{ id: 'p1', name: 'Trial', sort_order: 0 }], error: null }))
 const selectMock = vi.fn(() => ({ order: orderMock }))
-const fromMock = vi.fn(() => ({ select: selectMock }))
+const insertSingleMock = vi.fn(async () => ({ data: { id: 'p2', name: 'Empresarial', slug: 'empresarial' }, error: null }))
+const insertMock = vi.fn(() => ({ select: () => ({ single: insertSingleMock }) }))
+const fromMock = vi.fn(() => ({ select: selectMock, insert: insertMock }))
 vi.mock('@/lib/supabase', () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }))
 
-import { GET } from './route'
+import { GET, POST } from './route'
 
 describe('GET /api/admin/plans', () => {
   beforeEach(() => {
@@ -16,6 +18,8 @@ describe('GET /api/admin/plans', () => {
     orderMock.mockClear()
     selectMock.mockClear()
     fromMock.mockClear()
+    insertMock.mockClear()
+    insertSingleMock.mockClear()
   })
 
   it('não-admin → 403', async () => {
@@ -30,5 +34,13 @@ describe('GET /api/admin/plans', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.plans).toEqual([{ id: 'p1', name: 'Trial', sort_order: 0 }])
+  })
+
+  it('admin cria plano com slug derivado do nome', async () => {
+    getTenantContext.mockResolvedValue({ tenantId: 't1', userId: 'u1', isPlatformAdmin: true, trialExpired: false, suspended: false })
+    const req = { json: async () => ({ name: 'Empresarial' }) } as Request
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'Empresarial', slug: 'empresarial' }))
   })
 })

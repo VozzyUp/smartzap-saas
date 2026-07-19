@@ -25,8 +25,10 @@ vi.mock('@/lib/whatsapp-credentials', () => ({
 }))
 
 const uploadMediaToMetaMock = vi.fn()
+const downloadMetaMediaMock = vi.fn()
 vi.mock('@/lib/whatsapp/media', () => ({
   uploadMediaToMeta: (...args: unknown[]) => uploadMediaToMetaMock(...args),
+  downloadMetaMedia: (...args: unknown[]) => downloadMetaMediaMock(...args),
 }))
 
 const sendWhatsAppMediaMock = vi.fn()
@@ -85,6 +87,18 @@ const credentials = {
   accessToken: 'token_abc',
 }
 
+function oggOpusMono(): Buffer {
+  const packet = Buffer.from([
+    ...Buffer.from('OpusHead'),
+    1, 1, 0, 0, 0x80, 0xbb, 0, 0, 0, 0, 0,
+  ])
+  const header = Buffer.alloc(28)
+  header.write('OggS', 0, 'ascii')
+  header[26] = 1
+  header[27] = packet.length
+  return Buffer.concat([header, packet])
+}
+
 describe('POST /api/inbox/conversations/[id]/media', () => {
   beforeEach(() => {
     ctxMock = { tenantId: 't1', userId: 'u1', isPlatformAdmin: false }
@@ -93,6 +107,12 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
     getWhatsAppCredentialsForNumberMock.mockResolvedValue(credentials)
     getSupabaseAdminMock.mockReturnValue(supabaseAdminMock)
     updateEqEqMock.mockResolvedValue({ data: null, error: null })
+    downloadMetaMediaMock.mockResolvedValue({
+      ok: true,
+      buffer: oggOpusMono(),
+      mime: 'audio/ogg; codecs=opus',
+      size: 47,
+    })
   })
 
   it('401 sem sessão', async () => {
@@ -239,7 +259,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
 
   it('voice=true remuxa para ogg/opus antes de enviar como nota de voz (Fase 5B)', async () => {
     remuxToOggOpusMock.mockResolvedValue({
-      buffer: Buffer.from('ogg-bytes'),
+      buffer: oggOpusMono(),
       mime: 'audio/ogg; codecs=opus',
       remuxed: true,
     })
@@ -307,6 +327,37 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
     expect(res.status).toBe(422)
     expect(body.error).toContain('OGG/Opus')
     expect(uploadMediaToMetaMock).not.toHaveBeenCalled()
+    expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
+  })
+
+  it('voice=true não envia uma mídia que a Meta armazenou sem OGG/Opus válido', async () => {
+    remuxToOggOpusMock.mockResolvedValue({
+      buffer: oggOpusMono(),
+      mime: 'audio/ogg; codecs=opus',
+      remuxed: true,
+    })
+    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_voice_invalid' })
+    downloadMetaMediaMock.mockResolvedValue({
+      ok: true,
+      buffer: Buffer.from('invalid-media'),
+      mime: 'audio/ogg',
+      size: 13,
+    })
+    sendWhatsAppMediaMock.mockResolvedValue({ success: true, messageId: 'wamid.voice' })
+
+    const fd = new FormData()
+    fd.set('file', new File(['webm-bytes'], 'voice.webm', { type: 'audio/webm' }))
+    fd.set('voice', 'true')
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body.error).toContain('Meta armazenou uma nota de voz inválida')
+    expect(downloadMetaMediaMock).toHaveBeenCalledWith({
+      mediaId: 'media_voice_invalid',
+      accessToken: 'token_abc',
+    })
     expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
   })
 

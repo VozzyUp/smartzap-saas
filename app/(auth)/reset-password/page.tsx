@@ -151,21 +151,12 @@ function ResetPasswordForm() {
       <p className="text-center text-[var(--ds-text-muted)] text-sm mt-6">
         V-Smart © {new Date().getFullYear()} |{' '}
         <a
-          href="https://www.escoladeautomacao.com.br/"
+          href="https://www.vozzyup.com.br"
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-emerald-500 transition-colors"
         >
-          Escola de Automação
-        </a>
-        {' '}| by{' '}
-        <a
-          href="https://instagram.com/thaleslaray"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-emerald-500 transition-colors"
-        >
-          @thaleslaray
+          Desenvolvido por VozzyUp
         </a>
       </p>
     </div>

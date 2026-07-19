@@ -239,7 +239,18 @@ export function MessageInput({
     } catch (error) {
       isStartingVoiceRef.current = false
       console.error('[MessageInput] Erro ao acessar microfone:', error)
-      toast.error('Não foi possível acessar o microfone')
+      // Mensagem acionável por tipo de erro do getUserMedia — "não foi possível"
+      // genérico não diz ao usuário O QUE fazer.
+      const name = (error as DOMException)?.name
+      const description =
+        name === 'NotAllowedError' || name === 'PermissionDeniedError'
+          ? 'Permissão negada. Clique no cadeado na barra de endereço → Microfone → Permitir, e recarregue a página.'
+          : name === 'NotFoundError' || name === 'DevicesNotFoundError'
+            ? 'Nenhum microfone encontrado. Conecte um microfone e verifique a entrada de som do sistema.'
+            : name === 'NotReadableError'
+              ? 'O microfone está em uso por outro aplicativo. Feche-o e tente novamente.'
+              : name || undefined
+      toast.error('Não foi possível acessar o microfone', { description })
       return
     }
 

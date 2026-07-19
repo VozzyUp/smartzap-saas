@@ -54,6 +54,7 @@ export async function POST(request: Request) {
           .from('flows')
           .select('flow_json')
           .eq('meta_flow_id', flowId)
+          .eq('tenant_id', ctx.tenantId)
           .limit(1)
         if (!error) {
           const row = Array.isArray(data) ? data[0] : (data as any)
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
           const { error } = await supabase.from('flow_submissions').upsert(
             {
               message_id: msgId,
+              tenant_id: ctx.tenantId,
               from_phone: to,
               flow_id: flowId,
               flow_token: flowToken,

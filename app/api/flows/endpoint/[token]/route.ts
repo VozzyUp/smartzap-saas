@@ -10,7 +10,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { settingsDb } from '@/lib/supabase-db'
+import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
 import { resolveTenantByFlowsWebhookToken } from '@/lib/whatsapp-phone-numbers'
 import {
   decryptRequest,
@@ -26,6 +28,14 @@ import { metaSetEncryptionPublicKey } from '@/lib/meta-flows-api'
 const PRIVATE_KEY_SETTING = 'whatsapp_flow_private_key'
 const PUBLIC_KEY_SETTING = 'whatsapp_flow_public_key'
 
+function isValidMetaSignature(rawBody: string, signature: string, appSecret: string): boolean {
+  if (!signature.startsWith('sha256=')) return false
+  const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')}`
+  const receivedBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+  return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer)
+}
+
 interface Params {
   params: Promise<{ token: string }>
 }
@@ -38,7 +48,17 @@ export async function POST(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Endpoint não encontrado' }, { status: 404 })
     }
 
-    const body = await request.json()
+    const rawBody = await request.text()
+    const appCredentials = await getMetaAppCredentials(tenantId)
+    const appSecret = appCredentials?.appSecret || String(process.env.META_APP_SECRET || '').trim()
+    if (appSecret) {
+      const signature = request.headers.get('x-hub-signature-256') || ''
+      if (!isValidMetaSignature(rawBody, signature, appSecret)) {
+        return NextResponse.json({ error: 'Assinatura da Meta invÃ¡lida' }, { status: 401 })
+      }
+    }
+
+    const body = JSON.parse(rawBody)
     console.log('[flow-endpoint] 📥 POST received at', new Date().toISOString())
 
     const { encrypted_flow_data, encrypted_aes_key, initial_vector } = body

@@ -46,10 +46,13 @@ const CreateFlowSchema = z
 
 export async function GET() {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { data, error } = await supabase
       .from('flows')
       // Usar '*' para não quebrar quando a migration ainda não foi aplicada.
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -124,6 +127,7 @@ export async function POST(request: Request) {
     const tpl = input.templateKey ? getFlowTemplateByKey(input.templateKey) : null
 
     const fullInsert: Record<string, unknown> = {
+      tenant_id: ctx.tenantId,
       name: input.name,
       status: 'DRAFT',
       spec: initialSpec,
@@ -145,6 +149,7 @@ export async function POST(request: Request) {
     // 2) fallback: se a coluna não existir (migration não aplicada), remove campos novos
     if (error && isMissingDbColumn(error)) {
       const minimalInsert: Record<string, unknown> = {
+        tenant_id: ctx.tenantId,
         name: input.name,
         status: 'DRAFT',
         spec: initialSpec,
@@ -157,6 +162,19 @@ export async function POST(request: Request) {
     if (error) {
       const message = getErrorMessage(error)
       console.error('Failed to create flow:', error)
+
+      if (isMissingTable(error)) {
+        return NextResponse.json(
+          { error: 'A tabela de MiniApps ainda não está configurada. Aplique as migrations do Supabase e tente novamente.' },
+          { status: 503 }
+        )
+      }
+      if (/tenant_id/i.test(message)) {
+        return NextResponse.json(
+          { error: 'A configuração multi-tenant do banco está pendente. Aplique as migrations do Supabase e tente novamente.' },
+          { status: 503 }
+        )
+      }
 
       // Erros de banco/config são 500; validação já foi tratada pelo Zod.
       if (process.env.NODE_ENV !== 'production') {

@@ -384,7 +384,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     // Busca o flow local
-    const { data, error } = await supabase.from('flows').select('*').eq('id', id).limit(1)
+    const { data, error } = await supabase.from('flows').select('*').eq('id', id).eq('tenant_id', tenantCtx.tenantId).limit(1)
     if (error) return NextResponse.json({ error: error.message || 'Falha ao buscar flow' }, { status: 500 })
 
     const row = Array.isArray(data) ? data[0] : (data as any)
@@ -482,6 +482,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           meta_validation_errors: { source: 'local', ...localValidation },
         })
         .eq('id', id)
+        .eq('tenant_id', tenantCtx.tenantId)
 
       return NextResponse.json(
         {
@@ -707,7 +708,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const uploaded = await metaUploadFlowJsonAsset({
           accessToken: credentials.accessToken,
           flowId: metaFlowId,
-          flowJson,
+          // Usa a mesma versão higienizada e validada que é enviada na criação.
+          // O JSON salvo pode conter metadados do editor ou wrappers Form legados.
+          flowJson: flowJsonForMeta,
         })
         validationErrors = uploaded.validation_errors ?? null
 
@@ -734,7 +737,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       ...(metaStatus === 'PUBLISHED' ? { meta_published_at: now } : {}),
     }
 
-    const { data: updated, error: updErr } = await supabase.from('flows').update(update).eq('id', id).select('*').limit(1)
+    const { data: updated, error: updErr } = await supabase.from('flows').update(update).eq('id', id).eq('tenant_id', tenantCtx.tenantId).select('*').limit(1)
     if (updErr) {
       return NextResponse.json(
         {

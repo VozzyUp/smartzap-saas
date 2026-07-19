@@ -30,12 +30,15 @@ const PatchFlowSchema = z
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  const tenantCtx = await getTenantContext()
+  if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   try {
     const { data, error } = await supabase
       .from('flows')
       // '*' evita quebra quando a migration ainda não foi aplicada.
       .select('*')
       .eq('id', id)
+      .eq('tenant_id', tenantCtx.tenantId)
       .limit(1)
 
     if (error) return NextResponse.json({ error: error.message || 'Falha ao buscar flow' }, { status: 500 })
@@ -93,9 +96,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           .from('flows')
           .select('name, meta_flow_id, meta_status, meta_preview_url, meta_validation_errors, meta_last_checked_at, meta_published_at')
           .eq('id', id)
+          .eq('tenant_id', tenantCtx.tenantId)
           .limit(1))
         if (metaErr && isMissingDbColumn(metaErr)) {
-          ;({ data: metaRow, error: metaErr } = await supabase.from('flows').select('name, meta_flow_id, meta_status').eq('id', id).limit(1))
+          ;({ data: metaRow, error: metaErr } = await supabase.from('flows').select('name, meta_flow_id, meta_status').eq('id', id).eq('tenant_id', tenantCtx.tenantId).limit(1))
         }
         if (!metaErr) {
           const row = Array.isArray(metaRow) ? metaRow[0] : (metaRow as any)
@@ -133,7 +137,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       update.meta_published_at = null
     }
 
-    let { data, error } = await supabase.from('flows').update(update).eq('id', id).select('*').limit(1)
+    let { data, error } = await supabase.from('flows').update(update).eq('id', id).eq('tenant_id', tenantCtx.tenantId).select('*').limit(1)
 
     // Fallback: se colunas novas não existirem, remove-as e tenta novamente.
     if (error && isMissingDbColumn(error)) {
@@ -147,7 +151,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       delete stripped.meta_validation_errors
       delete stripped.meta_last_checked_at
       delete stripped.meta_published_at
-      ;({ data, error } = await supabase.from('flows').update(stripped).eq('id', id).select('*').limit(1))
+      ;({ data, error } = await supabase.from('flows').update(stripped).eq('id', id).eq('tenant_id', tenantCtx.tenantId).select('*').limit(1))
     }
 
     if (error) return NextResponse.json({ error: error.message || 'Falha ao atualizar flow' }, { status: 500 })
@@ -215,8 +219,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  const tenantCtx = await getTenantContext()
+  if (!tenantCtx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   try {
-    const { error } = await supabase.from('flows').delete().eq('id', id)
+    const { error } = await supabase.from('flows').delete().eq('id', id).eq('tenant_id', tenantCtx.tenantId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
   } catch (error) {

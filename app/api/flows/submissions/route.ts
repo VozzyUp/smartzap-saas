@@ -5,6 +5,7 @@ export const revalidate = 0
 
 import { supabase } from '@/lib/supabase'
 import { clampInt } from '@/lib/validation-utils'
+import { getTenantContext } from '@/lib/tenant-context'
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -43,6 +44,8 @@ function isMissingColumn(error: unknown, column: string): boolean {
  */
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const sp = request.nextUrl.searchParams
     const flowId = sp.get('flowId')
     const campaignId = sp.get('campaignId')
@@ -52,6 +55,7 @@ export async function GET(request: NextRequest) {
     let q = supabase
       .from('flow_submissions')
       .select('*')
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .limit(limit)
 

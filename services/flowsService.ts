@@ -117,17 +117,28 @@ export const flowsService = {
 
     const data = await res.json().catch(() => null)
     if (!res.ok) {
+      const metaIssueDetails = Array.isArray(data?.metaIssues)
+        ? data.metaIssues
+            .map((issue: any) => issue?.possibleSolution || issue?.description)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map(String)
+            .join(' ')
+        : ''
+      const withMetaIssues = (message: string) =>
+        metaIssueDetails ? `${message} Ação recomendada: ${metaIssueDetails}` : message
+
       if (data?.debug?.graphError) {
         const ge = data.debug.graphError
         const userTitle = ge.error_user_title ? String(ge.error_user_title) : ''
         const userMsg = ge.error_user_msg ? String(ge.error_user_msg) : ''
         const details = [userTitle, userMsg].filter(Boolean).join(' — ')
         const base = (data?.error && String(data.error)) || 'Falha ao publicar MiniApp na Meta'
-        throw new Error(details ? `${base}: ${details}` : base)
+        throw new Error(withMetaIssues(details ? `${base}: ${details}` : base))
       }
       const msg = (data?.error && String(data.error)) || 'Falha ao publicar MiniApp na Meta'
       const details = data?.issues ? `: ${Array.isArray(data.issues) ? data.issues.join(', ') : String(data.issues)}` : ''
-      throw new Error(`${msg}${details}`)
+      throw new Error(withMetaIssues(`${msg}${details}`))
     }
 
     return parseFlowRow(data?.row, 'Resposta inválida ao publicar MiniApp na Meta')

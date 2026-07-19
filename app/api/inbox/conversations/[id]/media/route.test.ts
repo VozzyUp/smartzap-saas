@@ -274,6 +274,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
         type: 'audio',
         mediaId: 'media_voice',
         filename: 'voice.ogg',
+        voice: true,
       })
     )
 
@@ -287,6 +288,26 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
         filename: 'voice.ogg',
       })
     )
+  })
+
+  it('voice=true não envia o áudio original quando a normalização para OGG/Opus falha', async () => {
+    remuxToOggOpusMock.mockResolvedValue({
+      buffer: Buffer.from('audio-original'),
+      mime: 'audio/mp4',
+      remuxed: false,
+    })
+
+    const fd = new FormData()
+    fd.set('file', new File(['audio-original'], 'voice.m4a', { type: 'audio/mp4' }))
+    fd.set('voice', 'true')
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(422)
+    expect(body.error).toContain('OGG/Opus')
+    expect(uploadMediaToMetaMock).not.toHaveBeenCalled()
+    expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
   })
 
   it('sem voice: audio comum da 5A nao aciona remux (sem regressao)', async () => {

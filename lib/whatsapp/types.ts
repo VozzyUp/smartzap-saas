@@ -173,7 +173,7 @@ export interface AudioMessagePayload {
   messaging_product: 'whatsapp';
   to: string;
   type: 'audio';
-  audio: { id?: string; link?: string };
+  audio: { id?: string; link?: string; voice?: boolean };
   context?: { message_id: string };
 }
 

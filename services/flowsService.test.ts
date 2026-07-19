@@ -76,6 +76,24 @@ describe('flowsService', () => {
     await expect(flowsService.publishToMeta('f1')).rejects.toThrow('Erro: Título — Mensagem')
   })
 
+  it('publishToMeta deve incluir a solução do health status em bloqueios de integridade', async () => {
+    mockFetch.mockResolvedValueOnce(createMockFetchResponse({
+      error: 'A Meta criou o MiniApp como rascunho, mas bloqueou a publicação por integridade da conta.',
+      metaIssues: [
+        {
+          entityType: 'BUSINESS',
+          errorCode: 141010,
+          description: 'A empresa não concluiu a verificação.',
+          possibleSolution: 'Conclua a verificação da empresa no Meta Business Manager.',
+        },
+      ],
+    }, { ok: false }))
+
+    await expect(flowsService.publishToMeta('f1')).rejects.toThrow(
+      'Conclua a verificação da empresa no Meta Business Manager.'
+    )
+  })
+
   it('send deve lançar erro quando API falha', async () => {
     mockFetch.mockResolvedValueOnce(createMockFetchResponse({ error: 'Falhou' }, { ok: false }))
 

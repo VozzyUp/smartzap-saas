@@ -130,6 +130,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // áudio original (pode falhar a whitelist normalmente, como antes da 5B).
     if (isVoice && originalMime.startsWith('audio/')) {
       const r = await remuxToOggOpus(buffer, originalMime)
+      if (!r.remuxed || r.mime !== 'audio/ogg') {
+        return NextResponse.json(
+          {
+            error: 'Não foi possível converter a gravação para OGG/Opus. Tente gravar novamente.',
+          },
+          { status: 422 }
+        )
+      }
       buffer = r.buffer
       mime = r.mime
       filename = r.mime === 'audio/ogg' ? 'voice.ogg' : originalFilename
@@ -191,6 +199,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       mediaId: uploaded.id,
       caption: caption || undefined,
       filename,
+      voice: isVoice,
       credentials,
     })
 

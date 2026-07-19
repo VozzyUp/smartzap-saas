@@ -91,6 +91,43 @@ const PublishSchema = z
   })
   .strict()
 
+type MetaHealthIssue = {
+  entityType: string
+  entityId: string | null
+  errorCode: number | string | null
+  description: string | null
+  possibleSolution: string | null
+}
+
+function getMetaHealthIssues(healthStatus: unknown): MetaHealthIssue[] {
+  const entities = Array.isArray((healthStatus as any)?.entities) ? (healthStatus as any).entities : []
+  return entities.flatMap((entity: any) => {
+    const errors = Array.isArray(entity?.errors) ? entity.errors : []
+    return errors.map((error: any) => ({
+      entityType: String(entity?.entity_type || 'UNKNOWN'),
+      entityId: entity?.id != null ? String(entity.id) : null,
+      errorCode: error?.error_code ?? null,
+      description: error?.error_description ? String(error.error_description) : null,
+      possibleSolution: error?.possible_solution ? String(error.possible_solution) : null,
+    }))
+  })
+}
+
+function isIntegrityPublishError(error: MetaGraphApiError): boolean {
+  const graphError = (error.data as any)?.error ?? error.data
+  const code = Number(graphError?.code || 0)
+  const text = [
+    graphError?.message,
+    graphError?.error_user_title,
+    graphError?.error_user_msg,
+    graphError?.error_data?.details,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return code === 139000 || (code === 139002 && text.includes('integr'))
+}
+
 function extractFlowJson(row: any): unknown {
   const savedFlowJson = row?.flow_json
   const savedDataApiVersion =
@@ -501,6 +538,77 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     let metaStatus: string | null = null
     let previewUrl: string | null = null
 
+    const persistMetaSnapshot = async (storedValidationErrors: unknown) => {
+      return await supabase
+        .from('flows')
+        .update({
+          updated_at: now,
+          meta_flow_id: metaFlowId,
+          meta_status: metaStatus,
+          meta_preview_url: previewUrl,
+          meta_validation_errors: storedValidationErrors,
+          meta_last_checked_at: now,
+        })
+        .eq('id', id)
+        .eq('tenant_id', tenantCtx.tenantId)
+    }
+
+    const publishMetaFlow = async (flowId: string): Promise<NextResponse | null> => {
+      try {
+        await metaPublishFlow({ accessToken: credentials!.accessToken, flowId })
+        return null
+      } catch (error) {
+        if (!(error instanceof MetaGraphApiError)) throw error
+
+        let details: Awaited<ReturnType<typeof metaGetFlowDetails>> | null = null
+        try {
+          details = await metaGetFlowDetails({ accessToken: credentials!.accessToken, flowId })
+          metaStatus = details.status || metaStatus
+          validationErrors = details.validation_errors ?? validationErrors
+        } catch {}
+
+        const graphError = (error.data as any)?.error ?? error.data
+        const healthStatus = details?.health_status ?? null
+        const metaIssues = getMetaHealthIssues(healthStatus)
+        const integrityBlocked = isIntegrityPublishError(error)
+        const diagnostic = {
+          source: 'meta',
+          stage: 'publish',
+          code: graphError?.code ?? null,
+          subcode: graphError?.error_subcode ?? null,
+          message: graphError?.message ?? error.message,
+          validationErrors,
+          healthStatus,
+          issues: metaIssues,
+        }
+        const { error: persistError } = await persistMetaSnapshot(diagnostic)
+
+        const friendlyError = integrityBlocked
+          ? 'A Meta criou o MiniApp como rascunho, mas bloqueou a publicação por integridade da conta. O conteúdo do Flow está salvo; verifique o Status de integridade em Configurações > Diagnóstico Meta.'
+          : error.message
+
+        return NextResponse.json(
+          {
+            error: friendlyError,
+            metaFlowId: flowId,
+            metaStatus,
+            validationErrors,
+            healthStatus,
+            metaIssues,
+            persistenceWarning: persistError?.message || undefined,
+            debug: wantsDebug
+              ? {
+                  status: error.status,
+                  graphError,
+                  publish: debugInfo,
+                }
+              : undefined,
+          },
+          { status: integrityBlocked ? 422 : 400 }
+        )
+      }
+    }
+
     if (!metaFlowId) {
       // A Meta exige `endpoint_uri` para Flows "de endpoint" (data_api_version/routing_model).
       // `dynamic` aqui significa "usa data_exchange"; `requiresEndpoint` cobre routing_model também.
@@ -592,7 +700,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const screens = Array.isArray((flowJsonObj as any)?.screens) ? (flowJsonObj as any).screens : []
       const screenIds = screens.map((s: any) => String(s?.id || '')).filter(Boolean).slice(0, 6)
 
-      // Criar na Meta (com publish opcional em um único request)
+      // A criação e a publicação são etapas separadas. Assim o ID do rascunho não se
+      // perde quando a Meta aceita o JSON, mas bloqueia a publicação por integridade.
       const baseName = String(row?.name || 'Flow').trim() || 'Flow'
       const maxNameLength = 60
       const buildUniqueName = (nameSuffix: string) => {
@@ -634,7 +743,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           name: uniqueName,
           categories: input.categories.length > 0 ? input.categories : ['OTHER'],
           flowJson: flowJsonForMeta,
-          publish: !!input.publish,
+          publish: false,
           endpointUri,
         })
       } catch (error) {
@@ -652,7 +761,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
               name: retryName,
               categories: input.categories.length > 0 ? input.categories : ['OTHER'],
               flowJson: flowJsonForMeta,
-              publish: !!input.publish,
+              publish: false,
               endpointUri,
             })
           } else {
@@ -672,13 +781,39 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         // #endregion agent log
       } catch {}
 
-      // Atualiza detalhes (status etc.)
-      const details = await metaGetFlowDetails({ accessToken: credentials.accessToken, flowId: metaFlowId })
+      // Atualiza detalhes (status etc.) e salva o DRAFT antes de publicar.
+      // Isso evita criar duplicados quando a Meta bloqueia somente a etapa de publicação.
+      let details = await metaGetFlowDetails({ accessToken: credentials.accessToken, flowId: metaFlowId })
       metaStatus = details.status || null
+      validationErrors = details.validation_errors ?? validationErrors
 
       // Preview
-      const preview = await metaGetFlowPreview({ accessToken: credentials.accessToken, flowId: metaFlowId })
-      previewUrl = typeof preview?.preview?.preview_url === 'string' ? preview.preview.preview_url : null
+      try {
+        const preview = await metaGetFlowPreview({ accessToken: credentials.accessToken, flowId: metaFlowId })
+        previewUrl = typeof preview?.preview?.preview_url === 'string' ? preview.preview.preview_url : null
+      } catch {}
+
+      const { error: draftPersistError } = await persistMetaSnapshot(validationErrors)
+      if (draftPersistError) {
+        return NextResponse.json(
+          {
+            error: 'O Flow foi criado na Meta, mas não foi possível salvar o ID localmente.',
+            metaFlowId,
+            metaStatus,
+            details: draftPersistError.message,
+          },
+          { status: 500 }
+        )
+      }
+
+      if (input.publish) {
+        const publishFailure = await publishMetaFlow(metaFlowId)
+        if (publishFailure) return publishFailure
+
+        details = await metaGetFlowDetails({ accessToken: credentials.accessToken, flowId: metaFlowId })
+        metaStatus = details.status || null
+        validationErrors = details.validation_errors ?? validationErrors
+      }
     } else {
       // Já existe: tentar atualizar (apenas se ainda for possível)
       let details = await metaGetFlowDetails({ accessToken: credentials.accessToken, flowId: metaFlowId })
@@ -714,12 +849,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         })
         validationErrors = uploaded.validation_errors ?? null
 
+        const { error: draftPersistError } = await persistMetaSnapshot(validationErrors)
+        if (draftPersistError) {
+          return NextResponse.json(
+            {
+              error: 'O rascunho foi atualizado na Meta, mas o estado local não pôde ser salvo.',
+              metaFlowId,
+              metaStatus,
+              details: draftPersistError.message,
+            },
+            { status: 500 }
+          )
+        }
+
         if (input.publish) {
-          await metaPublishFlow({ accessToken: credentials.accessToken, flowId: metaFlowId })
+          const publishFailure = await publishMetaFlow(metaFlowId)
+          if (publishFailure) return publishFailure
         }
 
         details = await metaGetFlowDetails({ accessToken: credentials.accessToken, flowId: metaFlowId })
         metaStatus = details.status || null
+        validationErrors = details.validation_errors ?? validationErrors
 
         const preview = await metaGetFlowPreview({ accessToken: credentials.accessToken, flowId: metaFlowId })
         previewUrl = typeof preview?.preview?.preview_url === 'string' ? preview.preview.preview_url : null

@@ -130,6 +130,8 @@ export interface SendWhatsAppMediaOptions {
   caption?: string
   /** Nome do arquivo — obrigatório para document */
   filename?: string
+  /** Envia áudio OGG/Opus como nota de voz gravada (PTT) */
+  voice?: boolean
   replyToMessageId?: string
   /** Credentials override (optional - will fetch from settings if not provided) */
   credentials?: WhatsAppCredentials
@@ -183,6 +185,7 @@ export async function sendWhatsAppMedia(
       payload = buildAudioMessage({
         to: normalizedTo,
         mediaId: options.mediaId,
+        voice: options.voice,
         replyToMessageId: options.replyToMessageId,
       }) as unknown as Record<string, unknown>
       break

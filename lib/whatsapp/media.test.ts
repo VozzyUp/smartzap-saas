@@ -124,6 +124,16 @@ describe('buildAudioMessage', () => {
     expect(result.audio.id).toBe('aud123')
   })
 
+  it('deve marcar explicitamente a mídia como nota de voz', () => {
+    const result = buildAudioMessage({
+      to: '+5511999999999',
+      mediaId: 'aud123',
+      voice: true,
+    })
+
+    expect(result.audio.voice).toBe(true)
+  })
+
   it('deve construir payload com mediaUrl', () => {
     const result = buildAudioMessage({ to: '+5511999999999', mediaUrl: 'https://example.com/audio.mp3' })
     expect(result.audio.link).toBe('https://example.com/audio.mp3')

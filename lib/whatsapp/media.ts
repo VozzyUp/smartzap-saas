@@ -98,6 +98,7 @@ export interface BuildAudioMessageOptions {
   to: string
   mediaId?: string
   mediaUrl?: string
+  voice?: boolean
   replyToMessageId?: string
 }
 
@@ -117,6 +118,7 @@ export function buildAudioMessage(options: BuildAudioMessageOptions): AudioMessa
     type: 'audio',
     audio: {
       ...(options.mediaId ? { id: options.mediaId } : { link: options.mediaUrl }),
+      ...(options.voice ? { voice: true } : {}),
     },
   }
 

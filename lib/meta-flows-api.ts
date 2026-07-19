@@ -32,6 +32,7 @@ export type MetaFlowsDetails = {
   json_version?: string
   data_api_version?: string
   endpoint_uri?: string
+  health_status?: unknown
 }
 
 const GraphErrorSchema = z
@@ -329,6 +330,7 @@ export async function metaGetFlowDetails(params: {
     'json_version',
     'data_api_version',
     'endpoint_uri',
+    'health_status',
   ].join(',')
 
   const url = `${GRAPH_BASE}/${encodeURIComponent(params.flowId)}?fields=${encodeURIComponent(fields)}`
@@ -351,5 +353,6 @@ export async function metaGetFlowDetails(params: {
     json_version: typeof data?.json_version === 'string' ? data.json_version : undefined,
     data_api_version: typeof data?.data_api_version === 'string' ? data.data_api_version : undefined,
     endpoint_uri: typeof data?.endpoint_uri === 'string' ? data.endpoint_uri : undefined,
+    health_status: data?.health_status,
   }
 }

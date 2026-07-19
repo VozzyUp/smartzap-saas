@@ -229,8 +229,8 @@ export function registerSettingsTools(server: McpServer) {
     {
       title: 'Assinar webhook WhatsApp',
       description:
-        'Registra o SmartZap como receptor de eventos WhatsApp na Meta. ' +
-        'Usa a URL do SmartZap automaticamente se callbackUrl for omitido. ' +
+        'Registra o V-Smart como receptor de eventos WhatsApp na Meta. ' +
+        'Usa a URL do V-Smart automaticamente se callbackUrl for omitido. ' +
         'Requer que as credenciais WhatsApp já estejam configuradas (set_whatsapp). ' +
         'URLs localhost são rejeitadas pela Meta — use uma URL pública.',
       inputSchema: {
@@ -239,7 +239,7 @@ export function registerSettingsTools(server: McpServer) {
           .url()
           .optional()
           .describe(
-            'URL pública do webhook (opcional — se omitida, usa a URL auto-detectada do SmartZap via NEXT_PUBLIC_APP_URL)'
+            'URL pública do webhook (opcional — se omitida, usa a URL auto-detectada do V-Smart via NEXT_PUBLIC_APP_URL)'
           ),
       },
     },

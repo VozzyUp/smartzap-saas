@@ -143,7 +143,7 @@ export function unauthorizedResponse(message: string = 'Unauthorized'): NextResp
     {
       status: 401,
       headers: {
-        'WWW-Authenticate': 'Bearer realm="SmartZap API"'
+        'WWW-Authenticate': 'Bearer realm="V-Smart API"'
       }
     }
   )

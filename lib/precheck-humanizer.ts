@@ -37,7 +37,7 @@ const SYSTEM_TOKEN_LABELS: Record<string, { label: string; focus: ContactFixTarg
 
 function extractSingleToken(raw: string): string | null {
   const s = (raw || '').trim();
-  // Suporta tokens internos do SmartZap com pontos (ex.: {{contact.name}})
+  // Suporta tokens internos do V-Smart com pontos (ex.: {{contact.name}})
   const m = s.match(/^\{\{([\w\d_.]+)\}\}$/);
   return m ? m[1] : null;
 }

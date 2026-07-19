@@ -329,7 +329,7 @@ export function ContactMemoriesSheet({
               </div>
             ) : (
               <>
-                {/* SEÇÃO 1: Perfil (Dados do SmartZap) */}
+                {/* SEÇÃO 1: Perfil (Dados do V-Smart) */}
                 {profile && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">

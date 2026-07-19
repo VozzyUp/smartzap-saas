@@ -110,7 +110,7 @@ export function WebhookStatusIndicator({
   const expectedUrl = webhookSubscription.smartzapWebhookUrl;
   const active = findActiveLevel(webhookSubscription.hierarchy, expectedUrl);
 
-  // URL do SmartZap configurada = sucesso
+  // URL do V-Smart configurada = sucesso
   if (active.isSmartZap) {
     return (
       <div className="px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-3">
@@ -147,7 +147,7 @@ export function WebhookStatusIndicator({
     );
   }
 
-  // Problema - URL não é do SmartZap ou não existe
+  // Problema - URL não é do V-Smart ou não existe
   return (
     <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg space-y-3">
       {/* Header */}

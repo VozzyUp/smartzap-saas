@@ -221,7 +221,7 @@ export default function DesignSystemLightPage() {
           </div>
           <h1 className="text-4xl font-bold text-zinc-900 mb-3">Design System - Light Mode</h1>
           <p className="text-zinc-500 text-lg max-w-2xl">
-            Preview das cores e tokens do SmartZap em modo claro.
+            Preview das cores e tokens do V-Smart em modo claro.
             Aprove esta paleta antes da implementação.
           </p>
         </div>

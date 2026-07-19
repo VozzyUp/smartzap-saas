@@ -82,16 +82,16 @@ export function WebhookAlertBanner() {
 
     const active = findActiveUrl(webhookSubscription.hierarchy, webhookSubscription.smartzapWebhookUrl);
 
-    // URL do SmartZap configurada = OK
+    // URL do V-Smart configurada = OK
     if (active.isSmartZap) {
       return null;
     }
 
-    // URL configurada mas não é do SmartZap
+    // URL configurada mas não é do V-Smart
     if (active.url && !active.isSmartZap) {
       return {
         title: 'Webhook apontando para outro sistema.',
-        description: 'A URL configurada não é do SmartZap.',
+        description: 'A URL configurada não é do V-Smart.',
       };
     }
 

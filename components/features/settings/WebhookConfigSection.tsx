@@ -197,7 +197,7 @@ export function WebhookConfigSection({
 
       {/* Explicação curta */}
       <p className="mt-4 mb-6 text-sm text-[var(--ds-text-secondary)]">
-        O webhook conecta a Meta ao SmartZap. Por ele você recebe respostas dos contatos e confirmações de entrega/leitura.
+        O webhook conecta a Meta ao V-Smart. Por ele você recebe respostas dos contatos e confirmações de entrega/leitura.
       </p>
 
       {/* URL e Token para copiar */}
@@ -314,7 +314,7 @@ export function WebhookConfigSection({
               <span className="flex-shrink-0 w-6 h-6 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center text-xs font-bold">✓</span>
               <div>
                 <p className="font-medium text-[var(--ds-text-primary)]">Pronto!</p>
-                <p className="mt-1">Após salvar, o SmartZap começará a receber as notificações automaticamente.</p>
+                <p className="mt-1">Após salvar, o V-Smart começará a receber as notificações automaticamente.</p>
               </div>
             </div>
           </div>
@@ -329,7 +329,7 @@ export function WebhookConfigSection({
             Configuração Avançada
           </h3>
 
-          {/* SmartZap Webhook URL Config (versão avançada com seletor de domínio) */}
+          {/* V-Smart Webhook URL Config (versão avançada com seletor de domínio) */}
           <WebhookUrlConfig
             webhookUrl={computedWebhookUrl}
             webhookToken={webhookToken}

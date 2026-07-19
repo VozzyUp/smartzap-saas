@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Typography Tokens
+ * V-Smart Design System - Typography Tokens
  *
  * Sistema tipográfico com:
  * - Font families (display + body)

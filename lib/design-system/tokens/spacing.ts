@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Spacing Tokens
+ * V-Smart Design System - Spacing Tokens
  *
  * Sistema de espaçamento baseado em escala de 4px
  * Consistente com Tailwind mas com nomes semânticos

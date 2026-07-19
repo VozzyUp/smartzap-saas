@@ -26,7 +26,7 @@ export function WizardStepChecklist() {
           <div className="w-8 h-8 rounded-lg bg-[var(--ds-status-success-bg)] flex items-center justify-center text-[var(--ds-status-success-text)] font-medium text-sm flex-shrink-0">2</div>
           <div>
             <div className="font-medium text-[var(--ds-text-primary)]">Conectar conta</div>
-            <div className="text-sm text-[var(--ds-text-secondary)]">Autorize o SmartZap a acessar seu Google Calendar.</div>
+            <div className="text-sm text-[var(--ds-text-secondary)]">Autorize o V-Smart a acessar seu Google Calendar.</div>
           </div>
         </div>
 

@@ -430,7 +430,7 @@ describe('renderTemplatePreviewText', () => {
       components: [
         { type: 'HEADER', format: 'TEXT', text: 'Olá {{1}}!' },
         { type: 'BODY', text: 'Você ganhou {{1}}% de desconto!' },
-        { type: 'FOOTER', text: 'SmartZap' },
+        { type: 'FOOTER', text: 'V-Smart' },
         {
           type: 'BUTTONS',
           buttons: [
@@ -448,7 +448,7 @@ describe('renderTemplatePreviewText', () => {
     expect(result).toContain('📋 *Template: full_template*')
     expect(result).toContain('*Olá Maria!*')
     expect(result).toContain('Você ganhou 50% de desconto!')
-    expect(result).toContain('_SmartZap_')
+    expect(result).toContain('_V-Smart_')
     expect(result).toContain('[🔗 Comprar]')
   })
 

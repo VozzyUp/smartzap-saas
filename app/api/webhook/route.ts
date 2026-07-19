@@ -1152,7 +1152,7 @@ export async function POST(request: NextRequest) {
               }
               const campaignId = extractCampaignIdFromFlowToken(flowToken)
 
-              // Best-effort: mapping para campos do SmartZap
+              // Best-effort: mapping para campos do V-Smart
               let flowLocalId: string | null = null
               let mappedData: Record<string, unknown> | null = null
               let mappedAt: string | null = null

@@ -163,7 +163,7 @@ function InstallBanner({ onInstall, onDismiss }: InstallBannerProps) {
             <Download className="w-5 h-5 text-emerald-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-zinc-100">Instalar SmartZap</h3>
+            <h3 className="text-sm font-semibold text-zinc-100">Instalar V-Smart</h3>
             <p className="text-xs text-zinc-400 mt-0.5">
               Acesse mais rápido direto da sua tela inicial
             </p>
@@ -215,7 +215,7 @@ function UpdateBanner({ onUpdate, onDismiss }: UpdateBannerProps) {
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-emerald-100">Atualização disponível</h3>
             <p className="text-xs text-emerald-300/70 mt-0.5">
-              Uma nova versão do SmartZap está pronta
+              Uma nova versão do V-Smart está pronta
             </p>
           </div>
           <button

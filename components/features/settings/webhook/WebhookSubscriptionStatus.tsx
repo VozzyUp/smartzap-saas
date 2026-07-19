@@ -107,7 +107,7 @@ export function WebhookSubscriptionStatus({
             isConfigured ? (
               <>
                 <StatusBadge status={isSmartZap ? 'success' : 'warning'} showDot>
-                  {isSmartZap ? 'SmartZap' : 'Outro sistema'}
+                  {isSmartZap ? 'V-Smart' : 'Outro sistema'}
                 </StatusBadge>
                 <span className="text-[var(--ds-text-muted)]">·</span>
                 <span className="text-[var(--ds-text-secondary)] text-xs font-mono truncate max-w-[200px]" title={overrideUrl || ''}>
@@ -153,7 +153,7 @@ export function WebhookSubscriptionStatus({
               ) : (
                 <>
                   <strong>App (#3)</strong> está sendo usado como fallback.
-                  Configure aqui para todos os números usarem o SmartZap automaticamente.
+                  Configure aqui para todos os números usarem o V-Smart automaticamente.
                 </>
               )}
             </p>
@@ -189,19 +189,19 @@ export function WebhookSubscriptionStatus({
               onClick={handleSubscribe}
               disabled={isLoading || !onSubscribe || (webhookSubscription !== undefined && !webhookSubscription?.ok)}
               className="h-10 px-3 bg-[var(--ds-status-success)] hover:opacity-90 text-white font-medium rounded-lg transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={webhookSubscription && !webhookSubscription.ok ? 'Configure as credenciais antes de ativar' : 'Configurar SmartZap como webhook WABA'}
+              title={webhookSubscription && !webhookSubscription.ok ? 'Configure as credenciais antes de ativar' : 'Configurar V-Smart como webhook WABA'}
             >
               {webhookSubscriptionMutating ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
                 <Zap size={16} />
               )}
-              Ativar SmartZap para WABA
+              Ativar V-Smart para WABA
             </button>
           ) : (
             <div className="flex items-center gap-2 px-3 py-2 bg-[var(--ds-status-success-bg)] text-[var(--ds-status-success-text)] rounded-lg text-sm">
               <CheckCircle2 size={16} />
-              SmartZap ativo
+              V-Smart ativo
             </div>
           )}
 

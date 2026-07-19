@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Color Tokens
+ * V-Smart Design System - Color Tokens
  *
  * Sistema de cores baseado em camadas:
  * 1. Primitivas (raw colors) - valores hex/hsl puros
@@ -210,7 +210,7 @@ export const semanticColors = {
     },
   },
 
-  // Campaign Status (specific to SmartZap)
+  // Campaign Status (specific to V-Smart)
   campaign: {
     draft: {
       text: primitiveColors.zinc[400],

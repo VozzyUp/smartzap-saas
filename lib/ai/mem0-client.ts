@@ -200,7 +200,7 @@ export async function fetchRelevantMemories(
 
   try {
     // Busca memórias como array (não string formatada)
-    // IMPORTANTE: app_id deve ser passado para filtrar memórias do SmartZap
+    // IMPORTANTE: app_id deve ser passado para filtrar memórias do V-Smart
     const memories = await withTimeout(
       getMemories(query, {
         user_id: config.user_id,

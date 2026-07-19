@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Shadow & Elevation Tokens
+ * V-Smart Design System - Shadow & Elevation Tokens
  *
  * Sistema de sombras para criar hierarquia visual:
  * - Elevations (box-shadow padrão)

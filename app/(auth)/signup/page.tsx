@@ -59,7 +59,7 @@ function SignupForm() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-emerald-500 to-emerald-600 mb-4">
           <span className="text-3xl font-bold text-white">S</span>
         </div>
-        <h1 className="text-2xl font-bold text-[var(--ds-text-primary)]">SmartZap</h1>
+        <h1 className="text-2xl font-bold text-[var(--ds-text-primary)]">V-Smart</h1>
         <p className="text-[var(--ds-text-secondary)] mt-1">Crie sua conta</p>
       </div>
 
@@ -145,7 +145,7 @@ function SignupForm() {
 
       {/* Footer */}
       <p className="text-center text-[var(--ds-text-muted)] text-sm mt-6">
-        SmartZap © {new Date().getFullYear()} |{' '}
+        V-Smart © {new Date().getFullYear()} |{' '}
         <a
           href="https://www.escoladeautomacao.com.br/"
           target="_blank"

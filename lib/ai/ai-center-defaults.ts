@@ -10,13 +10,13 @@ export type AiRoutesConfig = {
   generateFlowForm: boolean
 }
 
-/** Provider de IA suportado pelo SmartZap. */
+/** Provider de IA suportado pelo V-Smart. */
 export type AiProviderType = 'google' | 'openai'
 
 /**
  * Configuração de provider direto.
  *
- * O SmartZap usa as chaves do próprio usuário, armazenadas no Supabase.
+ * O V-Smart usa as chaves do próprio usuário, armazenadas no Supabase.
  * Cada cliente paga diretamente ao provider (Google / OpenAI).
  */
 export type AiDirectConfig = {

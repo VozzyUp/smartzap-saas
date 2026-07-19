@@ -138,7 +138,7 @@ export default function DesignSystemPage() {
       <div className="mb-12">
         <h1 className="text-heading-1 text-white mb-3">Design System</h1>
         <p className="text-zinc-400 text-lg max-w-2xl">
-          Documentação visual dos tokens de design do SmartZap.
+          Documentação visual dos tokens de design do V-Smart.
           Clique no botão de copiar para obter a variável CSS.
         </p>
       </div>
@@ -191,7 +191,7 @@ function ColorsSection() {
         <SectionHeader
           icon={Palette}
           title="Cores da Marca"
-          description="A paleta principal do SmartZap, inspirada no WhatsApp com tons de emerald."
+          description="A paleta principal do V-Smart, inspirada no WhatsApp com tons de emerald."
         />
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           <ColorSwatch name="Primary" value="#10b981" cssVar="var(--ds-brand-primary)" />

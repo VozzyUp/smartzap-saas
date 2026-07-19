@@ -60,7 +60,7 @@ export const SetupWizardView: React.FC<SetupWizardViewProps> = ({
           Configuração Inicial
         </h1>
         <p className="text-gray-400 max-w-md mx-auto">
-          Para usar o SmartZap, você precisa configurar alguns serviços. 
+          Para usar o V-Smart, você precisa configurar alguns serviços. 
           Siga os passos abaixo na ordem indicada.
         </p>
       </div>

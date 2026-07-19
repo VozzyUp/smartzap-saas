@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System
+ * V-Smart Design System
  *
  * Sistema de design centralizado com tokens para:
  * - Colors (cores primitivas, semânticas e de componentes)

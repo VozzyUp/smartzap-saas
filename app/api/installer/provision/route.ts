@@ -1,7 +1,7 @@
 /**
  * API de Provisioning Unificada
  *
- * Esta é a ÚNICA API de provisioning do SmartZap.
+ * Esta é a ÚNICA API de provisioning do V-Smart.
  * Recebe todos os dados coletados e executa o setup completo.
  *
  * Steps:

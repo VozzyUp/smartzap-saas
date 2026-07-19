@@ -35,7 +35,7 @@ export function WebhookUrlConfig({
     <div className="bg-[var(--ds-status-info-bg)] border border-[var(--ds-status-info)]/20 rounded-xl p-3 mb-6">
       <h4 className="font-medium text-[var(--ds-status-info-text)] mb-2 flex items-center gap-2 text-sm">
         <Zap size={14} />
-        URL do Webhook SmartZap
+        URL do Webhook V-Smart
       </h4>
 
       {/* Domain Selector - only show if multiple domains available */}

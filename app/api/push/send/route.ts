@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     // Notificação customizada
     const payload: PushPayload = {
-      title: body.title || 'SmartZap',
+      title: body.title || 'V-Smart',
       body: body.body || '',
       icon: body.icon || '/icons/icon-192.png',
       badge: body.badge || '/icons/icon-192.png',

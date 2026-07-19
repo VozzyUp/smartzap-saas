@@ -10,7 +10,7 @@ const META_API_VERSION = 'v24.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
 /**
- * Computa a URL do webhook do SmartZap baseado no ambiente
+ * Computa a URL do webhook do V-Smart baseado no ambiente
  */
 function computeWebhookUrl(): string {
   return `${getAppUrl()}/api/webhook`
@@ -169,7 +169,7 @@ export async function GET() {
  * Configura o webhook WABA (#2) com override_callback_uri
  *
  * Body:
- * { callbackUrl?: string } - Se não fornecido, usa a URL do SmartZap
+ * { callbackUrl?: string } - Se não fornecido, usa a URL do V-Smart
  */
 export async function POST(request: Request) {
   const ctx = await getTenantContext()
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
     // ignore
   }
 
-  // Se não forneceu callbackUrl, usa a URL do SmartZap
+  // Se não forneceu callbackUrl, usa a URL do V-Smart
   if (!callbackUrl) {
     callbackUrl = computeWebhookUrl()
   }

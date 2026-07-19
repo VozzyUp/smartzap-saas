@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * SmartZap Design System - FormSection
+ * V-Smart Design System - FormSection
  *
  * Seção de formulário com título, descrição e conteúdo.
  * Usado para agrupar campos relacionados em formulários e wizards.

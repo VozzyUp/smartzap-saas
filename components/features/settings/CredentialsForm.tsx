@@ -26,7 +26,7 @@ interface CredentialsFormProps {
  *
  * Usa o componente centralizado WhatsAppCredentialsForm e adiciona:
  * - Container visual com estilo glass
- * - Integração com o sistema de settings do SmartZap
+ * - Integração com o sistema de settings do V-Smart
  * - Salvamento de Meta App ID junto com credenciais principais
  */
 export const CredentialsForm = forwardRef<HTMLDivElement, CredentialsFormProps>(

@@ -290,9 +290,9 @@ export async function uploadMediaToMeta(params: {
     const form = new FormData()
     form.append('messaging_product', 'whatsapp')
     // No multipart da Cloud API, o MIME pertence ao campo `file`.
-    // Parâmetros como `codecs=opus` descrevem o arquivo internamente, mas a
-    // Meta espera o media type base no Content-Type da parte do arquivo.
-    const fileContentType = params.contentType.split(';', 1)[0].trim()
+    // Para nota de voz OGG, `codecs=opus` precisa ser preservado: a Meta não
+    // aceita o tipo base `audio/ogg` para esse formato.
+    const fileContentType = params.contentType.trim()
     const bytes = new Uint8Array(params.buffer)
     form.append('file', new Blob([bytes], { type: fileContentType }), params.filename ?? 'file')
     const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {

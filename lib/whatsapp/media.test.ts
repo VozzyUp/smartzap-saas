@@ -525,7 +525,7 @@ describe('uploadMediaToMeta', () => {
     expect(file.type).toBe('image/jpeg')
   })
 
-  it('deve enviar OGG/Opus com MIME base no campo file', async () => {
+  it('deve preservar codecs=opus no Content-Type do campo file', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -544,7 +544,7 @@ describe('uploadMediaToMeta', () => {
     const form = fetchMock.mock.calls[0][1].body as FormData
     expect(form.get('type')).toBeNull()
     const file = form.get('file') as File
-    expect(file.type).toBe('audio/ogg')
+    expect(file.type).toBe('audio/ogg; codecs=opus')
   })
 
   it('deve usar "file" como filename padrão quando não informado', async () => {

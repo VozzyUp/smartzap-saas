@@ -54,6 +54,12 @@ export async function remuxToOggOpus(input: Buffer, inputMime: string): Promise<
         '32k',
         '-application',
         'voip',
+        // Alguns clientes do WhatsApp recusam OGG/Opus cujo encoder preserva
+        // PTS negativo do WebM. Normalizamos a primeira amostra e a saída.
+        '-af',
+        'aresample=async=1:first_pts=0',
+        '-avoid_negative_ts',
+        'make_zero',
         '-f',
         'ogg',
         'pipe:1',

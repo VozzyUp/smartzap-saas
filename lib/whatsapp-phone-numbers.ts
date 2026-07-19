@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { randomUUID } from 'crypto'
 
 export async function upsertWhatsAppPhoneNumber(
@@ -77,11 +78,12 @@ export type WhatsAppNumberRow = {
   business_account_id: string | null
   access_token: string | null
   display_label: string | null
+  display_phone_number: string | null
   is_active: boolean
 }
 export type WhatsAppNumberPublic = Omit<WhatsAppNumberRow, 'access_token'>
 
-const PUBLIC_COLS = 'phone_number_id, tenant_id, business_account_id, display_label, is_active'
+const PUBLIC_COLS = 'phone_number_id, tenant_id, business_account_id, display_label, display_phone_number, is_active'
 const FULL_COLS = `${PUBLIC_COLS}, access_token`
 
 export async function getActiveWhatsAppNumber(tenantId: string): Promise<WhatsAppNumberRow | null> {
@@ -107,7 +109,7 @@ export async function listWhatsAppNumbers(tenantId: string): Promise<WhatsAppNum
 
 export async function addWhatsAppNumber(
   tenantId: string,
-  params: { phoneNumberId: string; businessAccountId?: string | null; accessToken: string; displayLabel?: string | null }
+  params: { phoneNumberId: string; businessAccountId?: string | null; accessToken: string; displayLabel?: string | null; displayPhoneNumber?: string | null }
 ): Promise<WhatsAppNumberRow> {
   const db = getSupabaseAdmin()!
   const existingActive = await getActiveWhatsAppNumber(tenantId)
@@ -118,6 +120,7 @@ export async function addWhatsAppNumber(
       business_account_id: params.businessAccountId ?? null,
       access_token: params.accessToken,
       display_label: params.displayLabel ?? null,
+      display_phone_number: params.displayPhoneNumber ?? null,
       is_active: existingActive === null, // 1º número do tenant já entra ativo
       updated_at: new Date().toISOString(),
     },
@@ -125,6 +128,37 @@ export async function addWhatsAppNumber(
   ).select(FULL_COLS).single()
   if (error) throw error
   return data as unknown as WhatsAppNumberRow
+}
+
+// Números existentes antes da coluna display_phone_number são enriquecidos uma
+// vez pela Meta. Assim a interface não volta a exibir o Phone Number ID.
+export async function refreshWhatsAppNumberDisplayPhoneNumber(
+  tenantId: string,
+  phoneNumberId: string
+): Promise<string | null> {
+  const number = await getWhatsAppNumberByPhoneId(tenantId, phoneNumberId)
+  if (!number?.access_token) return null
+
+  try {
+    const response = await fetchWithTimeout(
+      `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=display_phone_number`,
+      { headers: { Authorization: `Bearer ${number.access_token}` }, timeoutMs: 8000 }
+    )
+    if (!response.ok) return null
+    const data = await safeJson<{ display_phone_number?: string }>(response)
+    const displayPhoneNumber = data?.display_phone_number?.trim()
+    if (!displayPhoneNumber) return null
+
+    const db = getSupabaseAdmin()!
+    const { error } = await db.from('whatsapp_phone_numbers')
+      .update({ display_phone_number: displayPhoneNumber, updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId).eq('phone_number_id', phoneNumberId)
+    if (error) throw error
+    return displayPhoneNumber
+  } catch (error) {
+    console.warn(`[whatsapp-phone-numbers] falha ao buscar telefone de exibição para ${phoneNumberId}:`, error)
+    return null
+  }
 }
 
 export async function setActiveWhatsAppNumber(tenantId: string, phoneNumberId: string): Promise<void> {

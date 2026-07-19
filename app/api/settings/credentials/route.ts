@@ -149,7 +149,12 @@ export async function POST(request: NextRequest) {
     // Save to Database (Persist across refreshes). O token vai para a tabela
     // whatsapp_phone_numbers (fonte de verdade); settings é apenas espelhado
     // a partir do número ativo, para os call-sites legados.
-    await addWhatsAppNumber(ctx.tenantId, { phoneNumberId, businessAccountId, accessToken })
+    await addWhatsAppNumber(ctx.tenantId, {
+      phoneNumberId,
+      businessAccountId,
+      accessToken,
+      displayPhoneNumber: phoneData?.display_phone_number,
+    })
     await mirrorActiveToSettings(ctx.tenantId)
 
     return NextResponse.json({

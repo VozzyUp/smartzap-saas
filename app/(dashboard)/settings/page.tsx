@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSettingsController } from '@/hooks/useSettings'
 import { SettingsView } from '@/components/features/settings/SettingsView'
 import { SetupWizardView } from '@/components/features/settings/SetupWizardView'
@@ -12,6 +13,16 @@ export default function SettingsPage() {
   const controller = useSettingsController()
   const { usage, isLoading: usageLoading, refetch: refetchUsage } = useUsage()
   const [skipWizard, setSkipWizard] = useState(false)
+  const { data: adminStatus } = useQuery({
+    queryKey: ['adminStatus'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/me')
+      if (!response.ok) throw new Error('Failed to fetch admin status')
+      return response.json() as Promise<{ isPlatformAdmin: boolean }>
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
 
   // Show Setup Wizard if minimum infrastructure is not ready (QStash)
   // WhatsApp pode ser configurado depois em Configurações
@@ -121,6 +132,7 @@ export default function SettingsPage() {
             removeUpstashConfig={controller.removeUpstashConfig}
             isSavingUpstashConfig={controller.isSavingUpstashConfig}
             hideHeader
+            isPlatformAdmin={!!adminStatus?.isPlatformAdmin}
           />
         </div>
 

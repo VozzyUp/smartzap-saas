@@ -20,6 +20,7 @@ type WhatsAppNumberPublic = {
   tenant_id: string
   business_account_id: string | null
   display_label: string | null
+  display_phone_number: string | null
   is_active: boolean
 }
 
@@ -64,7 +65,7 @@ function NumberCard({
   isActivating: boolean
   isRemoving: boolean
 }) {
-  const label = number.display_label || number.phone_number_id
+  const label = number.display_phone_number || number.display_label || number.phone_number_id
 
   return (
     <div
@@ -344,7 +345,7 @@ export default function NumerosPage() {
                 number={number}
                 onActivate={() => handleActivate(number.phone_number_id)}
                 onRemove={() =>
-                  handleRemove(number.phone_number_id, number.display_label || number.phone_number_id)
+                  handleRemove(number.phone_number_id, number.display_phone_number || number.display_label || number.phone_number_id)
                 }
                 isActivating={activatingId === number.phone_number_id && activateMutation.isPending}
                 isRemoving={removingId === number.phone_number_id && removeMutation.isPending}

@@ -5,6 +5,7 @@ import {
   addWhatsAppNumber,
   mirrorActiveToSettings,
   resolveTenantByPhoneNumberId,
+  refreshWhatsAppNumberDisplayPhoneNumber,
 } from '@/lib/whatsapp-phone-numbers'
 import { canAddWhatsAppNumber, planLimitResponse } from '@/lib/plan-limits'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
@@ -17,7 +18,12 @@ export async function GET() {
   const ctx = await getTenantContext()
   if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const numbers = await listWhatsAppNumbers(ctx.tenantId)
-  return NextResponse.json({ numbers })
+  const enrichedNumbers = await Promise.all(numbers.map(async (number) => {
+    if (number.display_phone_number) return number
+    const displayPhoneNumber = await refreshWhatsAppNumberDisplayPhoneNumber(ctx.tenantId, number.phone_number_id)
+    return displayPhoneNumber ? { ...number, display_phone_number: displayPhoneNumber } : number
+  }))
+  return NextResponse.json({ numbers: enrichedNumbers })
 }
 
 // POST - Valida credenciais na Meta, aplica o gate de plano (reconexão-safe,
@@ -60,7 +66,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await addWhatsAppNumber(ctx.tenantId, { phoneNumberId, businessAccountId, accessToken, displayLabel })
+    await addWhatsAppNumber(ctx.tenantId, {
+      phoneNumberId,
+      businessAccountId,
+      accessToken,
+      displayLabel,
+      displayPhoneNumber: phoneData?.display_phone_number,
+    })
     await mirrorActiveToSettings(ctx.tenantId)
 
     return NextResponse.json({

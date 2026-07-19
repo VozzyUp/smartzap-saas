@@ -186,6 +186,7 @@ export interface SettingsViewProps {
 
   // UI options
   hideHeader?: boolean;
+  isPlatformAdmin?: boolean;
 
   // Test connection
   onTestConnection?: () => void;

@@ -6,15 +6,17 @@ vi.mock('@/lib/tenant-context', () => ({
   getTenantContext: vi.fn(async () => ctxMock),
 }))
 
-const listMock = vi.fn(async () => [{ phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', display_label: null, is_active: true }])
+const listMock = vi.fn(async () => [{ phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', display_label: null, display_phone_number: '+55 11 99999-9999', is_active: true }])
 const addMock = vi.fn(async () => ({}))
 const mirrorMock = vi.fn(async () => {})
 const resolveMock = vi.fn(async () => null as string | null)
+const refreshDisplayMock = vi.fn(async () => null as string | null)
 vi.mock('@/lib/whatsapp-phone-numbers', () => ({
   listWhatsAppNumbers: (...a: any[]) => listMock(...a),
   addWhatsAppNumber: (...a: any[]) => addMock(...a),
   mirrorActiveToSettings: (...a: any[]) => mirrorMock(...a),
   resolveTenantByPhoneNumberId: (...a: any[]) => resolveMock(...a),
+  refreshWhatsAppNumberDisplayPhoneNumber: (...a: any[]) => refreshDisplayMock(...a),
 }))
 
 const canAddMock = vi.fn(async () => ({ allowed: true, limit: 5, current: 1 }))
@@ -52,8 +54,21 @@ describe('GET /api/whatsapp-numbers', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(listMock).toHaveBeenCalledWith('t1')
-    expect(body.numbers).toEqual([{ phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', display_label: null, is_active: true }])
+    expect(body.numbers).toEqual([{ phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', display_label: null, display_phone_number: '+55 11 99999-9999', is_active: true }])
     expect(JSON.stringify(body)).not.toContain('access_token')
+  })
+
+  it('enriquece nÃºmeros antigos sem telefone de exibiÃ§Ã£o', async () => {
+    listMock.mockResolvedValueOnce([
+      { phone_number_id: 'pn_legacy', tenant_id: 't1', business_account_id: 'ba_1', display_label: null, display_phone_number: null, is_active: true },
+    ])
+    refreshDisplayMock.mockResolvedValueOnce('+55 11 98888-7777')
+
+    const res = await GET()
+    const body = await res.json()
+
+    expect(refreshDisplayMock).toHaveBeenCalledWith('t1', 'pn_legacy')
+    expect(body.numbers[0].display_phone_number).toBe('+55 11 98888-7777')
   })
 })
 
@@ -92,7 +107,13 @@ describe('POST /api/whatsapp-numbers', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(200)
-    expect(addMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok', displayLabel: 'Loja 2' })
+    expect(addMock).toHaveBeenCalledWith('t1', {
+      phoneNumberId: 'pn_2',
+      businessAccountId: 'ba_2',
+      accessToken: 'tok',
+      displayLabel: 'Loja 2',
+      displayPhoneNumber: '+551199999999',
+    })
     expect(mirrorMock).toHaveBeenCalledWith('t1')
   })
 

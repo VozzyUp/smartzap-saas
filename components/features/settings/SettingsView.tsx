@@ -47,6 +47,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   availableDomains,
   webhookPath,
   hideHeader,
+  isPlatformAdmin = false,
 
   onTestConnection,
   isTestingConnection,
@@ -161,7 +162,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* ========== ORDEM: 1. Sistema Online (acima), 2. Webhooks, 3. Contato de Teste, 4. Agendamento ========== */}
 
         {/* 2. Webhook Configuration Section */}
-        {settings.isConnected && webhookUrl && (
+        {isPlatformAdmin && settings.isConnected && webhookUrl && (
           <section id="webhooks">
           <WebhookConfigSection
             webhookUrl={webhookUrl}

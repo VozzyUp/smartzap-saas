@@ -17,10 +17,11 @@ export const revalidate = 0
 export async function GET() {
   const ctx = await getTenantContext()
   if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const numbers = await listWhatsAppNumbers(ctx.tenantId)
+  const tenantId = ctx.tenantId
+  const numbers = await listWhatsAppNumbers(tenantId)
   const enrichedNumbers = await Promise.all(numbers.map(async (number) => {
     if (number.display_phone_number) return number
-    const displayPhoneNumber = await refreshWhatsAppNumberDisplayPhoneNumber(ctx.tenantId, number.phone_number_id)
+    const displayPhoneNumber = await refreshWhatsAppNumberDisplayPhoneNumber(tenantId, number.phone_number_id)
     return displayPhoneNumber ? { ...number, display_phone_number: displayPhoneNumber } : number
   }))
   return NextResponse.json({ numbers: enrichedNumbers })

@@ -7,7 +7,8 @@ import { TurboConfigSection } from './TurboConfigSection';
 import { WebhookConfigSection } from './WebhookConfigSection';
 import { CalendarBookingPanel } from './CalendarBookingPanel';
 import { FlowEndpointPanel } from './FlowEndpointPanel';
-import { CredentialsForm } from './CredentialsForm';
+import Link from 'next/link';
+import { Smartphone } from 'lucide-react';
 import { UpstashConfigPanel } from './UpstashConfigPanel';
 import { ApiDocsPanel } from './ApiDocsPanel';
 import { useDevMode } from '@/components/providers/DevModeProvider';
@@ -143,20 +144,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onToggleEdit={() => setIsEditing((v) => !v)}
         />
 
-        {/* Credentials Form - Only visible if disconnected OR editing */}
-        {(!settings.isConnected || isEditing) && (
-          <CredentialsForm
+        {/* Fase 4: conexão/edição de credenciais consolidadas em /settings/numeros
+            (fonte de verdade dos números). O formulário legado daqui gravava só o
+            espelho e gerava estado inconsistente com a tabela de números. */}
+        {!settings.isConnected && (
+          <div
             ref={credentialsFormRef}
-            settings={settings}
-            setSettings={setSettings}
-            onSave={onSave}
-            onClose={() => setIsEditing(false)}
-            isSaving={isSaving}
-            onTestConnection={onTestConnection}
-            isTestingConnection={isTestingConnection}
-            metaApp={metaApp}
-            refreshMetaApp={refreshMetaApp}
-          />
+            className="rounded-2xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+          >
+            <div className="flex-1">
+              <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">
+                Nenhum número de WhatsApp conectado
+              </h3>
+              <p className="text-sm text-[var(--ds-text-muted)] mt-1">
+                Conecte e gerencie seus números (credenciais, número ativo, remoção) em um só lugar.
+              </p>
+            </div>
+            <Link
+              href="/settings/numeros"
+              className="inline-flex items-center gap-2 rounded-xl h-10 px-4 text-sm font-medium bg-primary-600 text-white hover:bg-primary-500 transition-colors"
+            >
+              <Smartphone size={14} aria-hidden="true" />
+              Ir para Números de WhatsApp
+            </Link>
+          </div>
         )}
 
         {/* ========== ORDEM: 1. Sistema Online (acima), 2. Webhooks, 3. Contato de Teste, 4. Agendamento ========== */}

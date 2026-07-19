@@ -1,7 +1,8 @@
 'use client';
 
 import React, { forwardRef } from 'react';
-import { Wifi, AlertTriangle, RefreshCw, AlertCircle, Shield, Edit2 } from 'lucide-react';
+import Link from 'next/link';
+import { Wifi, AlertTriangle, RefreshCw, AlertCircle, Shield, Smartphone } from 'lucide-react';
 import { AccountLimits } from '../../../lib/meta-limits';
 import { Container } from '@/components/ui/container';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -121,27 +122,17 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
 
       {settings.isConnected && (
         <div className="flex flex-col gap-3 min-w-35">
-          <button
-            onClick={onToggleEdit}
-            className={`group relative overflow-hidden rounded-xl h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2
-              ${isEditing
-                ? 'bg-primary-600 text-white shadow-lg hover:bg-primary-500 dark:bg-white dark:text-black dark:hover:bg-neutral-100'
-                : 'bg-[var(--ds-bg-hover)] text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] hover:border-[var(--ds-border-strong)]'
-              }`}
-            aria-label={isEditing ? 'Cancelar edição das configurações' : 'Editar configurações'}
-            aria-pressed={isEditing}
+          {/* Fase 4: a gestão de números (conectar/trocar/remover) vive em
+              /settings/numeros — este card é só status. Editar/Desconectar
+              daqui eram o caminho legado de 1 número e causavam inconsistência. */}
+          <Link
+            href="/settings/numeros"
+            className="group relative overflow-hidden rounded-xl h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 bg-[var(--ds-bg-hover)] text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] hover:border-[var(--ds-border-strong)] focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+            aria-label="Gerenciar números de WhatsApp"
           >
-            <Edit2 size={14} className={`transition-transform duration-500 ${isEditing ? 'rotate-45' : 'group-hover:scale-110'}`} aria-hidden="true" />
-            {isEditing ? 'Cancelar' : 'Editar'}
-          </button>
-
-          <button
-            onClick={onDisconnect}
-            className="text-xs font-medium text-red-400/60 hover:text-red-400 hover:bg-red-500/5 h-10 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
-            aria-label="Desconectar conta do WhatsApp"
-          >
-            Desconectar
-          </button>
+            <Smartphone size={14} className="group-hover:scale-110 transition-transform duration-300" aria-hidden="true" />
+            Gerenciar números
+          </Link>
         </div>
       )}
       </Container>

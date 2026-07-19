@@ -161,6 +161,11 @@ describe('webhook route - status de entrega do Inbox', () => {
     const res = await POST(req)
 
     expect(res.status).toBe(200)
+    expect(recordStatusEventMock).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.inbox_failed',
+      status: 'failed',
+    }))
     expect(campaignContactsLimitMock).toHaveBeenCalledOnce()
     expect(handleDeliveryStatusMock).toHaveBeenCalledWith({
       messageId: 'wamid.inbox_failed',
@@ -168,5 +173,32 @@ describe('webhook route - status de entrega do Inbox', () => {
       timestamp: '2023-11-14T22:13:20.000Z',
       errors,
     })
+  })
+
+  it('retorna 500 para falha de integridade ao persistir o evento', async () => {
+    applyCampaignStatusMock.mockResolvedValue({ reason: 'noop' })
+    recordStatusEventMock.mockRejectedValue({
+      code: '23502',
+      message: 'null value in column "tenant_id" of relation "whatsapp_status_events" violates not-null constraint',
+    })
+    const req = new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [{
+          changes: [{
+            value: {
+              metadata: { phone_number_id: 'pn_1' },
+              statuses: [{ id: 'wamid.integrity_error', status: 'sent', timestamp: '1700000000' }],
+            },
+          }],
+        }],
+      }),
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: 'Falha ao persistir evento do webhook (retry)' })
   })
 })

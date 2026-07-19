@@ -78,6 +78,7 @@ export async function enqueueWebhookStatusReconcileBestEffort(reason: string): P
 }
 
 export async function recordStatusEvent(params: {
+  tenantId: string
   messageId: string
   status: WhatsAppStatus
   eventTsIso: string | null
@@ -98,6 +99,7 @@ export async function recordStatusEvent(params: {
     .from('whatsapp_status_events')
     .upsert(
       {
+        tenant_id: params.tenantId,
         message_id: params.messageId,
         status: params.status,
         event_ts: params.eventTsIso,
@@ -312,6 +314,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
 }
 
 export async function handleWhatsAppStatusWebhookEvent(params: {
+  tenantId: string
   statusUpdate: WhatsAppWebhookStatusUpdate
   // Optional subset of webhook envelope (for forensics)
   payload?: any
@@ -330,6 +333,7 @@ export async function handleWhatsAppStatusWebhookEvent(params: {
   let eventId: string | null = null
   try {
     const rec = await recordStatusEvent({
+      tenantId: params.tenantId,
       messageId,
       status,
       eventTsIso,

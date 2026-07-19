@@ -493,7 +493,7 @@ function isMissingTableError(e: unknown, tableName: string): boolean {
 
   // PostgREST / Supabase cache errors often include the table name.
   if (m.includes('does not exist') && m.includes(t)) return true
-  if (m.includes('relation') && m.includes(t)) return true
+  if (m.includes('relation') && m.includes(t) && m.includes('does not exist')) return true
   if (m.includes('schema cache') && m.includes(t)) return true
 
   return false
@@ -731,6 +731,7 @@ export async function POST(request: NextRequest) {
             }
 
             const rec = await recordStatusEvent({
+              tenantId,
               messageId,
               status,
               eventTsIso,

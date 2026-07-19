@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 
 /**
- * SmartZap Design System - FilterBar
+ * V-Smart Design System - FilterBar
  *
  * Barra de filtros padronizada para páginas de listagem.
  * Inclui: Search, Dropdowns de filtro, Refresh, Ações extras.

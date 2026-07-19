@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'start e end sao obrigatorios' }, { status: 400 })
     }
 
-    const summary = body?.summary ? String(body.summary) : 'Agendamento via SmartZap'
+    const summary = body?.summary ? String(body.summary) : 'Agendamento via V-Smart'
     const description = body?.description ? String(body.description) : undefined
     const attendees = Array.isArray(body?.attendees) ? body.attendees : undefined
 

@@ -3,7 +3,7 @@ import { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
- * SmartZap Design System - StatsCard
+ * V-Smart Design System - StatsCard
  *
  * Card de estatística para exibir métricas numéricas.
  * Usado em páginas de listagem para mostrar totais e KPIs.

@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Pattern Components
+ * V-Smart Design System - Pattern Components
  *
  * Componentes de padrões para garantir consistência em:
  * - Layouts de página

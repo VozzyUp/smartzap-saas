@@ -55,7 +55,7 @@ export function TokenScopesCard({ data, checks }: TokenScopesCardProps) {
           <div className="text-xs text-gray-500">Token</div>
           <div className="mt-2 text-sm text-white font-medium">Permissoes (escopos) — checklist</div>
           <div className="mt-2 text-sm text-gray-300">
-            Aqui voce ve <b>o que conseguimos verificar</b> sobre escopos e o que e necessario para o SmartZap funcionar.
+            Aqui voce ve <b>o que conseguimos verificar</b> sobre escopos e o que e necessario para o V-Smart funcionar.
           </div>
         </div>
         <div className="shrink-0">

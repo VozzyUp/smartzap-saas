@@ -7,7 +7,7 @@ import { Stepper, Step, StepperProps } from './stepper'
 import { Button } from '@/components/ui/button'
 
 /**
- * SmartZap Design System - WizardPageLayout
+ * V-Smart Design System - WizardPageLayout
  *
  * Layout padrão para páginas de wizard/formulário multi-step.
  * Estrutura: Header → Stepper → Two-column (Form + Summary)

@@ -15,7 +15,7 @@ export type CatalogPlan = {
 }
 
 const WHATSAPP_URL = `https://wa.me/5511976194739?text=${encodeURIComponent(
-  'Olá! Quero fazer upgrade do meu plano no SmartZap.'
+  'Olá! Quero fazer upgrade do meu plano no V-Smart.'
 )}`
 
 function formatPrice(priceCents: number | null, slug: string): string {

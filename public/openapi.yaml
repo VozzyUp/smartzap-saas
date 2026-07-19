@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 info:
-  title: SmartZap API
+  title: V-Smart API
   description: |
     API de automação de marketing via WhatsApp.
 
@@ -22,7 +22,7 @@ info:
     - `/api/installer/*` - Setup inicial
   version: 1.0.0
   contact:
-    name: SmartZap
+    name: V-Smart
   license:
     name: Proprietary
     url: https://smartzap.app/license

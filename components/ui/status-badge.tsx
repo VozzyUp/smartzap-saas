@@ -29,7 +29,7 @@ const statusBadgeVariants = cva(
         processing: "bg-blue-500/10 text-[var(--ds-status-info-text)] animate-pulse",
         default: "bg-[var(--ds-bg-surface)] text-[var(--ds-text-secondary)]",
 
-        // Campaign status (SmartZap specific)
+        // Campaign status (V-Smart specific)
         draft: "bg-[var(--ds-bg-surface)] text-[var(--ds-text-secondary)]",
         scheduled: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
         sending: "bg-blue-500/10 text-[var(--ds-status-info-text)] animate-pulse",

@@ -641,7 +641,7 @@ async function createBookingEvent(tenantId: string, params: {
         `Telefone: ${params.customerPhone}`,
         params.notes ? `Observações: ${params.notes}` : null,
         '',
-        'Agendado via WhatsApp (SmartZap)',
+        'Agendado via WhatsApp (V-Smart)',
       ]
         .filter(Boolean)
         .join('\n'),

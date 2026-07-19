@@ -110,7 +110,7 @@ export function ConfigureWebhookStep({
             Para saber quando suas mensagens foram <strong className="text-white">entregues</strong> e <strong className="text-white">lidas</strong>,
           </p>
           <p className="text-zinc-400 text-sm">
-            o SmartZap precisa receber notificações do WhatsApp.
+            o V-Smart precisa receber notificações do WhatsApp.
           </p>
         </div>
 

@@ -1,5 +1,5 @@
 /**
- * SmartZap Service Worker
+ * V-Smart Service Worker
  *
  * Estratégias de cache:
  * - Cache-first: assets estáticos (JS, CSS, fontes, imagens)
@@ -127,7 +127,7 @@ self.addEventListener('push', (event) => {
   console.log('[SW] Push received')
 
   let data = {
-    title: 'SmartZap',
+    title: 'V-Smart',
     body: 'Nova mensagem recebida',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',

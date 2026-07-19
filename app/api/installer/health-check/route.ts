@@ -63,7 +63,7 @@ async function checkDatabaseHealth(dbUrl: string): Promise<{
   try {
     await client.connect();
 
-    // SmartZap não depende de Storage por padrão. Só valida quando explicitamente solicitado.
+    // V-Smart não depende de Storage por padrão. Só valida quando explicitamente solicitado.
     let storageReady = !shouldWaitStorage;
     if (shouldWaitStorage) {
       const storageResult = await client.query<{ ready: boolean }>(

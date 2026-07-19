@@ -117,7 +117,7 @@ export function SupabaseStep({ onComplete }: SupabaseStepProps) {
 
       // ========== 2. CRIAR PROJETO ==========
       setPhase('creating');
-      setStatusMessage('Criando projeto SmartZap...');
+      setStatusMessage('Criando projeto V-Smart...');
 
       const dbPass = generateDbPassword();
       let projectName = 'smartzap';
@@ -398,7 +398,7 @@ export function SupabaseStep({ onComplete }: SupabaseStepProps) {
           <div className="flex items-center gap-2 text-emerald-400">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <p className="text-xs text-left">
-              Criaremos automaticamente um projeto dedicado para o SmartZap
+              Criaremos automaticamente um projeto dedicado para o V-Smart
             </p>
           </div>
         </div>

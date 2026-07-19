@@ -30,7 +30,7 @@ export const ApiDocsPanel: React.FC = () => {
           <div>
             <CardTitle className="text-lg text-zinc-100">Documentação da API</CardTitle>
             <CardDescription>
-              Integre o SmartZap com seus sistemas via REST API
+              Integre o V-Smart com seus sistemas via REST API
             </CardDescription>
           </div>
         </div>

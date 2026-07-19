@@ -2,7 +2,7 @@
  * Supabase Client
  * 
  * PostgreSQL database with connection pooling and RLS
- * Banco principal do SmartZap (PostgreSQL + RLS)
+ * Banco principal do V-Smart (PostgreSQL + RLS)
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'

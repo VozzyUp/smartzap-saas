@@ -312,7 +312,7 @@ export function OnboardingChecklist({
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-zinc-700 text-zinc-300 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
-                  <span>Gere o token e <strong className="text-white">atualize nas configurações</strong> do SmartZap</span>
+                  <span>Gere o token e <strong className="text-white">atualize nas configurações</strong> do V-Smart</span>
                 </li>
               </ol>
             </div>

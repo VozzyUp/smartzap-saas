@@ -37,7 +37,7 @@ export type FlowTemplate = {
   description: string
   /** Flow JSON no formato exigido pela Meta (armazenado como JSONB). */
   flowJson: Record<string, unknown>
-  /** Mapping padrão para salvar respostas no SmartZap. */
+  /** Mapping padrão para salvar respostas no V-Smart. */
   defaultMapping: FlowMappingV1
   /** Form spec pré-definido (opcional). Se presente, usado pelo builder em vez de converter flowJson. */
   form?: FlowFormSpecV1

@@ -656,7 +656,7 @@ export const WhatsAppPhonePreview: React.FC<WhatsAppPhonePreviewProps> = ({
   namedVariables,
   namedHeaderVariables,
   fallbackContent,
-  businessName = 'SmartZap Business',
+  businessName = 'V-Smart Business',
   showEmptyState = true,
   emptyStateMessage = 'Selecione um template',
   size = 'lg',

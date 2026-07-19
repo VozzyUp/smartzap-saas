@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button, ButtonProps } from '@/components/ui/button'
 
 /**
- * SmartZap Design System - Action Buttons
+ * V-Smart Design System - Action Buttons
  *
  * Botões padronizados para ações em páginas.
  * Define hierarquia visual consistente.

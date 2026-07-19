@@ -1,6 +1,6 @@
 {
-  "name": "SmartZap Atendimento",
-  "short_name": "SmartZap",
+  "name": "V-Smart Atendimento",
+  "short_name": "V-Smart",
   "description": "Central de atendimento WhatsApp com IA",
   "start_url": "/atendimento",
   "scope": "/atendimento",

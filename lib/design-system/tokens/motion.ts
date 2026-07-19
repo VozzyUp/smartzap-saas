@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Motion Tokens
+ * V-Smart Design System - Motion Tokens
  *
  * Sistema de animação incluindo:
  * - Durações

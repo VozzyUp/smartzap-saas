@@ -2,7 +2,7 @@
  * Sistema de estado persistente para instalação resumível.
  * Salva progresso em localStorage para permitir retomar em caso de falha.
  *
- * Adaptado do CRM para SmartZap - inclui steps para QStash e Redis.
+ * Adaptado do CRM para V-Smart - inclui steps para QStash e Redis.
  */
 
 export interface InstallStep {
@@ -102,7 +102,7 @@ export function clearInstallState(): void {
 /**
  * Cria um novo estado de instalação
  *
- * Steps do SmartZap:
+ * Steps do V-Smart:
  * 1. health_check - Verificar saúde do projeto Supabase
  * 2. resolve_keys - Resolver chaves API do Supabase
  * 3. setup_envs - Configurar variáveis de ambiente no Vercel

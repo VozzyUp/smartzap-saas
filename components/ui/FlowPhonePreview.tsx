@@ -190,7 +190,7 @@ export function FlowPhonePreview(props: {
 }) {
   const parsed = useMemo(() => parseFlowJson(props.flowJson), [props.flowJson])
 
-  const businessName = props.businessName || 'SmartZap Business'
+  const businessName = props.businessName || 'V-Smart Business'
   const size = props.size || 'md'
 
   const sizeConfig =

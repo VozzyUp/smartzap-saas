@@ -15,7 +15,7 @@ describe('GeneratedTemplateSchema', () => {
     name: 'confirmacao_agendamento',
     header: 'Confirmacao de Agendamento',
     body: 'Ola {{1}}, seu agendamento foi confirmado para {{2}}.',
-    footer: 'SmartZap - Automacao',
+    footer: 'V-Smart - Automacao',
     button: 'Confirmar',
   }
 
@@ -345,7 +345,7 @@ describe('JudgedTemplateSchema', () => {
     name: 'confirmacao_agendamento',
     header: 'Confirmacao',
     body: 'Ola {{1}}, seu agendamento foi confirmado.',
-    footer: 'SmartZap',
+    footer: 'V-Smart',
     button: 'OK',
     judgment: {
       approved: true,

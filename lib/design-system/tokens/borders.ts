@@ -1,5 +1,5 @@
 /**
- * SmartZap Design System - Border Tokens
+ * V-Smart Design System - Border Tokens
  *
  * Sistema de bordas incluindo:
  * - Border widths

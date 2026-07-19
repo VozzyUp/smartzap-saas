@@ -240,7 +240,7 @@ export default function TemplatesPage() {
           <PageTitle>Templates</PageTitle>
           <PageDescription>
             {activeTab === 'flows'
-              ? 'Crie e monitore MiniApps do WhatsApp, e mapeie respostas para campos do SmartZap.'
+              ? 'Crie e monitore MiniApps do WhatsApp, e mapeie respostas para campos do V-Smart.'
               : activeTab === 'forms'
                 ? 'Crie formulários públicos para captar contatos e tags automaticamente.'
               : 'Gerencie templates e rascunhos.'}

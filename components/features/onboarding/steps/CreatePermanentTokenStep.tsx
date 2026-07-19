@@ -138,7 +138,7 @@ export function CreatePermanentTokenStep({
             <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center text-sm font-medium flex-shrink-0">2</span>
             <div className="text-zinc-300">
               <p>Clique em <strong className="text-white">"Adicionar"</strong></p>
-              <p className="text-zinc-500 text-sm">Nome: "SmartZap API" • Função: Admin</p>
+              <p className="text-zinc-500 text-sm">Nome: "V-Smart API" • Função: Admin</p>
             </div>
           </div>
 

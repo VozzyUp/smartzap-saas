@@ -1,5 +1,5 @@
 /**
- * Bootstrap da instância SmartZap.
+ * Bootstrap da instância V-Smart.
  * Configura settings iniciais após migrations.
  *
  * NOTA (Task 10 — cutover de auth): `MASTER_PASSWORD` foi aposentado como
@@ -59,7 +59,7 @@ export async function verifySupabaseConnection(params: {
 }
 
 /**
- * Bootstrap da instância SmartZap.
+ * Bootstrap da instância V-Smart.
  * Idempotente - pode rodar múltiplas vezes sem efeitos colaterais.
  */
 export async function bootstrapInstance({
@@ -95,7 +95,7 @@ export async function bootstrapInstance({
   // 2) Configura settings iniciais
   // Nota: company_name é necessário para isSetupComplete() retornar true
   // Usa o nome do admin se fornecido, senão extrai do email como fallback
-  const companyName = adminName?.trim() || emailNorm.split('@')[0] || 'SmartZap';
+  const companyName = adminName?.trim() || emailNorm.split('@')[0] || 'V-Smart';
 
   // Gera chaves RSA para o Flow Endpoint (MiniApp Dinâmico)
   // Isso evita erro ao publicar Flows que usam endpoint dinâmico

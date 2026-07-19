@@ -7,7 +7,7 @@ export default function ContaSuspensaPage() {
         <p className="text-[var(--ds-text-secondary)] mt-3">
           Sua conta está temporariamente suspensa. Seus dados estão preservados. Fale com a gente para reativar.
         </p>
-        <a href="mailto:contato@vozzyup.com.br?subject=Conta%20suspensa%20SmartZap"
+        <a href="mailto:contato@vozzyup.com.br?subject=Conta%20suspensa%20V-Smart"
            className="inline-block w-full mt-6 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition-colors">
           Falar com o time
         </a>

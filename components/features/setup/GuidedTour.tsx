@@ -28,7 +28,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'send-message',
     title: 'Envie sua primeira mensagem!',
-    description: 'Crie uma campanha de teste para ver o SmartZap em ação. Leva menos de 2 minutos.',
+    description: 'Crie uma campanha de teste para ver o V-Smart em ação. Leva menos de 2 minutos.',
     icon: <Send className="w-6 h-6" />,
     action: {
       label: 'Criar campanha',

@@ -261,8 +261,18 @@ export function TestConnectionStep({
     setIsCompleting(true);
     try {
       await onComplete();
-    } catch {
-      toast.error('Erro ao salvar configuração');
+    } catch (error: unknown) {
+      // Mostra o motivo REAL do servidor (err.body vem de settingsService.save):
+      // sem isso o usuário (e o suporte) só vê um erro genérico impossível de agir.
+      const err = error as { message?: string; body?: { error?: string; details?: string; limit?: number } };
+      const body = err?.body;
+      const description =
+        body?.error === 'plan_limit'
+          ? `Seu plano permite até ${body?.limit ?? '?'} número(s) de WhatsApp. Faça upgrade para adicionar mais.`
+          : [body?.error, body?.details, !body ? err?.message : null]
+              .filter(Boolean)
+              .join(' — ') || undefined;
+      toast.error('Erro ao salvar configuração', { description });
     } finally {
       setIsCompleting(false);
     }

@@ -163,8 +163,13 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error validating credentials:', error)
+    // details ajuda o suporte a agir: sem isso o cliente só vê um erro genérico
+    // e o diagnóstico exige acesso aos logs do container.
     return NextResponse.json(
-      { error: 'Failed to validate credentials' },
+      {
+        error: 'Failed to validate credentials',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: isAbortError(error) ? 504 : 502 }
     )
   }

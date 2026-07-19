@@ -205,6 +205,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       credentials,
     })
 
+    if (!sendResult.success || !sendResult.messageId) {
+      const reason = sendResult.success
+        ? 'Meta response did not include message_id'
+        : sendResult.error || 'Unknown error'
+      return NextResponse.json(
+        { error: `Failed to send media via WhatsApp: ${reason}` },
+        { status: 502 }
+      )
+    }
+
     // Persiste a mensagem outbound primeiro (para ter o messageId)
     const message = await createMessage({
       tenant_id: tenantId,

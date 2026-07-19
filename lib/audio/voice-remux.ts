@@ -7,8 +7,8 @@ export interface RemuxResult {
 }
 
 const REMUX_TIMEOUT_MS = 15_000
-// A Meta rejeita o MIME base `audio/ogg` para voz; o codec Opus precisa estar
-// declarado explicitamente no upload, além de existir de fato no container.
+// Mantemos o codec no descritor interno; a fronteira multipart da Meta envia
+// apenas o media type base (`audio/ogg`) no Content-Type do campo `file`.
 const TARGET_MIME = 'audio/ogg; codecs=opus'
 
 /**

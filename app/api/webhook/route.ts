@@ -757,6 +757,20 @@ export async function POST(request: NextRequest) {
 
           // (B) Aplicar no banco (fonte da verdade)
           try {
+            // T048: Update inbox message delivery status (best-effort)
+            // Run before campaign branches, which end the iteration with `continue`.
+            try {
+              await handleDeliveryStatus({
+                messageId,
+                status: status as 'sent' | 'delivered' | 'read' | 'failed',
+                timestamp: eventTsIso || undefined,
+                errors: (statusUpdate as any)?.errors ?? undefined,
+              })
+            } catch (inboxError) {
+              // Best-effort: don't fail webhook if inbox update fails
+              console.warn('[Webhook] Failed to update inbox delivery status:', inboxError)
+            }
+
             if (status === 'failed') {
               // Mantemos o tratamento rico existente (alerts/supressão/opt-out)
               // para não regredir features.
@@ -926,19 +940,6 @@ export async function POST(request: NextRequest) {
                   eventTsIso: eventTsIso || null,
                 },
               })
-            }
-
-            // T048: Update inbox message delivery status (best-effort)
-            try {
-              await handleDeliveryStatus({
-                messageId,
-                status: status as 'sent' | 'delivered' | 'read' | 'failed',
-                timestamp: eventTsIso || undefined,
-                errors: (statusUpdate as any)?.errors ?? undefined,
-              })
-            } catch (inboxError) {
-              // Best-effort: don't fail webhook if inbox update fails
-              console.warn('[Webhook] Failed to update inbox delivery status:', inboxError)
             }
 
             if (eventId) {

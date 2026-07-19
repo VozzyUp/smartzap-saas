@@ -518,11 +518,33 @@ describe('uploadMediaToMeta', () => {
     expect(init.body).toBeInstanceOf(FormData)
     const form = init.body as FormData
     expect(form.get('messaging_product')).toBe('whatsapp')
-    expect(form.get('type')).toBe('image/jpeg')
+    expect(form.get('type')).toBeNull()
     const file = form.get('file') as File
     expect(file).toBeTruthy()
     expect(file.name).toBe('foto.jpg')
     expect(file.type).toBe('image/jpeg')
+  })
+
+  it('deve enviar OGG/Opus com MIME base no campo file', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'media_voice' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await uploadMediaToMeta({
+      phoneNumberId: 'phone123',
+      accessToken: 'token123',
+      buffer: Buffer.from('ogg-opus-bytes'),
+      contentType: 'audio/ogg; codecs=opus',
+      filename: 'voice.ogg',
+    })
+
+    const form = fetchMock.mock.calls[0][1].body as FormData
+    expect(form.get('type')).toBeNull()
+    const file = form.get('file') as File
+    expect(file.type).toBe('audio/ogg')
   })
 
   it('deve usar "file" como filename padrão quando não informado', async () => {

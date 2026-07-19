@@ -289,9 +289,12 @@ export async function uploadMediaToMeta(params: {
   try {
     const form = new FormData()
     form.append('messaging_product', 'whatsapp')
-    form.append('type', params.contentType)
+    // No multipart da Cloud API, o MIME pertence ao campo `file`.
+    // Parâmetros como `codecs=opus` descrevem o arquivo internamente, mas a
+    // Meta espera o media type base no Content-Type da parte do arquivo.
+    const fileContentType = params.contentType.split(';', 1)[0].trim()
     const bytes = new Uint8Array(params.buffer)
-    form.append('file', new Blob([bytes], { type: params.contentType }), params.filename ?? 'file')
+    form.append('file', new Blob([bytes], { type: fileContentType }), params.filename ?? 'file')
     const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${params.accessToken}` },

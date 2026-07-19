@@ -310,6 +310,42 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
     expect(sendWhatsAppMediaMock).not.toHaveBeenCalled()
   })
 
+  it('502 quando a Meta rejeita o envio e nao persiste uma mensagem como enviada', async () => {
+    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_123' })
+    sendWhatsAppMediaMock.mockResolvedValue({
+      success: false,
+      error: 'Media upload has failed',
+      details: { error: { code: 131053 } },
+    })
+
+    const fd = new FormData()
+    fd.set('file', new File(['fake-bytes'], 'photo.jpg', { type: 'image/jpeg' }))
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body.error).toContain('Media upload has failed')
+    expect(createMessageMock).not.toHaveBeenCalled()
+    expect(storeOutboundMediaMock).not.toHaveBeenCalled()
+  })
+
+  it('502 quando a Meta responde sucesso sem messageId', async () => {
+    uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_123' })
+    sendWhatsAppMediaMock.mockResolvedValue({ success: true })
+
+    const fd = new FormData()
+    fd.set('file', new File(['fake-bytes'], 'photo.jpg', { type: 'image/jpeg' }))
+
+    const res = await POST(makeRequest(fd), makeParams('conv_1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body.error).toContain('message_id')
+    expect(createMessageMock).not.toHaveBeenCalled()
+    expect(storeOutboundMediaMock).not.toHaveBeenCalled()
+  })
+
   it('sem voice: audio comum da 5A nao aciona remux (sem regressao)', async () => {
     uploadMediaToMetaMock.mockResolvedValue({ ok: true, id: 'media_1' })
     sendWhatsAppMediaMock.mockResolvedValue({ success: true, messageId: 'wamid.audio' })

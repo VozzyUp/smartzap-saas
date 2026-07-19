@@ -55,7 +55,12 @@ describe('settings/credentials write-through', () => {
       body: JSON.stringify({ phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' }),
     })
     await POST(req)
-    expect(addMock).toHaveBeenCalledWith('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' })
+    expect(addMock).toHaveBeenCalledWith('t1', {
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok',
+      displayPhoneNumber: '+551199999999',
+    })
     expect(mirrorMock).toHaveBeenCalledWith('t1')
   })
 

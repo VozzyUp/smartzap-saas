@@ -37,7 +37,10 @@ async function countRows(table: string, tenantId: string, thisMonth = false): Pr
   try {
     const db = getSupabaseAdmin()
     if (!db) return Number.MAX_SAFE_INTEGER // fail-closed: trata como cheio
-    let q = db.from(table).select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+    // whatsapp_phone_numbers usa phone_number_id como chave primária, não "id".
+    // Consultar "id" faz a contagem falhar e, por segurança, retornar MAX_SAFE_INTEGER.
+    const countColumn = table === 'whatsapp_phone_numbers' ? 'phone_number_id' : 'id'
+    let q = db.from(table).select(countColumn, { count: 'exact', head: true }).eq('tenant_id', tenantId)
     if (thisMonth) {
       const start = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
       q = q.gte('created_at', start)

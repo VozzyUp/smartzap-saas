@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const single = vi.fn() // para .single() (tenants→plan_id, plans→plan)
 const count = vi.fn()  // para count queries (contacts/templates/campaigns/whatsapp_phone_numbers)
+const select = vi.fn()
 
 // Mock encadeável adaptado ao padrão do repo (ver lib/tenant-provisioning.test.ts):
 // builder cujos métodos de filtro retornam ele mesmo, single() é terminal síncrono,
@@ -9,7 +10,10 @@ const count = vi.fn()  // para count queries (contacts/templates/campaigns/whats
 vi.mock('@/lib/supabase', () => {
   const makeBuilder = (table: string) => {
     const b: any = {}
-    b.select = vi.fn(() => b)
+    b.select = vi.fn((...args: unknown[]) => {
+      select(...args)
+      return b
+    })
     b.eq = vi.fn(() => b)
     b.gte = vi.fn(() => b)
     b.single = vi.fn(() => single(table))
@@ -32,7 +36,7 @@ import {
 const PLAN_TRIAL = { id: 'p-trial', slug: 'trial', name: 'Trial', max_whatsapp_numbers: 1, max_contacts: 100, max_templates: 3, max_campaigns_per_month: 2 }
 const PLAN_PRO = { id: 'p-pro', slug: 'pro', name: 'Pro', max_whatsapp_numbers: 3, max_contacts: 50000, max_templates: null, max_campaigns_per_month: null }
 
-beforeEach(() => { single.mockReset(); count.mockReset() })
+beforeEach(() => { single.mockReset(); count.mockReset(); select.mockReset() })
 
 describe('getTenantPlan', () => {
   it('devolve o plano do tenant', async () => {
@@ -117,6 +121,7 @@ describe('canAddWhatsAppNumber', () => {
     single.mockImplementation((table: string) => table === 'tenants' ? { data: { plan_id: 'p-trial' } } : { data: PLAN_TRIAL })
     count.mockImplementation(() => ({ count: 0 }))
     expect((await canAddWhatsAppNumber('t1')).allowed).toBe(true)
+    expect(select).toHaveBeenCalledWith('phone_number_id', { count: 'exact', head: true })
   })
 
   it('no limite bloqueia', async () => {

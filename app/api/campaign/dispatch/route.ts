@@ -217,6 +217,12 @@ export async function POST(request: NextRequest) {
   }
   const tenantId: string = campaignRow.tenant_id
 
+  // Uma chamada manual só pode disparar campanha pertencente ao tenant da sessão.
+  // Jobs assinados pelo QStash não têm sessão e são autorizados pela assinatura.
+  if (!signature && sessionCtx?.tenantId !== tenantId) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+
   if (await isTenantBlocked(tenantId)) {
     return NextResponse.json({ error: 'tenant_blocked' }, { status: 403 })
   }
@@ -547,7 +553,7 @@ export async function POST(request: NextRequest) {
       return { data, error: firstError }
     })(),
     // Fetch suppressions
-    getActiveSuppressionsByPhone(normalizedPhonesForSuppression).catch((e) => {
+    getActiveSuppressionsByPhone(tenantId, normalizedPhonesForSuppression).catch((e) => {
       console.warn('[Dispatch] Falha ao carregar phone_suppressions (best-effort):', e)
       return new Map<string, { reason: string | null; source: string | null }>()
     }),

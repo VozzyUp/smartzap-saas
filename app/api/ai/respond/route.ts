@@ -106,19 +106,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Busca conversa
-    const conversation = await inboxDb.getConversation(conversationId)
-
-    if (!conversation) {
-      console.log(`❌ [AI-RESPOND] Conversation not found: ${conversationId}`)
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-    }
-
     // Rota sem sessão (worker QStash) — deriva tenantId do recurso (conversa)
     const tenantId = await getConversationTenantId(conversationId)
     if (!tenantId) {
       console.log(`❌ [AI-RESPOND] tenant_id not found for conversation: ${conversationId}`)
       return NextResponse.json({ error: 'Conversation tenant not found' }, { status: 404 })
+    }
+
+    // 2. Busca conversa já escopada ao tenant derivado
+    const conversation = await inboxDb.getConversation(tenantId, conversationId)
+    if (!conversation) {
+      console.log(`❌ [AI-RESPOND] Conversation not found: ${conversationId}`)
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
     if (await isTenantBlocked(tenantId)) {
@@ -157,7 +156,7 @@ export async function POST(req: NextRequest) {
     console.log(`🤖 [AI-RESPOND] Using agent: ${agent.name} (${agent.model})`)
 
     // 6. Busca mensagens recentes
-    const { messages } = await inboxDb.listMessages(conversationId, { limit: 20 })
+    const { messages } = await inboxDb.listMessages(tenantId, conversationId, { limit: 20 })
     console.log(`🤖 [AI-RESPOND] Found ${messages.length} messages`)
 
     if (messages.length === 0) {
@@ -283,7 +282,7 @@ export async function POST(req: NextRequest) {
     if (result.response.shouldHandoff) {
       console.log(`🔄 [AI-RESPOND] Processing handoff request...`)
 
-      await inboxDb.updateConversation(conversationId, { mode: 'human' })
+      await inboxDb.updateConversation(tenantId, conversationId, { mode: 'human' })
 
       await inboxDb.createMessage({
         tenant_id: tenantId,
@@ -438,7 +437,7 @@ async function handleAutoHandoff(
   }
 
   // Muda para modo humano
-  await inboxDb.updateConversation(conversationId, { mode: 'human' })
+  await inboxDb.updateConversation(tenantId, conversationId, { mode: 'human' })
 
   // Cria nota interna
   await inboxDb.createMessage({

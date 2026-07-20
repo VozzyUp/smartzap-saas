@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase-server'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { inboxDb } from '@/lib/inbox/inbox-db'
+import { getTenantContext } from '@/lib/tenant-context'
 import type { AIAgent, InboxConversation } from '@/types'
 
 // Allow up to 30 seconds for AI generation
@@ -47,11 +48,12 @@ type SuggestResponse = z.infer<typeof suggestResponseSchema>
 // Helper Functions
 // =============================================================================
 
-async function getAgent(agentId: string): Promise<AIAgent | null> {
+async function getAgent(tenantId: string, agentId: string): Promise<AIAgent | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ai_agents')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('id', agentId)
     .single()
 
@@ -74,7 +76,7 @@ async function isAIAgentsGloballyEnabled(): Promise<boolean> {
   return data.value !== 'false'
 }
 
-async function getDefaultAgent(): Promise<AIAgent | null> {
+async function getDefaultAgent(tenantId: string): Promise<AIAgent | null> {
   // Check global toggle first
   const isEnabled = await isAIAgentsGloballyEnabled()
   if (!isEnabled) return null
@@ -83,6 +85,7 @@ async function getDefaultAgent(): Promise<AIAgent | null> {
   const { data, error } = await supabase
     .from('ai_agents')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('is_active', true)
     .eq('is_default', true)
     .single()
@@ -121,6 +124,14 @@ IMPORTANTE: Use a ferramenta "suggest" para enviar sua sugestão.`
 
 export async function POST(req: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const tenantId = ctx.tenantId
     const body = await req.json()
     const parsed = requestSchema.safeParse(body)
 
@@ -134,7 +145,7 @@ export async function POST(req: Request) {
     const { conversationId } = parsed.data
 
     // Get conversation with messages
-    const conversation = await inboxDb.getConversation(conversationId)
+    const conversation = await inboxDb.getConversation(tenantId, conversationId)
     if (!conversation) {
       return new Response(
         JSON.stringify({ error: 'Conversation not found' }),
@@ -145,10 +156,10 @@ export async function POST(req: Request) {
     // Get agent (from conversation or default)
     let agent: AIAgent | null = null
     if (conversation.ai_agent_id) {
-      agent = await getAgent(conversation.ai_agent_id)
+      agent = await getAgent(tenantId, conversation.ai_agent_id)
     }
     if (!agent) {
-      agent = await getDefaultAgent()
+      agent = await getDefaultAgent(tenantId)
     }
     if (!agent) {
       return new Response(
@@ -158,7 +169,7 @@ export async function POST(req: Request) {
     }
 
     // Get recent messages for context
-    const { messages } = await inboxDb.listMessages(conversationId, { limit: 10 })
+    const { messages } = await inboxDb.listMessages(tenantId, conversationId, { limit: 10 })
 
     // Convert messages to AI format
     const aiMessages = messages

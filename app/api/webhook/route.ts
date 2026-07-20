@@ -177,6 +177,7 @@ function isOptOutKeyword(textRaw: string): boolean {
 }
 
 async function markContactOptOutAndSuppress(input: {
+  tenantId: string
   phoneRaw: string
   source: string
   reason: string
@@ -188,6 +189,7 @@ async function markContactOptOutAndSuppress(input: {
   // NÃO atualiza contacts.status - esse campo é controlado manualmente pelo usuário
   try {
     await upsertPhoneSuppression({
+      tenantId: input.tenantId,
       phone,
       reason: input.reason,
       source: input.source,
@@ -424,11 +426,13 @@ type KeywordWorkflow = {
 }
 
 async function loadKeywordWorkflows(
+  tenantId: string,
   excludeWorkflowId: string | null
 ): Promise<KeywordWorkflow[]> {
   const { data } = await supabase
     .from('workflow_versions')
     .select('workflow_id, nodes, published_at')
+    .eq('tenant_id', tenantId)
     .eq('status', 'published')
     .order('published_at', { ascending: false })
 
@@ -606,7 +610,7 @@ export async function POST(request: NextRequest) {
   // Depois: 1 batch paralelo (~200ms total)
   const [defaultWorkflowIdFromDb, allKeywordWorkflows] = await Promise.all([
     settingsDb.get(tenantId, 'workflow_builder_default_id'),
-    loadKeywordWorkflows(null), // Carrega todos, filtra depois
+    loadKeywordWorkflows(tenantId, null),
   ])
 
   const defaultWorkflowId =
@@ -884,6 +888,7 @@ export async function POST(request: NextRequest) {
 
                 if (isOptOutError(errorCode)) {
                   await markContactOptOutAndSuppress({
+                    tenantId,
                     phoneRaw: phone,
                     source: 'meta_opt_out_error',
                     reason: failureReason || `Opt-out detectado pela Meta (código ${errorCode})`,
@@ -1103,6 +1108,7 @@ export async function POST(request: NextRequest) {
                 const { data: contacts } = await supabase
                   .from('contacts')
                   .select('id')
+                  .eq('tenant_id', tenantId)
                   .eq('phone', normalizedFrom)
                   .limit(1)
 
@@ -1177,6 +1183,7 @@ export async function POST(request: NextRequest) {
                     .from('flows')
                     .select('id,mapping,flow_json,spec')
                     .eq('meta_flow_id', metaFlowIdForLookup)
+                    .eq('tenant_id', tenantId)
                     .limit(1)
 
                   const flowRow = Array.isArray(flowRows) ? flowRows[0] : (flowRows as any)
@@ -1184,6 +1191,7 @@ export async function POST(request: NextRequest) {
                   if (flowRow?.id && flowRow?.mapping) {
                     flowLocalId = String(flowRow.id)
                     const applied = await applyFlowMappingToContact({
+                      tenantId,
                       normalizedPhone: normalizedFrom,
                       flowId,
                       responseJson,
@@ -1204,6 +1212,7 @@ export async function POST(request: NextRequest) {
                           .from('flows')
                           .select('flow_json')
                           .eq('id', String(flowRow.id))
+                          .eq('tenant_id', tenantId)
                           .limit(1)
                         const row = Array.isArray(jsonRows) ? jsonRows[0] : (jsonRows as any)
                         flowJsonForChoiceMap = row?.flow_json ?? null
@@ -1616,6 +1625,7 @@ export async function POST(request: NextRequest) {
           if (text && isOptOutKeyword(text)) {
             console.log(`📵 Opt-out keyword detected from ${from}: "${text}"`)
             await markContactOptOutAndSuppress({
+              tenantId,
               phoneRaw: from,
               source: 'inbound_keyword',
               reason: 'Usuário solicitou opt-out via mensagem inbound',

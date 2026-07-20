@@ -20,6 +20,7 @@ export function isSuppressionActive(row: Pick<PhoneSuppressionRow, 'is_active' |
 }
 
 export async function getActiveSuppressionsByPhone(
+  tenantId: string,
   phones: string[]
 ): Promise<Map<string, PhoneSuppressionRow>> {
   const uniquePhones = Array.from(new Set(phones.map(p => String(p || '').trim()).filter(Boolean)))
@@ -28,6 +29,7 @@ export async function getActiveSuppressionsByPhone(
   const { data, error } = await supabase
     .from('phone_suppressions')
     .select('phone, is_active, reason, source, metadata, created_at, last_seen_at, expires_at')
+    .eq('tenant_id', tenantId)
     .in('phone', uniquePhones)
 
   if (error) throw error
@@ -54,6 +56,7 @@ export async function getActiveSuppressionsByPhone(
 }
 
 export async function upsertPhoneSuppression(input: {
+  tenantId: string
   phone: string
   reason?: string | null
   source?: string | null
@@ -71,6 +74,7 @@ export async function upsertPhoneSuppression(input: {
     .from('phone_suppressions')
     .upsert(
       {
+        tenant_id: input.tenantId,
         phone,
         is_active: input.isActive ?? true,
         reason: input.reason ?? null,
@@ -79,7 +83,7 @@ export async function upsertPhoneSuppression(input: {
         last_seen_at: now,
         expires_at: input.expiresAt ?? null,
       },
-      { onConflict: 'phone' }
+      { onConflict: 'tenant_id,phone' }
     )
 
   if (error) throw error

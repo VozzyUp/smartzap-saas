@@ -31,6 +31,8 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
     const { searchParams } = new URL(request.url)
 
@@ -46,7 +48,7 @@ export async function GET(
       )
     }
 
-    const result = await listMessages(id, {
+    const result = await listMessages(ctx.tenantId, id, {
       before: parsed.data.before,
       limit: parsed.data.limit,
     })

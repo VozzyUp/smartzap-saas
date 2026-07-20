@@ -260,7 +260,7 @@ async function handleInboundMessageLegacy(
     if (conversation.status === 'closed') updates.status = 'open'
     if (payload.phoneNumberId) updates.whatsapp_number_id = payload.phoneNumberId
     if (Object.keys(updates).length > 0) {
-      await inboxDb.updateConversation(conversation.id, updates as UpdateInboxConversationDTO)
+      await inboxDb.updateConversation(payload.tenantId, conversation.id, updates as UpdateInboxConversationDTO)
     }
   }
 
@@ -506,7 +506,7 @@ async function handleAIHandoff(
   )
 
   // Switch to human mode
-  await inboxDb.updateConversation(conversation.id, { mode: 'human' })
+  await inboxDb.updateConversation(conversation.tenant_id, conversation.id, { mode: 'human' })
 
   // Cancel any pending debounce
   cancelDebounce(conversation.id)

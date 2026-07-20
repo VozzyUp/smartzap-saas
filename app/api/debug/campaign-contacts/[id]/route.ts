@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { requirePlatformAdmin } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -22,6 +23,8 @@ function noStoreJson(payload: unknown, init?: { status?: number }) {
  * Retorna um registro (sem PII) para depuração de status sent/delivered/read.
  */
 export async function GET(_req: Request, { params }: Params) {
+  const auth = await requirePlatformAdmin()
+  if (!auth.ok) return auth.response
   const { id } = await params
   if (!id) return noStoreJson({ ok: false, error: 'id ausente' }, { status: 400 })
 

@@ -688,7 +688,6 @@ export function MessageInput({
             ) : (
               <>
                 {voicePreviewUrl && (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
                   <audio controls src={voicePreviewUrl} className="flex-1 min-w-0 h-9" />
                 )}
                 <div className="flex items-center gap-1.5 shrink-0">

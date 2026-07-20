@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { supabase } from '@/lib/supabase'
+import { requirePlatformAdmin } from '@/lib/admin-auth'
 
 function safeUrlHost(raw: string | undefined): { host: string | null; projectRef: string | null } {
   try {
@@ -44,6 +45,8 @@ async function probeTable(table: string) {
  * Endpoint simples de diagnóstico para ambientes de dev.
  */
 export async function GET() {
+  const auth = await requirePlatformAdmin()
+  if (!auth.ok) return auth.response
   const urlInfo = safeUrlHost(process.env.NEXT_PUBLIC_SUPABASE_URL)
   const hasSecretKey = !!process.env.SUPABASE_SECRET_KEY || !!process.env.SUPABASE_SERVICE_ROLE_KEY
   const hasPublishableKey = !!(

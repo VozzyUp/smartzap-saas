@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { updateExistingQuickReply, removeQuickReply } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const updateSchema = z.object({
   title: z.string().min(1).max(100).optional(),
@@ -18,6 +19,8 @@ interface RouteParams {
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
     const body = await request.json()
 
@@ -38,7 +41,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const quickReply = await updateExistingQuickReply(id, parsed.data)
+    const quickReply = await updateExistingQuickReply(ctx.tenantId, id, parsed.data)
 
     if (!quickReply) {
       return NextResponse.json(
@@ -68,9 +71,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
 
-    await removeQuickReply(id)
+    await removeQuickReply(ctx.tenantId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

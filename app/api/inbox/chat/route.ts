@@ -189,7 +189,7 @@ export async function POST(req: Request) {
     // Fetch agent and conversation in parallel
     const [agent, conversation] = await Promise.all([
       getAgent(agentId),
-      getConversationById(conversationId),
+      getConversationById(tenantId, conversationId),
     ])
 
     if (!agent) {
@@ -280,6 +280,7 @@ export async function POST(req: Request) {
                     priority: 'urgent',
                     handoff_summary: params.handoffSummary || params.handoffReason,
                   })
+                  .eq('tenant_id', tenantId)
                   .eq('id', conversationId)
               } else {
                 // Normal: transfere direto para humano
@@ -291,6 +292,7 @@ export async function POST(req: Request) {
                     priority: 'normal',
                     handoff_summary: params.handoffSummary || params.handoffReason,
                   })
+                  .eq('tenant_id', tenantId)
                   .eq('id', conversationId)
               }
             }

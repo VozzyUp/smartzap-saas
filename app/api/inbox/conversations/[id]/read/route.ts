@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { markAsRead } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -14,9 +15,11 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
 
-    await markAsRead(id)
+    await markAsRead(ctx.tenantId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

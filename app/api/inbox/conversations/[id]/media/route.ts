@@ -162,8 +162,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Conversa escopada por tenant
-    const conversation = await getConversationById(conversationId)
-    if (!conversation || conversation.tenant_id !== tenantId) {
+    const conversation = await getConversationById(tenantId, conversationId)
+    if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 

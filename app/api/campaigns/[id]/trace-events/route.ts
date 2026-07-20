@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,8 @@ function noStoreJson(payload: unknown, init?: { status?: number }) {
 
 export async function GET(request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return noStoreJson({ error: 'unauthorized' }, { status: 401 })
     const { id: campaignId } = await params
     if (!campaignId) return noStoreJson({ error: 'campaign id ausente' }, { status: 400 })
 
@@ -61,6 +64,7 @@ export async function GET(request: Request, { params }: Params) {
     let query = supabase
       .from('campaign_trace_events')
       .select('id,trace_id,ts,campaign_id,step,phase,ok,ms,batch_index,contact_id,phone_masked,extra', { count: 'exact' })
+      .eq('tenant_id', ctx.tenantId)
       .eq('campaign_id', campaignId)
       .eq('trace_id', traceId)
 

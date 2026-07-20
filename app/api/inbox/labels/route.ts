@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { listLabels, createNewLabel } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const postSchema = z.object({
   name: z.string().min(1).max(50),
@@ -13,7 +14,9 @@ const postSchema = z.object({
 
 export async function GET() {
   try {
-    const labels = await listLabels()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const labels = await listLabels(ctx.tenantId)
     return NextResponse.json(labels)
   } catch (error) {
     console.error('[GET /api/inbox/labels]', error)
@@ -26,6 +29,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const body = await request.json()
 
     const parsed = postSchema.safeParse(body)
@@ -37,7 +42,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const label = await createNewLabel(parsed.data)
+    const label = await createNewLabel(ctx.tenantId, parsed.data)
 
     return NextResponse.json(label, { status: 201 })
   } catch (error) {

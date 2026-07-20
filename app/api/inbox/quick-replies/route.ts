@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { listQuickReplies, createNewQuickReply } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const postSchema = z.object({
   title: z.string().min(1).max(100),
@@ -14,7 +15,9 @@ const postSchema = z.object({
 
 export async function GET() {
   try {
-    const quickReplies = await listQuickReplies()
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const quickReplies = await listQuickReplies(ctx.tenantId)
     return NextResponse.json(quickReplies)
   } catch (error) {
     console.error('[GET /api/inbox/quick-replies]', error)
@@ -27,6 +30,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const body = await request.json()
 
     const parsed = postSchema.safeParse(body)
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const quickReply = await createNewQuickReply(parsed.data)
+    const quickReply = await createNewQuickReply(ctx.tenantId, parsed.data)
 
     return NextResponse.json(quickReply, { status: 201 })
   } catch (error) {

@@ -126,6 +126,7 @@ export async function getConversations(
  * Get a single conversation by ID
  */
 export async function getConversationById(
+  tenantId: string,
   id: string
 ): Promise<InboxConversation | null> {
   const supabase = getClient()
@@ -140,6 +141,7 @@ export async function getConversationById(
       ),
       ai_agent:ai_agents(*)
     `)
+    .eq('tenant_id', tenantId)
     .eq('id', id)
     .single()
 
@@ -325,6 +327,7 @@ export async function createConversation(
  * Update a conversation
  */
 export async function updateConversation(
+  tenantId: string,
   id: string,
   dto: UpdateInboxConversationDTO
 ): Promise<InboxConversation> {
@@ -335,6 +338,7 @@ export async function updateConversation(
   const { data, error } = await supabase
     .from('inbox_conversations')
     .update(updateData)
+    .eq('tenant_id', tenantId)
     .eq('id', id)
     .select()
     .single()
@@ -345,21 +349,22 @@ export async function updateConversation(
 
   // Handle labels separately if provided
   if (labels !== undefined) {
-    await syncConversationLabels(id, labels)
+    await syncConversationLabels(tenantId, id, labels)
   }
 
-  return getConversationById(id) as Promise<InboxConversation>
+  return getConversationById(tenantId, id) as Promise<InboxConversation>
 }
 
 /**
  * Delete a conversation and all its messages (cascade)
  */
-export async function removeConversation(id: string): Promise<void> {
+export async function removeConversation(tenantId: string, id: string): Promise<void> {
   const supabase = getClient()
 
   const { error } = await supabase
     .from('inbox_conversations')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('id', id)
 
   if (error) {
@@ -385,6 +390,7 @@ export interface PaginatedMessages {
  * Get messages for a conversation
  */
 export async function getMessagesByConversation(
+  tenantId: string,
   conversationId: string,
   filters: MessageFilters = {}
 ): Promise<PaginatedMessages> {
@@ -394,6 +400,7 @@ export async function getMessagesByConversation(
   let query = supabase
     .from('inbox_messages')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(limit + 1) // Fetch one extra to check if there's more
@@ -598,24 +605,19 @@ async function updateConversationOnNewMessageFallback(
 /**
  * Mark conversation as read (reset unread_count) - ATOMIC version
  */
-export async function markConversationAsRead(conversationId: string): Promise<void> {
+export async function markConversationAsRead(tenantId: string, conversationId: string): Promise<void> {
   const supabase = getClient()
 
-  // Tenta usar RPC atômico primeiro
-  const { error: rpcError } = await supabase.rpc('reset_unread_count', {
-    p_conversation_id: conversationId,
-  })
+  // O cliente de serviço ignora RLS; use update escopado, em vez de uma RPC
+  // cujo contrato não recebe tenant_id.
+  const { error } = await supabase
+    .from('inbox_conversations')
+    .update({ unread_count: 0 })
+    .eq('tenant_id', tenantId)
+    .eq('id', conversationId)
 
-  if (rpcError) {
-    // Fallback para update direto
-    const { error } = await supabase
-      .from('inbox_conversations')
-      .update({ unread_count: 0 })
-      .eq('id', conversationId)
-
-    if (error) {
-      throw new Error(`Failed to mark conversation as read: ${error.message}`)
-    }
+  if (error) {
+    throw new Error(`Failed to mark conversation as read: ${error.message}`)
   }
 }
 
@@ -659,12 +661,13 @@ export async function incrementUnreadCount(conversationId: string): Promise<void
 /**
  * Get all labels
  */
-export async function getLabels(): Promise<InboxLabel[]> {
+export async function getLabels(tenantId: string): Promise<InboxLabel[]> {
   const supabase = getClient()
 
   const { data, error } = await supabase
     .from('inbox_labels')
     .select('*')
+    .eq('tenant_id', tenantId)
     .order('name')
 
   if (error) {
@@ -677,12 +680,12 @@ export async function getLabels(): Promise<InboxLabel[]> {
 /**
  * Create a label
  */
-export async function createLabel(dto: CreateInboxLabelDTO): Promise<InboxLabel> {
+export async function createLabel(tenantId: string, dto: CreateInboxLabelDTO): Promise<InboxLabel> {
   const supabase = getClient()
 
   const { data, error } = await supabase
     .from('inbox_labels')
-    .insert(dto)
+    .insert({ ...dto, tenant_id: tenantId })
     .select()
     .single()
 
@@ -696,12 +699,13 @@ export async function createLabel(dto: CreateInboxLabelDTO): Promise<InboxLabel>
 /**
  * Delete a label
  */
-export async function deleteLabel(id: string): Promise<void> {
+export async function deleteLabel(tenantId: string, id: string): Promise<void> {
   const supabase = getClient()
 
   const { error } = await supabase
     .from('inbox_labels')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('id', id)
 
   if (error) {
@@ -713,6 +717,7 @@ export async function deleteLabel(id: string): Promise<void> {
  * Add label to conversation
  */
 export async function addLabelToConversation(
+  tenantId: string,
   conversationId: string,
   labelId: string
 ): Promise<void> {
@@ -720,7 +725,7 @@ export async function addLabelToConversation(
 
   const { error } = await supabase
     .from('inbox_conversation_labels')
-    .upsert({ conversation_id: conversationId, label_id: labelId })
+    .upsert({ tenant_id: tenantId, conversation_id: conversationId, label_id: labelId })
 
   if (error) {
     throw new Error(`Failed to add label to conversation: ${error.message}`)
@@ -731,6 +736,7 @@ export async function addLabelToConversation(
  * Remove label from conversation
  */
 export async function removeLabelFromConversation(
+  tenantId: string,
   conversationId: string,
   labelId: string
 ): Promise<void> {
@@ -739,6 +745,7 @@ export async function removeLabelFromConversation(
   const { error } = await supabase
     .from('inbox_conversation_labels')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('conversation_id', conversationId)
     .eq('label_id', labelId)
 
@@ -751,6 +758,7 @@ export async function removeLabelFromConversation(
  * Sync conversation labels (replace all)
  */
 async function syncConversationLabels(
+  tenantId: string,
   conversationId: string,
   labelIds: string[]
 ): Promise<void> {
@@ -760,6 +768,7 @@ async function syncConversationLabels(
   await supabase
     .from('inbox_conversation_labels')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('conversation_id', conversationId)
 
   // Insert new labels
@@ -768,6 +777,7 @@ async function syncConversationLabels(
       .from('inbox_conversation_labels')
       .insert(
         labelIds.map((labelId) => ({
+          tenant_id: tenantId,
           conversation_id: conversationId,
           label_id: labelId,
         }))
@@ -786,12 +796,13 @@ async function syncConversationLabels(
 /**
  * Get all quick replies
  */
-export async function getQuickReplies(): Promise<InboxQuickReply[]> {
+export async function getQuickReplies(tenantId: string): Promise<InboxQuickReply[]> {
   const supabase = getClient()
 
   const { data, error } = await supabase
     .from('inbox_quick_replies')
     .select('*')
+    .eq('tenant_id', tenantId)
     .order('title')
 
   if (error) {
@@ -805,13 +816,14 @@ export async function getQuickReplies(): Promise<InboxQuickReply[]> {
  * Create a quick reply
  */
 export async function createQuickReply(
+  tenantId: string,
   dto: CreateInboxQuickReplyDTO
 ): Promise<InboxQuickReply> {
   const supabase = getClient()
 
   const { data, error } = await supabase
     .from('inbox_quick_replies')
-    .insert(dto)
+    .insert({ ...dto, tenant_id: tenantId })
     .select()
     .single()
 
@@ -826,6 +838,7 @@ export async function createQuickReply(
  * Update a quick reply
  */
 export async function updateQuickReply(
+  tenantId: string,
   id: string,
   dto: Partial<CreateInboxQuickReplyDTO>
 ): Promise<InboxQuickReply> {
@@ -834,6 +847,7 @@ export async function updateQuickReply(
   const { data, error } = await supabase
     .from('inbox_quick_replies')
     .update(dto)
+    .eq('tenant_id', tenantId)
     .eq('id', id)
     .select()
     .single()
@@ -848,12 +862,13 @@ export async function updateQuickReply(
 /**
  * Delete a quick reply
  */
-export async function deleteQuickReply(id: string): Promise<void> {
+export async function deleteQuickReply(tenantId: string, id: string): Promise<void> {
   const supabase = getClient()
 
   const { error } = await supabase
     .from('inbox_quick_replies')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('id', id)
 
   if (error) {

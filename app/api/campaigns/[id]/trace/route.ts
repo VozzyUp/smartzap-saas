@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,8 @@ function noStoreJson(payload: unknown, init?: { status?: number }) {
 
 export async function GET(request: Request, { params }: Params) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return noStoreJson({ error: 'unauthorized' }, { status: 401 })
     const { id: campaignId } = await params
     if (!campaignId) return noStoreJson({ error: 'campaign id ausente' }, { status: 400 })
 
@@ -52,6 +55,7 @@ export async function GET(request: Request, { params }: Params) {
     const { data: runs, error: runsErr } = await supabase
       .from('campaign_run_metrics')
       .select('trace_id,created_at,recipients,sent_total,failed_total,skipped_total,first_dispatch_at,last_sent_at')
+      .eq('tenant_id', ctx.tenantId)
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -84,6 +88,7 @@ export async function GET(request: Request, { params }: Params) {
       const { data: rows, error: ccErr } = await supabase
         .from('campaign_contacts')
         .select('trace_id,sending_at,sent_at,failed_at,skipped_at')
+        .eq('tenant_id', ctx.tenantId)
         .eq('campaign_id', campaignId)
         .not('trace_id', 'is', null)
         .order('sending_at', { ascending: false, nullsFirst: false })

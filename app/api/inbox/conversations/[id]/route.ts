@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getConversation, patchConversation, deleteConversation } from '@/lib/inbox/inbox-service'
+import { getTenantContext } from '@/lib/tenant-context'
 
 const patchSchema = z.object({
   status: z.enum(['open', 'closed']).optional(),
@@ -23,9 +24,11 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
 
-    const conversation = await getConversation(id)
+    const conversation = await getConversation(ctx.tenantId, id)
 
     if (!conversation) {
       return NextResponse.json(
@@ -49,6 +52,8 @@ export async function PATCH(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
     const body = await request.json()
 
@@ -61,7 +66,7 @@ export async function PATCH(
       )
     }
 
-    const conversation = await patchConversation(id, parsed.data)
+    const conversation = await patchConversation(ctx.tenantId, id, parsed.data)
 
     return NextResponse.json(conversation)
   } catch (error) {
@@ -78,9 +83,11 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
 
-    await deleteConversation(id)
+    await deleteConversation(ctx.tenantId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

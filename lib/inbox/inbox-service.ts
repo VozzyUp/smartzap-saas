@@ -50,8 +50,8 @@ export async function listConversations(tenantId: string, filters: ConversationF
   return getConversations(tenantId, filters)
 }
 
-export async function getConversation(id: string) {
-  return getConversationById(id)
+export async function getConversation(tenantId: string, id: string) {
+  return getConversationById(tenantId, id)
 }
 
 export async function findOrCreateConversation(
@@ -64,37 +64,39 @@ export async function findOrCreateConversation(
 }
 
 export async function patchConversation(
+  tenantId: string,
   id: string,
   updates: UpdateInboxConversationDTO
 ) {
-  return updateConversation(id, updates)
+  return updateConversation(tenantId, id, updates)
 }
 
-export async function closeConversation(id: string) {
-  return updateConversation(id, { status: 'closed' })
+export async function closeConversation(tenantId: string, id: string) {
+  return updateConversation(tenantId, id, { status: 'closed' })
 }
 
-export async function reopenConversation(id: string) {
-  return updateConversation(id, { status: 'open' })
+export async function reopenConversation(tenantId: string, id: string) {
+  return updateConversation(tenantId, id, { status: 'open' })
 }
 
-export async function setConversationMode(id: string, mode: ConversationMode) {
-  return updateConversation(id, { mode })
+export async function setConversationMode(tenantId: string, id: string, mode: ConversationMode) {
+  return updateConversation(tenantId, id, { mode })
 }
 
 export async function setConversationPriority(
+  tenantId: string,
   id: string,
   priority: ConversationPriority
 ) {
-  return updateConversation(id, { priority })
+  return updateConversation(tenantId, id, { priority })
 }
 
-export async function markAsRead(conversationId: string) {
-  return markConversationAsRead(conversationId)
+export async function markAsRead(tenantId: string, conversationId: string) {
+  return markConversationAsRead(tenantId, conversationId)
 }
 
-export async function deleteConversation(id: string) {
-  return removeConversation(id)
+export async function deleteConversation(tenantId: string, id: string) {
+  return removeConversation(tenantId, id)
 }
 
 // =============================================================================
@@ -102,10 +104,11 @@ export async function deleteConversation(id: string) {
 // =============================================================================
 
 export async function listMessages(
+  tenantId: string,
   conversationId: string,
   filters: MessageFilters = {}
 ) {
-  return getMessagesByConversation(conversationId, filters)
+  return getMessagesByConversation(tenantId, conversationId, filters)
 }
 
 /**
@@ -121,7 +124,7 @@ export async function sendMessage(
   templateParams?: Record<string, string[]>
 ): Promise<InboxMessage> {
   // Get conversation to get phone number
-  const conversation = await getConversationById(conversationId)
+  const conversation = await getConversationById(tenantId, conversationId)
   if (!conversation) {
     throw new Error('Conversation not found')
   }
@@ -213,7 +216,7 @@ export async function persistInboundMessage(
   })
 
   // Refresh conversation to get updated counters
-  const updatedConversation = await getConversationById(conversation.id)
+  const updatedConversation = await getConversationById(tenantId, conversation.id)
 
   return {
     conversation: updatedConversation!,
@@ -235,47 +238,48 @@ export async function handleDeliveryStatusUpdate(
 // Label Service
 // =============================================================================
 
-export async function listLabels() {
-  return getLabels()
+export async function listLabels(tenantId: string) {
+  return getLabels(tenantId)
 }
 
-export async function createNewLabel(dto: CreateInboxLabelDTO) {
-  return createLabel(dto)
+export async function createNewLabel(tenantId: string, dto: CreateInboxLabelDTO) {
+  return createLabel(tenantId, dto)
 }
 
-export async function removeLabel(id: string) {
-  return deleteLabel(id)
+export async function removeLabel(tenantId: string, id: string) {
+  return deleteLabel(tenantId, id)
 }
 
-export async function assignLabel(conversationId: string, labelId: string) {
-  return addLabelToConversation(conversationId, labelId)
+export async function assignLabel(tenantId: string, conversationId: string, labelId: string) {
+  return addLabelToConversation(tenantId, conversationId, labelId)
 }
 
-export async function unassignLabel(conversationId: string, labelId: string) {
-  return removeLabelFromConversation(conversationId, labelId)
+export async function unassignLabel(tenantId: string, conversationId: string, labelId: string) {
+  return removeLabelFromConversation(tenantId, conversationId, labelId)
 }
 
 // =============================================================================
 // Quick Replies Service
 // =============================================================================
 
-export async function listQuickReplies() {
-  return getQuickReplies()
+export async function listQuickReplies(tenantId: string) {
+  return getQuickReplies(tenantId)
 }
 
-export async function createNewQuickReply(dto: CreateInboxQuickReplyDTO) {
-  return createQuickReply(dto)
+export async function createNewQuickReply(tenantId: string, dto: CreateInboxQuickReplyDTO) {
+  return createQuickReply(tenantId, dto)
 }
 
 export async function updateExistingQuickReply(
+  tenantId: string,
   id: string,
   dto: Partial<CreateInboxQuickReplyDTO>
 ) {
-  return updateQuickReply(id, dto)
+  return updateQuickReply(tenantId, id, dto)
 }
 
-export async function removeQuickReply(id: string) {
-  return deleteQuickReply(id)
+export async function removeQuickReply(tenantId: string, id: string) {
+  return deleteQuickReply(tenantId, id)
 }
 
 // =============================================================================
@@ -286,6 +290,7 @@ export async function removeQuickReply(id: string) {
  * Pause automation for a conversation
  */
 export async function pauseAutomation(
+  tenantId: string,
   conversationId: string,
   minutes: number,
   pausedBy?: string
@@ -293,7 +298,7 @@ export async function pauseAutomation(
   const pauseUntil = new Date()
   pauseUntil.setMinutes(pauseUntil.getMinutes() + minutes)
 
-  return updateConversation(conversationId, {
+  return updateConversation(tenantId, conversationId, {
     mode: 'human',
     // @ts-expect-error - These fields exist but aren't in the DTO
     automation_paused_until: pauseUntil.toISOString(),
@@ -305,9 +310,10 @@ export async function pauseAutomation(
  * Resume automation for a conversation
  */
 export async function resumeAutomation(
+  tenantId: string,
   conversationId: string
 ): Promise<InboxConversation> {
-  return updateConversation(conversationId, {
+  return updateConversation(tenantId, conversationId, {
     mode: 'bot',
     // @ts-expect-error - These fields exist but aren't in the DTO
     automation_paused_until: null,
@@ -319,9 +325,10 @@ export async function resumeAutomation(
  * Check if automation is paused for a conversation
  */
 export async function isAutomationPaused(
+  tenantId: string,
   conversationId: string
 ): Promise<boolean> {
-  const conversation = await getConversationById(conversationId)
+  const conversation = await getConversationById(tenantId, conversationId)
   if (!conversation) return false
 
   // Check if in human mode
@@ -335,7 +342,7 @@ export async function isAutomationPaused(
     }
 
     // Pause expired, resume automation
-    await resumeAutomation(conversationId)
+    await resumeAutomation(tenantId, conversationId)
   }
 
   return false
@@ -349,12 +356,13 @@ export async function isAutomationPaused(
  * Execute handoff to human operator
  */
 export async function executeHandoff(
+  tenantId: string,
   conversationId: string,
   reason: string,
   summary: string,
   priority: ConversationPriority = 'high'
 ): Promise<InboxConversation> {
-  return updateConversation(conversationId, {
+  return updateConversation(tenantId, conversationId, {
     mode: 'human',
     priority,
     // @ts-expect-error - This field exists but isn't in the DTO

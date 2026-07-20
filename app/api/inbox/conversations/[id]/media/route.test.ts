@@ -149,7 +149,7 @@ describe('POST /api/inbox/conversations/[id]/media', () => {
   })
 
   it('404 quando a conversa não existe ou não é do tenant', async () => {
-    getConversationByIdMock.mockResolvedValue({ ...conversation, tenant_id: 'other_tenant' })
+    getConversationByIdMock.mockResolvedValue(null)
     const fd = new FormData()
     fd.set('file', new File(['abc'], 'photo.jpg', { type: 'image/jpeg' }))
     const res = await POST(makeRequest(fd), makeParams('conv_1'))

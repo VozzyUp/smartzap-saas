@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
-import { requireSessionOrApiKey } from '@/lib/request-auth'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,8 +13,8 @@ type RouteParams = { params: Promise<{ phone: string }> }
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   // Requer autenticação (sessão ou API key)
-  const authError = await requireSessionOrApiKey(request)
-  if (authError) return authError
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const { phone: phoneRaw } = await params
   const phone = normalizePhoneNumber(phoneRaw)
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { data, error } = await supabase
     .from('phone_suppressions')
     .select('*')
+    .eq('tenant_id', ctx.tenantId)
     .eq('phone', phone)
     .single()
 
@@ -47,8 +48,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   // Requer autenticação (sessão ou API key)
-  const authError = await requireSessionOrApiKey(request)
-  if (authError) return authError
+  const ctx = await getTenantContext()
+  if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const { phone: phoneRaw } = await params
   const phone = normalizePhoneNumber(phoneRaw)
@@ -60,6 +61,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { error } = await supabase
     .from('phone_suppressions')
     .delete()
+    .eq('tenant_id', ctx.tenantId)
     .eq('phone', phone)
 
   if (error) {

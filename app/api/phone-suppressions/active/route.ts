@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { validateBodyOrError } from '@/lib/api-validation'
 import { getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -22,6 +23,9 @@ const GetActivePhoneSuppressionsSchema = z.object({
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const body = await request.json()
 
     const validation = validateBodyOrError(GetActivePhoneSuppressionsSchema, body)
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ phones: [] }, { status: 200 })
     }
 
-    const active = await getActiveSuppressionsByPhone(normalizedPhones)
+    const active = await getActiveSuppressionsByPhone(ctx.tenantId, normalizedPhones)
     return NextResponse.json(
       {
         phones: Array.from(active.keys()),

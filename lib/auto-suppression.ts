@@ -139,7 +139,7 @@ export async function maybeAutoSuppressByFailure(tenantId: string, input: AutoSu
 
   // Não sobrescreve supressões já ativas (ex.: opt-out manual/inbound/meta)
   try {
-    const active = await getActiveSuppressionsByPhone([normalizedPhone])
+    const active = await getActiveSuppressionsByPhone(tenantId, [normalizedPhone])
     if (active.get(normalizedPhone)) {
       return { suppressed: false, reason: 'already_suppressed' }
     }
@@ -175,6 +175,7 @@ export async function maybeAutoSuppressByFailure(tenantId: string, input: AutoSu
   const reason = `Auto-supressão: ${recentCount} falha(s) ${failureCode} (undeliverable) nos últimos ${windowDays} dias. Quarentena ${ttlDays} dias.`
 
   await upsertPhoneSuppression({
+    tenantId,
     phone: normalizedPhone,
     source: 'auto_failure_policy',
     reason,

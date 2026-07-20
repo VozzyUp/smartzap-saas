@@ -15,12 +15,10 @@ const handleDeliveryStatusMock = vi.fn()
 
 const supabaseFromMock = vi.fn((table: string) => {
   if (table === 'workflow_versions') {
+    const query: any = { order: workflowVersionsOrderMock }
+    query.eq = () => query
     return {
-      select: () => ({
-        eq: () => ({
-          order: workflowVersionsOrderMock,
-        }),
-      }),
+      select: () => query,
     }
   }
 

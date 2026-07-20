@@ -22,6 +22,7 @@ function deepGetResponseValue(response: Record<string, unknown>, field: string):
 }
 
 export async function applyFlowMappingToContact(input: {
+  tenantId: string
   normalizedPhone: string
   flowId: string | null
   responseJson: unknown
@@ -79,6 +80,7 @@ export async function applyFlowMappingToContact(input: {
     .from('contacts')
     .select('id,custom_fields')
     .eq('phone', input.normalizedPhone)
+    .eq('tenant_id', input.tenantId)
     .limit(1)
 
   if (existingError) throw existingError
@@ -97,6 +99,7 @@ export async function applyFlowMappingToContact(input: {
     .from('contacts')
     .update(updates)
     .eq('phone', input.normalizedPhone)
+    .eq('tenant_id', input.tenantId)
     .select('id')
     .limit(1)
 

@@ -28,7 +28,7 @@ function createMockQueryBuilder(options: {
     error: options.selectError ?? null,
   })
 
-  mockEq.mockReturnValue({ limit: mockLimit })
+  mockEq.mockReturnValue({ eq: mockEq, limit: mockLimit })
   mockSelect.mockReturnValue({ eq: mockEq })
 
   // Chain: from().update().eq().select().limit()
@@ -37,12 +37,15 @@ function createMockQueryBuilder(options: {
     error: options.updateError ?? null,
   })
   const updateMockSelect = vi.fn().mockReturnValue({ limit: updateMockLimit })
-  const updateMockEq = vi.fn().mockReturnValue({ select: updateMockSelect })
+  const updateMockEq = vi.fn()
+  updateMockEq.mockReturnValue({ eq: updateMockEq, select: updateMockSelect })
   mockUpdate.mockReturnValue({ eq: updateMockEq })
 
   return {
     select: mockSelect,
     update: mockUpdate,
+    selectEq: mockEq,
+    updateEq: updateMockEq,
   }
 }
 
@@ -373,6 +376,25 @@ describe('applyFlowMappingToContact', () => {
   })
 
   describe('integracao com Supabase', () => {
+    it('limita a busca e a atualizacao ao tenant do Flow', async () => {
+      const mockBuilder = createMockQueryBuilder({
+        selectData: [{ id: 'contact-1', custom_fields: {} }],
+        updateData: [{ id: 'contact-1' }],
+      })
+      vi.mocked(supabase.from).mockReturnValue(mockBuilder as any)
+
+      await applyFlowMappingToContact({
+        tenantId: 'tenant-a',
+        normalizedPhone: '+5511999999999',
+        flowId: 'flow-123',
+        responseJson: { name: 'Cliente A' },
+        mapping: { contact: { nameField: 'name' } },
+      })
+
+      expect(mockBuilder.selectEq).toHaveBeenCalledWith('tenant_id', 'tenant-a')
+      expect(mockBuilder.updateEq).toHaveBeenCalledWith('tenant_id', 'tenant-a')
+    })
+
     it('retorna updated: false quando contato nao existe no banco', async () => {
       const mockBuilder = createMockQueryBuilder({
         selectData: [],

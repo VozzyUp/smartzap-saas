@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
+import { getTenantContext } from '@/lib/tenant-context'
+import { contactDb } from '@/lib/supabase-db'
 
 interface RouteParams {
   params: Promise<{ phone: string }>
@@ -26,7 +28,16 @@ interface MemoryData {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
     const { phone } = await params
+    if (!phone) return NextResponse.json({ ok: false, error: 'Phone é obrigatório' }, { status: 400 })
+
+    // Não permita que uma rota de IA seja usada para resumir dados de um
+    // contato que não pertence ao tenant autenticado.
+    const contact = await contactDb.getByPhone(ctx.tenantId, phone).catch(() => null)
+    if (!contact) return NextResponse.json({ ok: false, error: 'Contato não encontrado' }, { status: 404 })
+
     const body = await request.json()
     const { profile, memories } = body as { profile: ProfileData | null; memories: MemoryData[] }
 

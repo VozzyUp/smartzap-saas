@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,6 +11,9 @@ export const revalidate = 0
  */
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
     const url = new URL(request.url)
     const limitParam = url.searchParams.get('limit')
     const offsetParam = url.searchParams.get('offset')
@@ -32,6 +36,7 @@ export async function GET(request: NextRequest) {
         `,
         { count: 'exact' }
       )
+      .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
 
     // Filtro por campanha

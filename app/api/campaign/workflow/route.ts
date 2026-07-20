@@ -1233,7 +1233,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           let suppressionsByPhone = new Map<string, { phone: string; reason: string | null; source: string | null }>()
           try {
             const phones = Array.from(new Set(batch.map(c => normalizePhoneNumber(String(c.phone || '').trim())).filter(Boolean)))
-            const active = await getActiveSuppressionsByPhone(phones)
+            const active = await getActiveSuppressionsByPhone(tenantId, phones)
             suppressionsByPhone = new Map(
               Array.from(active.entries()).map(([phone, row]) => [phone, { phone, reason: row.reason, source: row.source }])
             )

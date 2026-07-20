@@ -22,6 +22,7 @@ export default defineConfig({
             '**/tmp/tests/**',
             // Worktrees de agentes (isoladas do produto)
             '**/.claude/worktrees/**',
+            '**/.worktrees/**',
         ],
     },
     resolve: {

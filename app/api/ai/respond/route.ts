@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Busca agente
-    const agent = await getAgentForConversation(conversation.ai_agent_id)
+    const agent = await getAgentForConversation(conversation.ai_agent_id, tenantId)
 
     if (!agent) {
       console.log(`❌ [AI-RESPOND] No agent configured`)
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     // 7. Busca dados do contato (se existir)
     let contactData: ContactContext | undefined
     if (conversation.contact_id) {
-      contactData = await getContactData(conversation.contact_id)
+      contactData = await getContactData(conversation.contact_id, tenantId)
       if (contactData) {
         console.log(`🤖 [AI-RESPOND] Contact data loaded: ${contactData.name || 'unnamed'}`)
       }
@@ -358,7 +358,7 @@ async function getConversationTenantId(conversationId: string): Promise<string |
 /**
  * Busca dados do contato para injetar no contexto da IA
  */
-async function getContactData(contactId: string): Promise<ContactContext | undefined> {
+async function getContactData(contactId: string, tenantId: string): Promise<ContactContext | undefined> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return undefined
 
@@ -366,6 +366,7 @@ async function getContactData(contactId: string): Promise<ContactContext | undef
     .from('contacts')
     .select('name, email, created_at')
     .eq('id', contactId)
+    .eq('tenant_id', tenantId)
     .single()
 
   if (error || !data) return undefined
@@ -380,21 +381,27 @@ async function getContactData(contactId: string): Promise<ContactContext | undef
 /**
  * Busca o agente de IA para uma conversa
  * Prioridade: agente específico da conversa → agente padrão
+ *
+ * SEGURANÇA: `tenantId` obrigatório em AMBAS as queries. O fallback "agente
+ * padrão" sem filtro de tenant podia (com >1 tenant tendo is_default=true)
+ * responder no WhatsApp de um tenant usando o prompt/comportamento do agente
+ * de OUTRO tenant — mistura de dados entre clientes.
  */
-async function getAgentForConversation(agentId: string | null): Promise<AIAgent | null> {
+async function getAgentForConversation(agentId: string | null, tenantId: string): Promise<AIAgent | null> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return null
 
   // Tenta agente específico
   if (agentId) {
-    const { data } = await supabase.from('ai_agents').select('*').eq('id', agentId).single()
+    const { data } = await supabase.from('ai_agents').select('*').eq('id', agentId).eq('tenant_id', tenantId).single()
     if (data) return data as AIAgent
   }
 
-  // Fallback para agente padrão
+  // Fallback para agente padrão (do MESMO tenant)
   const { data } = await supabase
     .from('ai_agents')
     .select('*')
+    .eq('tenant_id', tenantId)
     .eq('is_active', true)
     .eq('is_default', true)
     .single()

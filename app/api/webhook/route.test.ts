@@ -12,6 +12,8 @@ const markEventAttemptMock = vi.fn()
 const enqueueStatusReconcileMock = vi.fn()
 const applyCampaignStatusMock = vi.fn()
 const handleDeliveryStatusMock = vi.fn()
+const campaignContactsUpdateMock = vi.fn()
+const rpcMock = vi.fn()
 
 const supabaseFromMock = vi.fn((table: string) => {
   if (table === 'workflow_versions') {
@@ -29,6 +31,14 @@ const supabaseFromMock = vi.fn((table: string) => {
           limit: campaignContactsLimitMock,
         }),
       }),
+      update: (patch: any) => {
+        const chain: any = {
+          eq: () => chain,
+          neq: () => chain,
+          select: async () => campaignContactsUpdateMock(patch),
+        }
+        return chain
+      },
     }
   }
 
@@ -39,7 +49,10 @@ vi.mock('@/lib/whatsapp-phone-numbers', () => ({
 }))
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: () => ({}),
-  supabase: { from: (...a: [string]) => supabaseFromMock(...a) },
+  supabase: {
+    from: (...a: [string]) => supabaseFromMock(...a),
+    rpc: (...a: [string, any]) => rpcMock(...a),
+  },
 }))
 vi.mock('@/lib/trial', () => ({
   isTenantBlocked: (...a: any[]) => isTenantBlockedMock(...a),
@@ -128,6 +141,49 @@ describe('webhook route - status de entrega do Inbox', () => {
     markEventAttemptMock.mockResolvedValue(undefined)
     enqueueStatusReconcileMock.mockResolvedValue(undefined)
     handleDeliveryStatusMock.mockResolvedValue(true)
+    campaignContactsUpdateMock.mockResolvedValue({ data: [{ id: 'cc_1' }], error: null })
+    rpcMock.mockResolvedValue({ error: null })
+  })
+
+  it('status failed com campaign_contact correspondente: chama increment_campaign_stat com p_tenant_id (bug: RPC exige esse parâmetro desde 20260708000004)', async () => {
+    campaignContactsLimitMock.mockResolvedValueOnce({
+      data: [{ id: 'cc_1', status: 'sent', campaign_id: 'camp_1', phone: '+5511999999999', trace_id: null, delivered_at: null }],
+      error: null,
+    })
+
+    const errors = [{ code: 131053, title: 'Media upload error' }]
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'waba_1',
+        changes: [{
+          field: 'messages',
+          value: {
+            metadata: { phone_number_id: 'pn_1' },
+            statuses: [{
+              id: 'wamid.campaign_failed',
+              recipient_id: '5511999999999',
+              status: 'failed',
+              timestamp: '1700000000',
+              errors,
+            }],
+          },
+        }],
+      }],
+    }
+    const req = new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(200)
+    expect(rpcMock).toHaveBeenCalledWith('increment_campaign_stat', {
+      campaign_id_input: 'camp_1',
+      field: 'failed',
+      p_tenant_id: 'tenant_1',
+    })
   })
 
   it('encaminha status failed ao Inbox mesmo sem campaign_contact correspondente', async () => {

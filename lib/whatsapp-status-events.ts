@@ -176,7 +176,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
   // Use a non-throwing query to avoid the `.single()` footgun.
   const { data: rows, error } = await supabase
     .from('campaign_contacts')
-    .select('id, status, campaign_id, phone, trace_id, delivered_at')
+    .select('id, status, campaign_id, tenant_id, phone, trace_id, delivered_at')
     .eq('message_id', input.messageId)
     .limit(1)
 
@@ -187,6 +187,11 @@ export async function applyStatusUpdateToCampaignContact(input: {
   }
 
   const campaignId = existing.campaign_id as string
+  // increment_campaign_stat exige p_tenant_id desde 20260708000004 (hardening
+  // multi-tenant) — sem isso a RPC não bate com nenhuma assinatura e falha
+  // silenciosamente (bug real: sent/delivered/read/failed ficavam travados
+  // em 0 em campaigns mesmo com campaign_contacts corretos).
+  const tenantId = existing.tenant_id as string
   const traceId = (existing as any)?.trace_id ?? null
   const phone = (existing as any)?.phone ?? null
 
@@ -216,6 +221,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
       const { error: rpcError } = await supabase.rpc('increment_campaign_stat', {
         campaign_id_input: campaignId,
         field: 'delivered',
+        p_tenant_id: tenantId,
       })
       if (rpcError) console.error('Failed to increment delivered count:', rpcError)
       return { applied: true, reason: 'applied', campaignId, campaignContactId: existing.id, traceId, phone }
@@ -257,6 +263,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
         const { error: rpcDeliveredErr } = await supabase.rpc('increment_campaign_stat', {
           campaign_id_input: campaignId,
           field: 'delivered',
+          p_tenant_id: tenantId,
         })
         if (rpcDeliveredErr) console.error('Failed to increment delivered count (via read):', rpcDeliveredErr)
       }
@@ -264,6 +271,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
       const { error: rpcError } = await supabase.rpc('increment_campaign_stat', {
         campaign_id_input: campaignId,
         field: 'read',
+        p_tenant_id: tenantId,
       })
       if (rpcError) console.error('Failed to increment read count:', rpcError)
 
@@ -302,6 +310,7 @@ export async function applyStatusUpdateToCampaignContact(input: {
       const { error: rpcError } = await supabase.rpc('increment_campaign_stat', {
         campaign_id_input: campaignId,
         field: 'failed',
+        p_tenant_id: tenantId,
       })
       if (rpcError) console.error('Failed to increment failed count:', rpcError)
       return { applied: true, reason: 'applied', campaignId, campaignContactId: existing.id, traceId, phone }

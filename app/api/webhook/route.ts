@@ -871,6 +871,7 @@ export async function POST(request: NextRequest) {
                 const { error: rpcError } = await supabase.rpc('increment_campaign_stat', {
                   campaign_id_input: campaignId,
                   field: 'failed',
+                  p_tenant_id: tenantId,
                 })
 
                 if (rpcError) console.error('Failed to increment failed count:', rpcError)

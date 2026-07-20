@@ -3,8 +3,9 @@ import { getFormsInitialData } from './actions'
 import { FormsClientWrapper } from './FormsClientWrapper'
 import { FormsSkeleton } from '@/components/features/lead-forms/FormsSkeleton'
 
-// ISR: revalida a cada 2 minutos (forms mudam pouco)
-export const revalidate = 120
+// Dados por-tenant (via cookies/getTenantContext) — nunca cache por tempo.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 async function FormsWithData() {
   const initialData = await getFormsInitialData()

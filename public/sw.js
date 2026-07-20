@@ -7,7 +7,10 @@
  * - Stale-while-revalidate: páginas HTML
  */
 
-const CACHE_VERSION = 'smartzap-v1'
+// v2: navegação (páginas HTML) deixou de usar stale-while-revalidate — bump
+// força o browser a descartar o cache antigo, que podia ter HTML obsoleto
+// por-tenant servido antes da rede (causava dados "oscilando" a cada F5).
+const CACHE_VERSION = 'smartzap-v2'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 
@@ -88,6 +91,25 @@ self.addEventListener('activate', (event) => {
 // FETCH - Handle requests with appropriate strategy
 // =============================================================================
 
+/**
+ * Decide qual estratégia de cache usar para um request que JÁ passou pelo
+ * gate de shouldIgnore() (ex.: /api/ nunca chega aqui — ver fetch listener).
+ *
+ * Páginas HTML usam network-first (não stale-while-revalidate): SWR devolve
+ * o HTML do cache IMEDIATAMENTE e só atualiza em segundo plano, então cada
+ * F5 mostra o snapshot da rodada ANTERIOR — o app parece alternar entre
+ * dados diferentes a cada reload (ex.: contagem de contatos oscilando).
+ * Sendo dados por-tenant, essa staleness também não é aceitável.
+ */
+function selectStrategy(request, url) {
+  if (isStaticAsset(url)) {
+    return 'cache-first'
+  }
+
+  // HTML pages e o default caem no mesmo caminho: sempre rede primeiro.
+  return 'network-first'
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
@@ -97,25 +119,13 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // API requests: Network-first
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE))
-    return
-  }
+  const strategy = selectStrategy(request, url)
 
-  // Static assets: Cache-first
-  if (isStaticAsset(url)) {
+  if (strategy === 'cache-first') {
     event.respondWith(cacheFirst(request, STATIC_CACHE))
     return
   }
 
-  // HTML pages: Stale-while-revalidate
-  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE))
-    return
-  }
-
-  // Default: Network-first
   event.respondWith(networkFirst(request, DYNAMIC_CACHE))
 })
 
@@ -247,26 +257,6 @@ async function networkFirst(request, cacheName) {
   }
 }
 
-/**
- * Stale-while-revalidate: Retorna cache imediatamente, atualiza em background
- * Ideal para páginas HTML - rápido mas sempre atualizado
- */
-async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName)
-  const cached = await cache.match(request)
-
-  const fetchPromise = fetch(request)
-    .then((response) => {
-      // Só cacheia requisições GET (Cache API não suporta HEAD/POST)
-      if (response.ok && request.method === 'GET') {
-        cache.put(request, response.clone())
-      }
-      return response
-    })
-    .catch(() => null)
-
-  return cached || fetchPromise || new Response('Offline', { status: 503 })
-}
 
 // =============================================================================
 // HELPERS
@@ -299,3 +289,8 @@ self.addEventListener('message', (event) => {
     )
   }
 })
+
+// Export inerte no browser (module é undefined lá) — só usado pelos testes.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { selectStrategy, shouldIgnore, isStaticAsset }
+}

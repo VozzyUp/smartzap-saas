@@ -3,8 +3,10 @@ import { getDashboardData } from './actions/dashboard'
 import { DashboardSkeleton } from '@/components/features/dashboard/DashboardSkeleton'
 import { DashboardClientLoader } from './DashboardClientLoader'
 
-// ISR: revalida a cada 30 segundos
-export const revalidate = 30
+// Dados por-tenant (via cookies/getTenantContext) — nunca cache por tempo,
+// senão o card de agregados fica dessincronizado da lista abaixo dele.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /**
  * Componente async que busca dados no servidor e passa para o cliente.

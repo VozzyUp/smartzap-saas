@@ -3,8 +3,10 @@ import { getCampaignsInitialData } from './actions'
 import { CampaignsClientWrapper } from './CampaignsClientWrapper'
 import { CampaignsSkeleton } from '@/components/features/campaigns/CampaignsSkeleton'
 
-// ISR: revalida a cada 60 segundos (campanhas mudam menos que dashboard)
-export const revalidate = 60
+// Dados por-tenant (via cookies/getTenantContext) — nunca cache por tempo,
+// senão o card do dashboard mostra um total que esta lista ainda não reflete.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /**
  * Componente async que busca dados no servidor e passa para o cliente.

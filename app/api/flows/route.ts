@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-// Cache GET requests for 5 minutes - flows rarely change
-// POST/PUT/DELETE remain dynamic by default
-export const revalidate = 300
+// Dados por-tenant (via getTenantContext) — nunca cache por tempo, senão o
+// Data Cache do Next pode servir a resposta cacheada de OUTRO tenant/janela
+// (o Cache-Control: no-store abaixo protege o navegador/proxy, não este
+// cache interno do Next).
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { supabase } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'

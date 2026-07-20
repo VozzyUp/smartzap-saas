@@ -1,7 +1,9 @@
 import { SubmissionsClientWrapper } from './SubmissionsClientWrapper'
 import { getSubmissionsInitialData } from './actions'
 
-export const revalidate = 30 // ISR: 30 segundos
+// Dados por-tenant (via cookies/getTenantContext) — nunca cache por tempo.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 interface PageProps {
   searchParams: Promise<{ campaignId?: string; flowId?: string }>

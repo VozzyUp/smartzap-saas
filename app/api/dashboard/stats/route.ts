@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getTenantContext } from '@/lib/tenant-context'
 
-// Allow 60s cache on Vercel Edge - dashboard uses realtime/polling for updates
-export const revalidate = 60
+// Dados por-tenant (via getTenantContext/cookies) — nunca cache por tempo.
+// O comentário antigo ("cache no Vercel Edge") não se aplica mais: o app
+// saiu do Vercel na Fase 1 e roda self-hosted. Sem force-dynamic, o Data
+// Cache do Next podia servir um snapshot de até 60s desatualizado, fazendo
+// o card do dashboard não bater com a lista de campanhas logo abaixo.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET() {
   try {

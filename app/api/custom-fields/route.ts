@@ -4,9 +4,10 @@ import { validateBodyOrError } from '@/lib/api-validation'
 import { getTenantContext } from '@/lib/tenant-context'
 import { z } from 'zod'
 
-// Cache GET requests for 10 minutes - custom fields rarely change
-// POST/PUT/DELETE remain dynamic by default
-export const revalidate = 600
+// Dados por-tenant (via getTenantContext) — nunca cache por tempo, senão o
+// Data Cache do Next pode servir a resposta cacheada de OUTRO tenant/janela.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // Schema for creating a custom field definition
 const CreateCustomFieldSchema = z.object({

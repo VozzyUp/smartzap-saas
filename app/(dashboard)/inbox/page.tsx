@@ -6,8 +6,11 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { PageLayoutScope } from '@/components/providers/PageLayoutProvider'
 import { Loader2 } from 'lucide-react'
 
-// ISR: revalida a cada 30 segundos (inbox precisa de dados mais frescos)
-export const revalidate = 30
+// Dados por-tenant (via cookies/getTenantContext) — nunca cache por tempo.
+// O inbox já se mantém atualizado via realtime; a carga inicial precisa
+// ser sempre fresca (senão a lista de conversas pode "voltar" numa reabertura).
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /** Full-bleed layout for inbox - no padding, fills available space */
 const INBOX_LAYOUT = {

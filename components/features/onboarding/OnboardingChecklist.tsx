@@ -112,6 +112,13 @@ export function OnboardingChecklist({
     return null;
   }
 
+  // Evita piscar 67% no F5: enquanto o status real do token permanente ainda
+  // não voltou do banco, não renderiza (senão assume "não confirmado" por
+  // padrão e o card aparece incompleto por um instante até corrigir sozinho).
+  if (isLoadingTokenStatus) {
+    return null;
+  }
+
   // Fonte da verdade: health check (DB)
   const isCredentialsOk = healthStatus.services.whatsapp.status === 'ok';
   const isWebhookOk = healthStatus.services.webhook?.status === 'ok';

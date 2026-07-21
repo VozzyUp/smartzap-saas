@@ -225,6 +225,43 @@ describe('kanban', () => {
     )
   })
 
+  it('moveCard zera next_followup_index ao trocar de estágio (bug: card avançava mas ainda recebia follow-up do estágio antigo)', async () => {
+    cardsSelectFn.mockReturnValueOnce({
+      data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 },
+      error: null,
+    })
+    stagesSelectFn
+      .mockReturnValueOnce({ data: { id: 's2', tenant_id: 't1', board_id: 'b1', name: 'Em andamento', color: '#f59e0b', position: 1 }, error: null })
+      .mockReturnValueOnce({ data: { id: 's1', tenant_id: 't1', board_id: 'b1', name: 'Novo', color: '#3b82f6', position: 0 }, error: null })
+    boardsSelectFn.mockReturnValueOnce({ data: { id: 'b1', tenant_id: 't1', name: 'Vendas', position: 0 }, error: null })
+    cardsUpdateFn.mockReturnValueOnce({ error: null })
+    contactsSelectFn.mockReturnValueOnce({ data: { tags: [] }, error: null })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await moveCard('t1', 'c1', { stageId: 's2', position: 0 })
+
+    expect(cardsUpdateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ next_followup_index: 0 }),
+      expect.objectContaining({ tenant_id: 't1', id: 'c1' })
+    )
+  })
+
+  it('moveCard NÃO mexe em next_followup_index quando o estágio não muda (position-only move)', async () => {
+    cardsSelectFn.mockReturnValueOnce({
+      data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 },
+      error: null,
+    })
+    stagesSelectFn.mockReturnValueOnce({ data: { id: 's1', tenant_id: 't1', board_id: 'b1', name: 'Novo', color: '#3b82f6', position: 0 }, error: null })
+    cardsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await moveCard('t1', 'c1', { stageId: 's1', position: 2 })
+
+    expect(cardsUpdateFn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ next_followup_index: expect.anything() }),
+      expect.objectContaining({ tenant_id: 't1', id: 'c1' })
+    )
+  })
+
   it('moveCard lança invalid_stage quando a fase alvo é de outro board', async () => {
     cardsSelectFn.mockReturnValueOnce({
       data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 },

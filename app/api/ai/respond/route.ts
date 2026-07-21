@@ -19,6 +19,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { redis } from '@/lib/redis'
 import type { AIAgent } from '@/types'
 import { isTenantBlocked } from '@/lib/trial'
+import { triggerKanbanAutomationForAIReply } from './kanban-automation-hook'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -277,6 +278,10 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`✅ [AI-RESPOND] All ${messageIds.length} messages sent`)
+
+    if (messageIds.length > 0) {
+      await triggerKanbanAutomationForAIReply(tenantId, conversation.contact_id, result.response.detectedQuoteRequest)
+    }
 
     // 10. Handoff se necessário
     if (result.response.shouldHandoff) {

@@ -158,7 +158,14 @@ const baseResponseSchema = z.object({
     .boolean()
     .optional()
     .describe('Se a resposta deve citar a mensagem do usuário (aparecer como reply)'),
+  detectedQuoteRequest: z
+    .boolean()
+    .optional()
+    .describe('Se o cliente pediu orçamento/preço nesta mensagem'),
 })
+
+// Exportado só para teste unitário do schema (lib/ai/agents/chat-agent-quote-detection.test.ts)
+export const baseResponseSchemaForTests = baseResponseSchema
 
 // Campos de handoff (adicionados quando habilitado)
 // NOTA: A lógica de QUANDO fazer handoff deve estar no system_prompt do agente,

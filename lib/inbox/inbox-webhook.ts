@@ -15,6 +15,7 @@ import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { inboxDb, isHumanModeExpired, switchToBotMode, findConversationByPhoneLightweight } from './inbox-db'
 import { cancelDebounce } from '@/lib/ai/agents/chat-agent'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { recordInboundActivity, triggerAutomationEvent, detectQuoteKeyword } from '@/lib/kanban-automation'
 import { Client } from '@upstash/qstash'
 import { redis } from '@/lib/redis'
 import { getAppUrl } from '@/lib/app-url'
@@ -195,6 +196,8 @@ export async function handleInboundMessage(
           })
         }
 
+        await triggerKanbanAutomationForInbound(payload.tenantId, normalizedPhone, content)
+
         return {
           conversationId: result.conversation_id,
           messageId: result.message_id,
@@ -308,6 +311,8 @@ async function handleInboundMessageLegacy(
   if (currentMode === 'bot' && !isAutomationPaused(conversation.automation_paused_until)) {
     triggeredAI = await triggerAIProcessing(conversation as InboxConversation, message)
   }
+
+  await triggerKanbanAutomationForInbound(payload.tenantId, normalizedPhone, legacyContent)
 
   return {
     conversationId: conversation.id,
@@ -683,6 +688,31 @@ async function enqueueMediaIngest(params: {
 /**
  * Find contact ID by phone number
  */
+/**
+ * Automação de Kanban disparada por resposta do cliente: registra a
+ * atividade (usada pelo sweep de follow-up), avança o card pro estágio de
+ * "cliente respondeu" configurado, e roda a detecção de orçamento por
+ * palavra-chave (fallback pra conversas sem IA ativa — a detecção via IA
+ * acontece em app/api/ai/respond/route.ts). Best-effort: nunca falha o
+ * webhook, só loga.
+ */
+async function triggerKanbanAutomationForInbound(tenantId: string, phone: string, content: string): Promise<void> {
+  try {
+    const contactId = await findContactId(tenantId, phone)
+    if (!contactId) return
+
+    await recordInboundActivity(tenantId, contactId)
+    await triggerAutomationEvent(tenantId, contactId, 'client_replied', 'system')
+
+    const isQuoteRequest = await detectQuoteKeyword(tenantId, content)
+    if (isQuoteRequest) {
+      await triggerAutomationEvent(tenantId, contactId, 'quote_detected', 'keyword')
+    }
+  } catch (e) {
+    console.warn('[Inbox] Falha na automação de Kanban (best-effort):', e)
+  }
+}
+
 async function findContactId(tenantId: string, phone: string): Promise<string | null> {
   const supabase = getSupabaseAdmin()
   if (!supabase) {

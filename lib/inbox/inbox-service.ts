@@ -28,6 +28,7 @@ import {
 } from './inbox-db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
+import { triggerAutomationEvent } from '@/lib/kanban-automation'
 import type {
   InboxConversation,
   InboxMessage,
@@ -182,6 +183,17 @@ export async function sendMessage(
     await updateMessageDeliveryStatus(message.id, 'failed')
   } else if (whatsappResult.messageId) {
     await updateMessageDeliveryStatus(whatsappResult.messageId, 'sent')
+  }
+
+  // Automação de Kanban: só dispara em resposta 1:1 de atendente humano
+  // realmente enviada (não em falha), nunca em disparo de campanha (função
+  // separada) — best-effort, não pode derrubar o envio da mensagem.
+  if (!whatsappResult.error && conversation.contact_id) {
+    try {
+      await triggerAutomationEvent(tenantId, conversation.contact_id, 'message_sent', 'manual')
+    } catch (e) {
+      console.warn('[Inbox] Falha na automação de Kanban (best-effort):', e)
+    }
   }
 
   return message

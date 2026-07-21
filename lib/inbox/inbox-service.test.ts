@@ -18,6 +18,11 @@ vi.mock('@/lib/whatsapp-credentials', () => ({
   getWhatsAppCredentialsForNumber: vi.fn(),
 }))
 
+const triggerAutomationEventMock = vi.fn()
+vi.mock('@/lib/kanban-automation', () => ({
+  triggerAutomationEvent: (...a: unknown[]) => triggerAutomationEventMock(...a),
+}))
+
 import {
   findMessageByWhatsAppId,
   getOrCreateConversation,
@@ -293,5 +298,60 @@ describe('sendMessage (Fase 4: reply pelo numero da conversa)', () => {
     await expect(sendMessage('tenant_1', 'conv_3', 'oi')).rejects.toThrow(
       'WhatsApp credentials not configured'
     )
+  })
+
+  it('envio manual com sucesso: dispara automação de Kanban message_sent com o contact_id da conversa', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_4',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: 'contact_4',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+
+    await sendMessage('tenant_1', 'conv_4', 'oi')
+
+    expect(triggerAutomationEventMock).toHaveBeenCalledWith('tenant_1', 'contact_4', 'message_sent', 'manual')
+  })
+
+  it('conversa sem contact_id: não dispara automação', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_5',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: null,
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+
+    await sendMessage('tenant_1', 'conv_5', 'oi')
+
+    expect(triggerAutomationEventMock).not.toHaveBeenCalled()
+  })
+
+  it('falha no envio (whatsappResult.error): não dispara automação', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_6',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: 'contact_6',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+    mockSendWhatsAppMessage.mockResolvedValueOnce({ error: 'falha no envio' })
+
+    await sendMessage('tenant_1', 'conv_6', 'oi')
+
+    expect(triggerAutomationEventMock).not.toHaveBeenCalled()
   })
 })

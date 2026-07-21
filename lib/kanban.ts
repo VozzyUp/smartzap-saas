@@ -445,7 +445,15 @@ export async function moveCard(
 
   const { error } = await db()
     .from('kanban_cards')
-    .update({ stage_id: params.stageId, position: params.position, moved_at: new Date().toISOString() })
+    .update({
+      stage_id: params.stageId,
+      position: params.position,
+      moved_at: new Date().toISOString(),
+      // Sair do estágio cancela a sequência de follow-up daquele estágio —
+      // sem isso um card que já avançou (cliente respondeu) ainda recebe
+      // "sumiu?" do estágio anterior no próximo sweep.
+      ...(stageChanged ? { next_followup_index: 0 } : {}),
+    })
     .eq('tenant_id', tenantId)
     .eq('id', cardId)
   if (error) throw error

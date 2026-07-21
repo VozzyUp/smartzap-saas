@@ -36,6 +36,11 @@ vi.mock('@/lib/kanban', () => ({
   KanbanError,
 }))
 
+const setCardAutomationPaused = vi.fn()
+vi.mock('@/lib/kanban-automation', () => ({
+  setCardAutomationPaused: (...args: unknown[]) => setCardAutomationPaused(...args),
+}))
+
 const authedCtx = { tenantId: 't1', userId: 'u1', isPlatformAdmin: false, trialExpired: false, suspended: false }
 
 function jsonRequest(body: unknown) {
@@ -111,6 +116,16 @@ describe('PATCH /api/kanban/cards/[id]', () => {
     const res = await PATCH(jsonRequest({ stageId: 's2', position: 1 }), { params: Promise.resolve({ id: 'card1' }) })
     expect(res.status).toBe(200)
     expect(moveCard).toHaveBeenCalledWith('t1', 'card1', { stageId: 's2', position: 1 })
+  })
+
+  it('alterna o kill switch de automação do card (automationPaused, sem stageId)', async () => {
+    getTenantContext.mockResolvedValue(authedCtx)
+    setCardAutomationPaused.mockResolvedValue(undefined)
+    const { PATCH } = await import('./cards/[id]/route')
+    const res = await PATCH(jsonRequest({ automationPaused: true }), { params: Promise.resolve({ id: 'card1' }) })
+    expect(res.status).toBe(200)
+    expect(setCardAutomationPaused).toHaveBeenCalledWith('t1', 'card1', true)
+    expect(moveCard).not.toHaveBeenCalled()
   })
 })
 

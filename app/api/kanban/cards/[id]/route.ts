@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getTenantContext } from '@/lib/tenant-context'
 import { moveCard, removeCard } from '@/lib/kanban'
+import { setCardAutomationPaused } from '@/lib/kanban-automation'
 import { kanbanErrorResponse } from '../../_lib'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const { id } = await params
     const body = await request.json().catch(() => ({}))
-    const { stageId, position } = body as { stageId?: string; position?: number }
+    const { stageId, position, automationPaused } = body as { stageId?: string; position?: number; automationPaused?: boolean }
+
+    // Kill switch por card: alterna a pausa da automação, sem mover o card.
+    if (typeof automationPaused === 'boolean' && stageId === undefined) {
+      await setCardAutomationPaused(ctx.tenantId, id, automationPaused)
+      return NextResponse.json({ success: true })
+    }
+
     if (!stageId || typeof position !== 'number') {
       return NextResponse.json({ error: 'stageId e position são obrigatórios' }, { status: 400 })
     }

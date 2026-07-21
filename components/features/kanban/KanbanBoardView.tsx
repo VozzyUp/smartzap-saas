@@ -14,7 +14,7 @@ import {
 } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, UserPlus } from 'lucide-react'
+import { Loader2, UserPlus, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getBoardData, moveCard } from './api'
@@ -22,6 +22,7 @@ import { ContactCard } from './ContactCard'
 import { StageColumn } from './StageColumn'
 import { NewStageColumn } from './NewStageColumn'
 import { AddCardDialog } from './AddCardDialog'
+import { AutomationPanel } from './AutomationPanel'
 import type { KanbanBoardData, KanbanCardWithContact } from './types'
 
 const QUERY_KEY = (boardId: string) => ['kanban-board-data', boardId] as const
@@ -30,6 +31,7 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
   const queryClient = useQueryClient()
   const [activeCard, setActiveCard] = useState<KanbanCardWithContact | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isAutomationOpen, setIsAutomationOpen] = useState(false)
   const snapshotRef = useRef<KanbanBoardData | undefined>(undefined)
 
   const { data, isLoading } = useQuery<KanbanBoardData>({
@@ -162,7 +164,11 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-end">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={() => setIsAutomationOpen(true)}>
+          <Zap size={14} className="mr-1.5" aria-hidden="true" />
+          Automação
+        </Button>
         <Button size="sm" onClick={() => setIsAddOpen(true)}>
           <UserPlus size={14} className="mr-1.5" aria-hidden="true" />
           Adicionar cliente
@@ -187,6 +193,7 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
       </DndContext>
 
       <AddCardDialog boardId={boardId} open={isAddOpen} onOpenChange={setIsAddOpen} />
+      <AutomationPanel boardId={boardId} stages={stages} open={isAutomationOpen} onOpenChange={setIsAutomationOpen} />
     </div>
   )
 }

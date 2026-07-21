@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { MoreVertical, Pencil, Trash2, Palette, Check } from 'lucide-react'
+import { MoreVertical, Pencil, Trash2, Palette, Check, Clock3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/lib/api'
@@ -19,6 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { updateStage, deleteStage } from './api'
 import { ContactCard } from './ContactCard'
+import { FollowupRulesEditor } from './FollowupRulesEditor'
 import { STAGE_COLORS, type KanbanStageWithCards } from './types'
 
 interface StageColumnProps {
@@ -30,6 +31,7 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
   const queryClient = useQueryClient()
   const [isRenaming, setIsRenaming] = useState(false)
   const [nameDraft, setNameDraft] = useState(stage.name)
+  const [isFollowupOpen, setIsFollowupOpen] = useState(false)
 
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -167,6 +169,10 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
               <Pencil size={14} aria-hidden="true" />
               Renomear
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setIsFollowupOpen(true)}>
+              <Clock3 size={14} aria-hidden="true" />
+              Follow-up automático
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
               <Trash2 size={14} aria-hidden="true" />
@@ -175,6 +181,13 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <FollowupRulesEditor
+        stageId={stage.id}
+        stageName={stage.name}
+        open={isFollowupOpen}
+        onOpenChange={setIsFollowupOpen}
+      />
 
       <div
         ref={setNodeRef}

@@ -144,6 +144,182 @@ async function logAutomationEvent(
 }
 
 // ============================================================================
+// Configuração: mapeamento evento → coluna + janela de horário (painel do board)
+// ============================================================================
+
+export type BoardAutomationConfig = {
+  automations: Partial<Record<AutomationEventType, { targetStageId: string; active: boolean }>>
+  settings: {
+    windowStart: string
+    windowEnd: string
+    weekdaysMask: number
+    staleStageId: string | null
+  } | null
+}
+
+export async function getBoardAutomationConfig(tenantId: string, boardId: string): Promise<BoardAutomationConfig> {
+  const [{ data: automations }, { data: settings }] = await Promise.all([
+    db().from('kanban_board_automations').select('*').eq('tenant_id', tenantId).eq('board_id', boardId),
+    db().from('kanban_automation_settings').select('*').eq('tenant_id', tenantId).eq('board_id', boardId).maybeSingle(),
+  ])
+
+  const config: BoardAutomationConfig['automations'] = {}
+  for (const row of (automations as any[]) ?? []) {
+    config[row.event_type as AutomationEventType] = { targetStageId: row.target_stage_id, active: row.active }
+  }
+
+  return {
+    automations: config,
+    settings: settings
+      ? {
+          windowStart: (settings as any).window_start,
+          windowEnd: (settings as any).window_end,
+          weekdaysMask: (settings as any).weekdays_mask,
+          staleStageId: (settings as any).stale_stage_id,
+        }
+      : null,
+  }
+}
+
+export async function saveBoardAutomationConfig(
+  tenantId: string,
+  boardId: string,
+  config: {
+    automations: Partial<Record<AutomationEventType, { targetStageId: string; active: boolean } | null>>
+    settings: { windowStart: string; windowEnd: string; weekdaysMask: number; staleStageId: string | null }
+  }
+): Promise<void> {
+  for (const [eventType, value] of Object.entries(config.automations)) {
+    if (!value) {
+      await db().from('kanban_board_automations').delete().eq('tenant_id', tenantId).eq('board_id', boardId).eq('event_type', eventType)
+      continue
+    }
+    await db().from('kanban_board_automations').upsert(
+      {
+        tenant_id: tenantId,
+        board_id: boardId,
+        event_type: eventType,
+        target_stage_id: value.targetStageId,
+        active: value.active,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'board_id,event_type' }
+    )
+  }
+
+  await db().from('kanban_automation_settings').upsert(
+    {
+      tenant_id: tenantId,
+      board_id: boardId,
+      window_start: config.settings.windowStart,
+      window_end: config.settings.windowEnd,
+      weekdays_mask: config.settings.weekdaysMask,
+      stale_stage_id: config.settings.staleStageId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'board_id' }
+  )
+}
+
+// ============================================================================
+// Regras de follow-up por estágio
+// ============================================================================
+
+export type FollowupRule = { id?: string; dayOffset: number; templateText: string; position: number }
+
+export async function listFollowupRules(tenantId: string, stageId: string): Promise<FollowupRule[]> {
+  const { data } = await db()
+    .from('kanban_stage_followup_rules')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('stage_id', stageId)
+    .eq('active', true)
+    .order('position', { ascending: true })
+  return ((data as any[]) ?? []).map((r) => ({
+    id: r.id,
+    dayOffset: r.day_offset,
+    templateText: r.template_text,
+    position: r.position,
+  }))
+}
+
+/** Substitui TODAS as regras do estágio pela lista enviada (editor "salva tudo de uma vez"). */
+export async function saveFollowupRules(tenantId: string, stageId: string, rules: FollowupRule[]): Promise<void> {
+  await db().from('kanban_stage_followup_rules').delete().eq('tenant_id', tenantId).eq('stage_id', stageId)
+  if (rules.length === 0) return
+
+  await db()
+    .from('kanban_stage_followup_rules')
+    .insert(
+      rules.map((r, i) => ({
+        tenant_id: tenantId,
+        stage_id: stageId,
+        day_offset: r.dayOffset,
+        template_text: r.templateText,
+        position: i,
+        active: true,
+      }))
+    )
+}
+
+// ============================================================================
+// Palavras-chave de orçamento
+// ============================================================================
+
+export type QuoteKeyword = { id: string; keyword: string }
+
+export async function listQuoteKeywords(tenantId: string): Promise<QuoteKeyword[]> {
+  const { data } = await db().from('kanban_quote_keywords').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: true })
+  return ((data as any[]) ?? []).map((k) => ({ id: k.id, keyword: k.keyword }))
+}
+
+export async function addQuoteKeyword(tenantId: string, keyword: string): Promise<QuoteKeyword> {
+  const { data, error } = await db()
+    .from('kanban_quote_keywords')
+    .insert({ tenant_id: tenantId, keyword: keyword.trim() })
+    .select('*')
+    .single()
+  if (error) throw error
+  return { id: (data as any).id, keyword: (data as any).keyword }
+}
+
+export async function removeQuoteKeyword(tenantId: string, keywordId: string): Promise<void> {
+  await db().from('kanban_quote_keywords').delete().eq('tenant_id', tenantId).eq('id', keywordId)
+}
+
+// ============================================================================
+// Kill switch por card + timeline
+// ============================================================================
+
+export async function setCardAutomationPaused(tenantId: string, cardId: string, paused: boolean): Promise<void> {
+  await db().from('kanban_cards').update({ automation_paused: paused }).eq('tenant_id', tenantId).eq('id', cardId)
+}
+
+export type CardAutomationLogEntry = {
+  id: string
+  eventType: 'stage_moved' | 'followup_sent'
+  source: AutomationSource
+  detail: Record<string, unknown>
+  createdAt: string
+}
+
+export async function listCardAutomationLog(tenantId: string, cardId: string): Promise<CardAutomationLogEntry[]> {
+  const { data } = await db()
+    .from('kanban_card_automation_log')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('card_id', cardId)
+    .order('created_at', { ascending: false })
+  return ((data as any[]) ?? []).map((e) => ({
+    id: e.id,
+    eventType: e.event_type,
+    source: e.source,
+    detail: e.detail,
+    createdAt: e.created_at,
+  }))
+}
+
+// ============================================================================
 // recordInboundActivity
 // ============================================================================
 

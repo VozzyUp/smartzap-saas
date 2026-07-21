@@ -30,6 +30,12 @@ export type KanbanCard = {
   position: number
   created_at: string
   moved_at: string
+  // Colunas da automação (20260725000001_kanban_automation.sql) — usadas por
+  // lib/kanban-automation.ts, opcionais aqui pra não exigir todo call site existente.
+  last_inbound_at?: string | null
+  next_followup_index?: number
+  automation_paused?: boolean
+  last_manual_move_at?: string | null
 }
 
 export type KanbanBoardData = {

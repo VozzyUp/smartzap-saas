@@ -3,20 +3,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // --- Mocks nomeados por (tabela x operação), no mesmo espírito de lib/kanban.test.ts ---
 
 const boardAutomationsSelectFn = vi.fn()
+const boardAutomationsUpsertFn = vi.fn()
+const boardAutomationsDeleteFn = vi.fn()
 const kanbanCardsSelectFn = vi.fn()
 const kanbanCardsUpdateFn = vi.fn()
 const kanbanStagesSelectFn = vi.fn()
 const automationLogInsertFn = vi.fn()
 const quoteKeywordsSelectFn = vi.fn()
+const quoteKeywordsInsertFn = vi.fn()
+const quoteKeywordsDeleteFn = vi.fn()
 const followupRulesSelectFn = vi.fn()
+const followupRulesInsertFn = vi.fn()
+const followupRulesDeleteFn = vi.fn()
 const automationSettingsSelectFn = vi.fn()
+const automationSettingsUpsertFn = vi.fn()
 const contactsSelectFn = vi.fn()
 
-function makeChain(handlers: { select?: any; insert?: any; update?: any }) {
+function makeChain(handlers: { select?: any; insert?: any; update?: any; upsert?: any; delete?: any }) {
   const eqs: Record<string, any> = {}
   const ins: Record<string, any[]> = {}
   let gte: [string, any] | null = null
-  let op: 'select' | 'insert' | 'update' | null = null
+  let op: 'select' | 'insert' | 'update' | 'upsert' | 'delete' | null = null
   let payload: any
   let limited: number | null = null
 
@@ -24,12 +31,15 @@ function makeChain(handlers: { select?: any; insert?: any; update?: any }) {
     select: () => { if (op === null) op = 'select'; return chain },
     insert: (rows: any) => { op = 'insert'; payload = rows; return chain },
     update: (patch: any) => { op = 'update'; payload = patch; return chain },
+    upsert: (rows: any, opts?: any) => { op = 'upsert'; payload = { rows, opts }; return chain },
+    delete: () => { op = 'delete'; return chain },
     eq: (col: string, val: any) => { eqs[col] = val; return chain },
     in: (col: string, vals: any[]) => { ins[col] = vals; return chain },
     gte: (col: string, val: any) => { gte = [col, val]; return chain },
     order: () => chain,
     limit: (n: number) => { limited = n; return chain },
     maybeSingle: () => resolve(),
+    single: () => resolve(),
     then: (resolveFn: any) => resolveFn(resolve()),
   }
 
@@ -37,6 +47,8 @@ function makeChain(handlers: { select?: any; insert?: any; update?: any }) {
     if (op === 'select') return handlers.select?.(eqs, ins, gte, limited) ?? { data: null, error: null }
     if (op === 'insert') return handlers.insert?.(payload, eqs) ?? { data: null, error: null }
     if (op === 'update') return handlers.update?.(payload, eqs) ?? { data: null, error: null }
+    if (op === 'upsert') return handlers.upsert?.(payload, eqs) ?? { data: null, error: null }
+    if (op === 'delete') return handlers.delete?.(eqs) ?? { data: null, error: null }
     throw new Error(`unmapped op: ${op}`)
   }
 
@@ -46,13 +58,21 @@ function makeChain(handlers: { select?: any; insert?: any; update?: any }) {
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: () => ({
     from: (table: string) => {
-      if (table === 'kanban_board_automations') return makeChain({ select: boardAutomationsSelectFn })
+      if (table === 'kanban_board_automations') {
+        return makeChain({ select: boardAutomationsSelectFn, upsert: boardAutomationsUpsertFn, delete: boardAutomationsDeleteFn })
+      }
       if (table === 'kanban_cards') return makeChain({ select: kanbanCardsSelectFn, update: kanbanCardsUpdateFn })
       if (table === 'kanban_stages') return makeChain({ select: kanbanStagesSelectFn })
       if (table === 'kanban_card_automation_log') return makeChain({ select: automationLogInsertFn, insert: automationLogInsertFn })
-      if (table === 'kanban_quote_keywords') return makeChain({ select: quoteKeywordsSelectFn })
-      if (table === 'kanban_stage_followup_rules') return makeChain({ select: followupRulesSelectFn })
-      if (table === 'kanban_automation_settings') return makeChain({ select: automationSettingsSelectFn })
+      if (table === 'kanban_quote_keywords') {
+        return makeChain({ select: quoteKeywordsSelectFn, insert: quoteKeywordsInsertFn, delete: quoteKeywordsDeleteFn })
+      }
+      if (table === 'kanban_stage_followup_rules') {
+        return makeChain({ select: followupRulesSelectFn, insert: followupRulesInsertFn, delete: followupRulesDeleteFn })
+      }
+      if (table === 'kanban_automation_settings') {
+        return makeChain({ select: automationSettingsSelectFn, upsert: automationSettingsUpsertFn })
+      }
       if (table === 'contacts') return makeChain({ select: contactsSelectFn })
       throw new Error(`unexpected table ${table}`)
     },
@@ -87,6 +107,15 @@ import {
   shouldTriggerFollowup,
   substituteTemplate,
   matchesAnyKeyword,
+  getBoardAutomationConfig,
+  saveBoardAutomationConfig,
+  listFollowupRules,
+  saveFollowupRules,
+  listQuoteKeywords,
+  addQuoteKeyword,
+  removeQuoteKeyword,
+  setCardAutomationPaused,
+  listCardAutomationLog,
 } from './kanban-automation'
 
 describe('helpers puros', () => {
@@ -228,6 +257,156 @@ describe('detectQuoteKeyword', () => {
     quoteKeywordsSelectFn.mockReturnValueOnce({ data: [], error: null })
 
     expect(await detectQuoteKeyword('tenant_1', 'Qual o valor do orçamento?')).toBe(false)
+  })
+})
+
+describe('getBoardAutomationConfig / saveBoardAutomationConfig', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('getBoardAutomationConfig monta o mapa evento->estágio e as configurações de janela', async () => {
+    boardAutomationsSelectFn.mockReturnValueOnce({
+      data: [
+        { event_type: 'message_sent', target_stage_id: 'stage_a', active: true },
+        { event_type: 'client_replied', target_stage_id: 'stage_b', active: false },
+      ],
+      error: null,
+    })
+    automationSettingsSelectFn.mockReturnValueOnce({
+      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: 'stage_frio' },
+      error: null,
+    })
+
+    const config = await getBoardAutomationConfig('tenant_1', 'board_1')
+
+    expect(config.automations.message_sent).toEqual({ targetStageId: 'stage_a', active: true })
+    expect(config.automations.client_replied).toEqual({ targetStageId: 'stage_b', active: false })
+    expect(config.settings).toEqual({ windowStart: '09:00', windowEnd: '18:00', weekdaysMask: 62, staleStageId: 'stage_frio' })
+  })
+
+  it('saveBoardAutomationConfig faz upsert dos eventos configurados e delete dos removidos (null)', async () => {
+    boardAutomationsUpsertFn.mockReturnValue({ data: null, error: null })
+    boardAutomationsDeleteFn.mockReturnValue({ data: null, error: null })
+    automationSettingsUpsertFn.mockReturnValue({ data: null, error: null })
+
+    await saveBoardAutomationConfig('tenant_1', 'board_1', {
+      automations: {
+        message_sent: { targetStageId: 'stage_a', active: true },
+        client_replied: null,
+      },
+      settings: { windowStart: '08:00', windowEnd: '17:00', weekdaysMask: 62, staleStageId: null },
+    })
+
+    expect(boardAutomationsUpsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: expect.objectContaining({ tenant_id: 'tenant_1', board_id: 'board_1', event_type: 'message_sent', target_stage_id: 'stage_a', active: true }),
+        opts: expect.objectContaining({ onConflict: 'board_id,event_type' }),
+      }),
+      {}
+    )
+    expect(boardAutomationsDeleteFn).toHaveBeenCalledWith(
+      expect.objectContaining({ tenant_id: 'tenant_1', board_id: 'board_1', event_type: 'client_replied' })
+    )
+    expect(automationSettingsUpsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: expect.objectContaining({ tenant_id: 'tenant_1', board_id: 'board_1', window_start: '08:00', window_end: '17:00' }),
+        opts: expect.objectContaining({ onConflict: 'board_id' }),
+      }),
+      {}
+    )
+  })
+})
+
+describe('listFollowupRules / saveFollowupRules', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('listFollowupRules retorna as regras ordenadas por position', async () => {
+    followupRulesSelectFn.mockReturnValueOnce({
+      data: [{ id: 'r1', day_offset: 1, template_text: 'Oi', position: 0 }],
+      error: null,
+    })
+
+    const rules = await listFollowupRules('tenant_1', 'stage_1')
+
+    expect(rules).toEqual([{ id: 'r1', dayOffset: 1, templateText: 'Oi', position: 0 }])
+  })
+
+  it('saveFollowupRules apaga as regras antigas e insere a lista nova em ordem', async () => {
+    followupRulesDeleteFn.mockReturnValueOnce({ data: null, error: null })
+    followupRulesInsertFn.mockReturnValueOnce({ data: null, error: null })
+
+    await saveFollowupRules('tenant_1', 'stage_1', [
+      { dayOffset: 1, templateText: 'Dia 1', position: 0 },
+      { dayOffset: 3, templateText: 'Dia 3', position: 1 },
+    ])
+
+    expect(followupRulesDeleteFn).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 'tenant_1', stage_id: 'stage_1' }))
+    expect(followupRulesInsertFn).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ tenant_id: 'tenant_1', stage_id: 'stage_1', day_offset: 1, template_text: 'Dia 1', position: 0 }),
+        expect.objectContaining({ tenant_id: 'tenant_1', stage_id: 'stage_1', day_offset: 3, template_text: 'Dia 3', position: 1 }),
+      ],
+      {}
+    )
+  })
+
+  it('saveFollowupRules com lista vazia: só apaga, não insere', async () => {
+    followupRulesDeleteFn.mockReturnValueOnce({ data: null, error: null })
+
+    await saveFollowupRules('tenant_1', 'stage_1', [])
+
+    expect(followupRulesInsertFn).not.toHaveBeenCalled()
+  })
+})
+
+describe('quote keywords CRUD', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('listQuoteKeywords retorna as palavras do tenant', async () => {
+    quoteKeywordsSelectFn.mockReturnValueOnce({ data: [{ id: 'k1', keyword: 'orçamento' }], error: null })
+
+    expect(await listQuoteKeywords('tenant_1')).toEqual([{ id: 'k1', keyword: 'orçamento' }])
+  })
+
+  it('addQuoteKeyword insere e retorna a palavra criada', async () => {
+    quoteKeywordsInsertFn.mockReturnValueOnce({ data: { id: 'k2', keyword: 'preço' }, error: null })
+
+    expect(await addQuoteKeyword('tenant_1', 'preço')).toEqual({ id: 'k2', keyword: 'preço' })
+  })
+
+  it('removeQuoteKeyword deleta por id escopado ao tenant', async () => {
+    quoteKeywordsDeleteFn.mockReturnValueOnce({ data: null, error: null })
+
+    await removeQuoteKeyword('tenant_1', 'k1')
+
+    expect(quoteKeywordsDeleteFn).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 'tenant_1', id: 'k1' }))
+  })
+})
+
+describe('setCardAutomationPaused / listCardAutomationLog', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('setCardAutomationPaused atualiza a flag do card', async () => {
+    kanbanCardsUpdateFn.mockReturnValueOnce({ data: null, error: null })
+
+    await setCardAutomationPaused('tenant_1', 'card_1', true)
+
+    expect(kanbanCardsUpdateFn).toHaveBeenCalledWith(
+      { automation_paused: true },
+      expect.objectContaining({ tenant_id: 'tenant_1', id: 'card_1' })
+    )
+  })
+
+  it('listCardAutomationLog retorna o histórico do card mais recente primeiro', async () => {
+    automationLogInsertFn.mockReturnValueOnce({
+      data: [{ id: 'log_1', event_type: 'stage_moved', source: 'ai', detail: {}, created_at: '2026-07-20T10:00:00Z' }],
+      error: null,
+    })
+
+    const log = await listCardAutomationLog('tenant_1', 'card_1')
+
+    expect(log).toEqual([
+      { id: 'log_1', eventType: 'stage_moved', source: 'ai', detail: {}, createdAt: '2026-07-20T10:00:00Z' },
+    ])
   })
 })
 

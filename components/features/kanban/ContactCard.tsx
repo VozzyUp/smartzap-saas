@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Phone, GripVertical } from 'lucide-react'
+import { Phone, GripVertical, History, PauseCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/date-utils'
+import { CardAutomationDialog } from './CardAutomationDialog'
 import type { KanbanCardWithContact } from './types'
 
 interface ContactCardProps {
@@ -14,6 +16,7 @@ interface ContactCardProps {
 }
 
 export function ContactCard({ card, overlay }: ContactCardProps) {
+  const [isAutomationOpen, setIsAutomationOpen] = useState(false)
   const sortable = useSortable({
     id: card.id,
     data: { type: 'card', card },
@@ -59,11 +62,33 @@ export function ContactCard({ card, overlay }: ContactCardProps) {
               {phone}
             </p>
           )}
-          <p className="mt-1.5 text-[11px] text-[var(--ds-text-muted)]">
-            {formatRelativeTime(card.moved_at)}
-          </p>
+          <div className="mt-1.5 flex items-center justify-between">
+            <p className="text-[11px] text-[var(--ds-text-muted)]">{formatRelativeTime(card.moved_at)}</p>
+            {!overlay && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsAutomationOpen(true)
+                }}
+                className="rounded-md p-1 text-[var(--ds-text-muted)] opacity-0 hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)] group-hover:opacity-100"
+                aria-label="Ver histórico de automação"
+              >
+                {card.automation_paused ? (
+                  <PauseCircle size={12} aria-hidden="true" />
+                ) : (
+                  <History size={12} aria-hidden="true" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {!overlay && (
+        <CardAutomationDialog card={card} open={isAutomationOpen} onOpenChange={setIsAutomationOpen} />
+      )}
     </div>
   )
 }

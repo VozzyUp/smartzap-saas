@@ -82,19 +82,40 @@ export async function subscribeWabaToWebhook(params: {
   }
 
   // 2) Só depois, com o app já inscrito, campos + override_callback_uri juntos.
-  const overrideBody = new URLSearchParams()
   // smb_message_echoes: campo separado que a Meta usa pra "ecoar" mensagens
   // enviadas pelo app do WhatsApp Business no celular (coexistência) — sem
   // essa inscrição, o V-Smart nunca recebe o que o atendente manda por lá.
-  overrideBody.set('subscribed_fields', 'messages,smb_message_echoes')
-  overrideBody.set('override_callback_uri', callbackUrl)
-  overrideBody.set('verify_token', verifyToken)
+  const overrideResult = await postOverride({ wabaId, accessToken, callbackUrl, verifyToken, fields: 'messages,smb_message_echoes' })
+  if (overrideResult.ok) return overrideResult
 
-  const overrideResult = await postSubscribedApps({ wabaId, accessToken, body: overrideBody })
-  if (!overrideResult.ok) {
-    return { ok: false, error: `Passo 2/2 (override): ${overrideResult.error}` }
+  // Fallback: smb_message_echoes é um campo mais novo — pode não estar
+  // liberado pro App do V-Smart na Meta ainda, e nesse caso a Meta rejeita a
+  // chamada INTEIRA (não só o campo problemático). Tenta de novo só com
+  // "messages", que é o essencial — mensagem recebida não pode ficar refém
+  // de um campo extra que talvez precise de habilitação manual à parte.
+  const fallbackResult = await postOverride({ wabaId, accessToken, callbackUrl, verifyToken, fields: 'messages' })
+  if (fallbackResult.ok) return fallbackResult
+
+  return { ok: false, error: fallbackResult.error }
+}
+
+async function postOverride(params: {
+  wabaId: string
+  accessToken: string
+  callbackUrl: string
+  verifyToken: string
+  fields: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const body = new URLSearchParams()
+  body.set('subscribed_fields', params.fields)
+  body.set('override_callback_uri', params.callbackUrl)
+  body.set('verify_token', params.verifyToken)
+
+  const result = await postSubscribedApps({ wabaId: params.wabaId, accessToken: params.accessToken, body })
+  if (!result.ok) {
+    return { ok: false, error: `Passo 2/2 (override, campos: ${params.fields}): ${result.error}` }
   }
-  return overrideResult
+  return result
 }
 
 /**

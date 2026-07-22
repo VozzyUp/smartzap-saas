@@ -84,13 +84,42 @@ describe('subscribeWabaToWebhook', () => {
     expect(fetchWithTimeout).toHaveBeenCalledTimes(1)
   })
 
-  it('retorna ok=false quando a inscrição bare funciona mas a 2ª chamada (campos + override) falha', async () => {
+  it('quando a 2ª chamada (messages+smb_message_echoes) falha, tenta um FALLBACK só com "messages" — se esse funcionar, retorna ok=true (smb_message_echoes pode não estar habilitado pro App na Meta ainda; não trava o essencial por causa do extra)', async () => {
     fetchWithTimeout
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 1) bare
       .mockResolvedValueOnce({
         ok: false,
         json: async () => ({ error: { message: 'Before override the current callback uri...' } }),
-      })
+      }) // 2) messages+smb_message_echoes falha
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 3) fallback só messages funciona
+
+    const result = await subscribeWabaToWebhook({
+      wabaId: 'waba_1',
+      accessToken: 'tok_1',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(3)
+
+    const [, init3] = fetchWithTimeout.mock.calls[2]
+    const body3 = new URLSearchParams(String(init3.body))
+    expect(body3.get('subscribed_fields')).toBe('messages')
+    expect(body3.get('override_callback_uri')).toBe('https://app.vsmart.com/api/webhook')
+  })
+
+  it('retorna ok=false quando a 2ª chamada E o fallback (só messages) também falham', async () => {
+    fetchWithTimeout
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 1) bare
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: { message: 'Before override the current callback uri...' } }),
+      }) // 2) messages+smb_message_echoes falha
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: { message: 'Permission denied entirely' } }),
+      }) // 3) fallback também falha
 
     const result = await subscribeWabaToWebhook({
       wabaId: 'waba_1',
@@ -100,8 +129,8 @@ describe('subscribeWabaToWebhook', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.error).toContain('override')
-    expect(fetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(result.error).toContain('Permission denied entirely')
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(3)
   })
 })
 

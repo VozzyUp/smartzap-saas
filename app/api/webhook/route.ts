@@ -42,6 +42,7 @@ import { isTenantBlocked } from '@/lib/trial'
 import {
   handleInboundMessage,
   handleDeliveryStatus,
+  handleOutboundMessageEcho,
 } from '@/lib/inbox/inbox-webhook'
 import { resolveTenantByPhoneNumberId } from '@/lib/whatsapp-phone-numbers'
 
@@ -979,6 +980,34 @@ export async function POST(request: NextRequest) {
               { status: 'error', error: e instanceof Error ? e.message : String(e) },
               { status: 500 }
             )
+          }
+        }
+
+        // =====================================================================
+        // Coexistência: mensagens enviadas pelo atendente no APP do WhatsApp
+        // Business (não pela API) chegam num campo separado da Meta —
+        // smb_message_echoes — não em `messages`. Sem tratar isso aqui, essas
+        // respostas nunca aparecem no inbox (a Meta as entrega normalmente
+        // pro cliente, só não avisa o V-Smart pelo canal usual).
+        // =====================================================================
+        const messageEchoes = change.value?.message_echoes || []
+        for (const echo of messageEchoes) {
+          try {
+            const echoResult = await handleOutboundMessageEcho({
+              tenantId,
+              messageId: echo?.id || '',
+              to: echo?.to,
+              type: echo?.type,
+              text: extractInboundText(echo),
+              timestamp: echo?.timestamp,
+              phoneNumberId: change?.value?.metadata?.phone_number_id || undefined,
+            })
+            if (echoResult) {
+              console.log(`📤 [Coexistência] Echo persistido: conversation=${echoResult.conversationId}, message=${echoResult.messageId}`)
+            }
+          } catch (echoError) {
+            // Best-effort: não falha o webhook por causa de um echo
+            console.warn('[Webhook] Falha ao processar smb_message_echoes:', echoError)
           }
         }
 

@@ -28,10 +28,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   const status = await getWabaWebhookStatus({ wabaId: creds.businessAccountId, accessToken: creds.accessToken })
+  const expectedWebhookUrl = webhookCallbackUrl()
+
+  // A Meta às vezes não lista "messages" em subscribed_fields mesmo com o
+  // webhook funcionando de verdade — o sinal confiável é messages OU o
+  // override_callback_uri já apontando pro V-Smart (mesma lógica usada em
+  // app/api/meta/diagnostics/route.ts, validada em produção).
+  const webhookActive = status.messagesSubscribed || status.overrideCallbackUri === expectedWebhookUrl
+
   return NextResponse.json({
     messagesSubscribed: status.messagesSubscribed,
     overrideCallbackUri: status.overrideCallbackUri,
-    expectedWebhookUrl: webhookCallbackUrl(),
+    expectedWebhookUrl,
+    webhookActive,
     ok: status.ok,
     error: status.error,
   })

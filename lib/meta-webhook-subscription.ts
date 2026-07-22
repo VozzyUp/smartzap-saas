@@ -37,7 +37,10 @@ export async function subscribeWabaToWebhook(params: {
   const { wabaId, accessToken, callbackUrl, verifyToken } = params
 
   const form = new URLSearchParams()
-  form.set('subscribed_fields', 'messages')
+  // smb_message_echoes: campo separado que a Meta usa pra "ecoar" mensagens
+  // enviadas pelo app do WhatsApp Business no celular (coexistência) — sem
+  // essa inscrição, o V-Smart nunca recebe o que o atendente manda por lá.
+  form.set('subscribed_fields', 'messages,smb_message_echoes')
   form.set('override_callback_uri', callbackUrl)
   form.set('verify_token', verifyToken)
 

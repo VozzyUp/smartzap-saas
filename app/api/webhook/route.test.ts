@@ -14,6 +14,7 @@ const applyCampaignStatusMock = vi.fn()
 const handleDeliveryStatusMock = vi.fn()
 const campaignContactsUpdateMock = vi.fn()
 const rpcMock = vi.fn()
+const handleOutboundMessageEchoMock = vi.fn()
 
 const supabaseFromMock = vi.fn((table: string) => {
   if (table === 'workflow_versions') {
@@ -77,6 +78,7 @@ vi.mock('@/lib/whatsapp-status-events', () => ({
 vi.mock('@/lib/inbox/inbox-webhook', () => ({
   handleInboundMessage: vi.fn(),
   handleDeliveryStatus: (...a: any[]) => handleDeliveryStatusMock(...a),
+  handleOutboundMessageEcho: (...a: any[]) => handleOutboundMessageEchoMock(...a),
 }))
 // lib/builder/workflow-conversations.ts tem `import "server-only"`, que lança
 // fora do build do Next (o pacote depende de aliasing do webpack que o Vitest
@@ -254,5 +256,82 @@ describe('webhook route - status de entrega do Inbox', () => {
 
     expect(res.status).toBe(500)
     expect(await res.json()).toMatchObject({ error: 'Falha ao persistir evento do webhook (retry)' })
+  })
+})
+
+describe('webhook route — smb_message_echoes (coexistência: mensagem enviada pelo app do celular)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.META_APP_SECRET
+    resolveTenantMock.mockResolvedValue('tenant_1')
+    isTenantBlockedMock.mockResolvedValue(false)
+    settingsGetMock.mockResolvedValue(null)
+    workflowVersionsOrderMock.mockResolvedValue({ data: [], error: null })
+    handleOutboundMessageEchoMock.mockResolvedValue({ conversationId: 'conv_1', messageId: 'msg_1' })
+  })
+
+  it('processa message_echoes chamando handleOutboundMessageEcho com os campos mapeados', async () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'waba_1',
+        changes: [{
+          field: 'smb_message_echoes',
+          value: {
+            messaging_product: 'whatsapp',
+            metadata: { display_phone_number: '15550783881', phone_number_id: 'pn_1' },
+            message_echoes: [{
+              from: '15550783881',
+              to: '5511999999999',
+              id: 'wamid.echo1',
+              timestamp: '1700000000',
+              type: 'text',
+              text: { body: 'Já resolvi seu pedido!' },
+            }],
+          },
+        }],
+      }],
+    }
+    const req = new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(200)
+    expect(handleOutboundMessageEchoMock).toHaveBeenCalledWith({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.echo1',
+      to: '5511999999999',
+      type: 'text',
+      text: 'Já resolvi seu pedido!',
+      timestamp: '1700000000',
+      phoneNumberId: 'pn_1',
+    })
+  })
+
+  it('erro ao processar um echo não derruba o webhook (best-effort)', async () => {
+    handleOutboundMessageEchoMock.mockRejectedValueOnce(new Error('boom'))
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        changes: [{
+          field: 'smb_message_echoes',
+          value: {
+            metadata: { phone_number_id: 'pn_1' },
+            message_echoes: [{ from: '15550783881', to: '5511999999999', id: 'wamid.echo2', type: 'text', text: { body: 'Oi' } }],
+          },
+        }],
+      }],
+    }
+    const req = new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(200)
   })
 })

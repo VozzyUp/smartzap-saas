@@ -52,6 +52,7 @@ type WebhookStatus = {
   messagesSubscribed: boolean
   overrideCallbackUri: string | null
   expectedWebhookUrl: string
+  webhookActive: boolean
   ok: boolean
   error?: string
 }
@@ -89,7 +90,7 @@ function WebhookStatusRow({ phoneNumberId }: { phoneNumberId: string }) {
     },
   })
 
-  const subscribed = data?.messagesSubscribed === true && data?.ok !== false
+  const subscribed = data?.webhookActive === true && data?.ok !== false
 
   return (
     <div className="mt-3 pt-3 border-t border-zinc-800">

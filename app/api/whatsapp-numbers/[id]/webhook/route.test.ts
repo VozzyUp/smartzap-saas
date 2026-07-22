@@ -46,7 +46,22 @@ describe('GET /api/whatsapp-numbers/[id]/webhook — status', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.messagesSubscribed).toBe(true)
+    expect(body.webhookActive).toBe(true)
     expect(statusMock).toHaveBeenCalledWith({ wabaId: 'waba_1', accessToken: 'tok_1' })
+  })
+
+  it('webhookActive=true quando o override_callback_uri já aponta pro V-Smart, mesmo sem messages em subscribed_fields (comportamento real da Meta observado no diagnóstico)', async () => {
+    statusMock.mockResolvedValue({ ok: true, messagesSubscribed: false, overrideCallbackUri: 'https://app.vsmart.com/api/webhook' })
+    const res = await GET(new NextRequest('http://localhost/x'), makeParams('pn_2'))
+    const body = await res.json()
+    expect(body.webhookActive).toBe(true)
+  })
+
+  it('webhookActive=false quando nem messages nem override apontam pro V-Smart', async () => {
+    statusMock.mockResolvedValue({ ok: true, messagesSubscribed: false, overrideCallbackUri: null })
+    const res = await GET(new NextRequest('http://localhost/x'), makeParams('pn_2'))
+    const body = await res.json()
+    expect(body.webhookActive).toBe(false)
   })
 
   it('400 quando o número não tem credenciais salvas', async () => {

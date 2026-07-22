@@ -82,6 +82,23 @@ export interface InboundMessagePayload {
   phoneNumberId?: string
 }
 
+/**
+ * Payload do webhook `smb_message_echoes` (coexistência) — mensagem que o
+ * atendente mandou pelo APP do WhatsApp Business no celular, não pela API.
+ * Estrutura oficial: https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/smb_message_echoes
+ */
+export interface OutboundMessageEchoPayload {
+  tenantId: string
+  messageId: string
+  /** Telefone do cliente que recebeu a mensagem (campo `to` do echo) */
+  to: string
+  /** text, image, audio, video, document, revoke, edit */
+  type: string
+  text: string
+  timestamp?: string
+  phoneNumberId?: string
+}
+
 export interface StatusUpdatePayload {
   /** WhatsApp message ID */
   messageId: string
@@ -749,6 +766,59 @@ function mapMessageType(waType: string): InboxMessage['message_type'] {
   }
 
   return typeMap[waType] || 'text'
+}
+
+const ECHO_TYPES_NOT_PERSISTED = new Set(['revoke', 'edit'])
+
+/**
+ * Processa um `smb_message_echoes` (coexistência): mensagem que o atendente
+ * mandou pelo app do WhatsApp Business no celular, não pela API do V-Smart.
+ * Persiste como mensagem outbound na conversa do cliente, pra aparecer no
+ * inbox igual a qualquer outra resposta — sem isso, ela some (foi enviada de
+ * verdade, o cliente recebeu, mas o V-Smart nunca fica sabendo).
+ *
+ * `revoke`/`edit` (apagar/editar mensagem no app) ainda não têm uma
+ * representação no inbox — ignorados por ora, sem lançar erro.
+ */
+export async function handleOutboundMessageEcho(
+  payload: OutboundMessageEchoPayload
+): Promise<{ conversationId: string; messageId: string } | null> {
+  if (ECHO_TYPES_NOT_PERSISTED.has(payload.type)) {
+    return null
+  }
+
+  const normalizedTo = normalizePhoneNumber(payload.to)
+  const contactId = await findContactId(payload.tenantId, normalizedTo)
+
+  const conversation = await inboxDb.getOrCreateConversation(
+    payload.tenantId,
+    normalizedTo,
+    contactId ?? undefined,
+    undefined,
+    payload.phoneNumberId ?? undefined
+  )
+
+  const message = await inboxDb.createMessage({
+    tenant_id: payload.tenantId,
+    conversation_id: conversation.id,
+    direction: 'outbound',
+    content: payload.text,
+    message_type: mapMessageType(payload.type),
+    whatsapp_message_id: payload.messageId || undefined,
+    delivery_status: 'sent',
+  })
+
+  // Mesma automação de Kanban de qualquer resposta manual (inbox/telefone) —
+  // best-effort, nunca derruba o processamento do echo.
+  if (contactId) {
+    try {
+      await triggerAutomationEvent(payload.tenantId, contactId, 'message_sent', 'manual')
+    } catch (e) {
+      console.warn('[Inbox] Falha na automação de Kanban (best-effort, echo):', e)
+    }
+  }
+
+  return { conversationId: conversation.id, messageId: message.id }
 }
 
 /**

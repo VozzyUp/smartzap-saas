@@ -53,9 +53,25 @@ describe('subscribeWabaToWebhook', () => {
     expect(init.method).toBe('POST')
     expect(init.headers.Authorization).toBe('Bearer tok_1')
     const body = String(init.body)
-    expect(body).toContain('subscribed_fields=messages')
     expect(body).toContain('override_callback_uri=')
     expect(body).toContain('verify_token=vt_1')
+  })
+
+  it('inscreve tanto messages quanto smb_message_echoes (coexistência: mensagens enviadas pelo app do celular)', async () => {
+    fetchWithTimeout.mockResolvedValue({ ok: true, json: async () => ({ success: true }) })
+
+    await subscribeWabaToWebhook({
+      wabaId: 'waba_1',
+      accessToken: 'tok_1',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+    })
+
+    const [, init] = fetchWithTimeout.mock.calls[0]
+    const params = new URLSearchParams(String(init.body))
+    const fields = (params.get('subscribed_fields') || '').split(',')
+    expect(fields).toContain('messages')
+    expect(fields).toContain('smb_message_echoes')
   })
 
   it('retorna ok=false com a mensagem de erro da Meta quando o POST falha', async () => {

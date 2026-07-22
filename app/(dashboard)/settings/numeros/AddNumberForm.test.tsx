@@ -121,3 +121,98 @@ describe('AddNumberForm — botão Testar Conexão', () => {
     expect(isDisabled(screen.getByRole('button', { name: /^Adicionar Número$/i }))).toBe(true)
   })
 })
+
+describe('AddNumberForm — Tipo de número (API oficial / Coexistência)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('Coexistência vem selecionada por padrão e mostra a nota de aviso', () => {
+    renderWithQueryClient(<AddNumberForm onSuccess={() => {}} />)
+
+    expect((screen.getByLabelText(/Coexistência/i) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText(/API oficial/i) as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByText(/vínculo do app do WhatsApp Business no celular/i)).not.toBeNull()
+  })
+
+  it('selecionar API oficial esconde a nota de aviso de coexistência', () => {
+    renderWithQueryClient(<AddNumberForm onSuccess={() => {}} />)
+
+    fireEvent.click(screen.getByLabelText(/API oficial/i))
+
+    expect(screen.queryByText(/vínculo do app do WhatsApp Business no celular/i)).toBeNull()
+  })
+
+  it('envia connectionType="official_api" ao adicionar quando essa opção está selecionada', async () => {
+    ;(fetch as any)
+      .mockResolvedValueOnce(
+        mockFetchResponse(true, { ok: true, displayPhoneNumber: '+55 11 91234-5678', verifiedName: 'Loja' })
+      )
+      .mockResolvedValueOnce(mockFetchResponse(true, { success: true, webhookSubscribed: true }))
+
+    renderWithQueryClient(<AddNumberForm onSuccess={() => {}} />)
+    fillForm()
+    fireEvent.click(screen.getByLabelText(/API oficial/i))
+    fireEvent.click(screen.getByRole('button', { name: /testar conexão/i }))
+
+    await waitFor(() => {
+      expect(isDisabled(screen.getByRole('button', { name: /^Adicionar Número$/i }))).toBe(false)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Adicionar Número$/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/whatsapp-numbers',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            phoneNumberId: 'pn_1',
+            businessAccountId: 'waba_1',
+            accessToken: 'tok_1',
+            displayLabel: '',
+            connectionType: 'official_api',
+          }),
+        })
+      )
+    })
+  })
+
+  it('envia connectionType="coexistence" por padrão (sem trocar a seleção)', async () => {
+    ;(fetch as any)
+      .mockResolvedValueOnce(
+        mockFetchResponse(true, { ok: true, displayPhoneNumber: '+55 11 91234-5678', verifiedName: 'Loja' })
+      )
+      .mockResolvedValueOnce(mockFetchResponse(true, { success: true, webhookSubscribed: true }))
+
+    renderWithQueryClient(<AddNumberForm onSuccess={() => {}} />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /testar conexão/i }))
+
+    await waitFor(() => {
+      expect(isDisabled(screen.getByRole('button', { name: /^Adicionar Número$/i }))).toBe(false)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Adicionar Número$/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/whatsapp-numbers',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            phoneNumberId: 'pn_1',
+            businessAccountId: 'waba_1',
+            accessToken: 'tok_1',
+            displayLabel: '',
+            connectionType: 'coexistence',
+          }),
+        })
+      )
+    })
+  })
+})

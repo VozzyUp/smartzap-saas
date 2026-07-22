@@ -15,6 +15,8 @@ import { getPlanLimitBody, formatPlanLimit } from '@/lib/plan-limit-message'
 // Types & API
 // =============================================================================
 
+type WhatsAppConnectionType = 'official_api' | 'coexistence'
+
 type WhatsAppNumberPublic = {
   phone_number_id: string
   tenant_id: string
@@ -22,6 +24,7 @@ type WhatsAppNumberPublic = {
   display_label: string | null
   display_phone_number: string | null
   is_active: boolean
+  connection_type: WhatsAppConnectionType | null
 }
 
 async function fetchNumbers(): Promise<WhatsAppNumberPublic[]> {
@@ -34,6 +37,7 @@ type AddNumberInput = {
   businessAccountId: string
   accessToken: string
   displayLabel: string
+  connectionType: WhatsAppConnectionType
 }
 
 async function addNumber(input: AddNumberInput) {
@@ -152,7 +156,7 @@ function WebhookStatusRow({ phoneNumberId }: { phoneNumberId: string }) {
   )
 }
 
-function NumberCard({
+export function NumberCard({
   number,
   onActivate,
   onRemove,
@@ -187,12 +191,19 @@ function NumberCard({
           </div>
         </div>
 
-        {number.is_active && (
-          <span className="inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-            <CheckCircle2 size={10} aria-hidden="true" />
-            Ativo
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          {number.is_active && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+              <CheckCircle2 size={10} aria-hidden="true" />
+              Ativo
+            </span>
+          )}
+          {number.connection_type && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
+              {number.connection_type === 'official_api' ? 'API oficial' : 'Coexistência'}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mt-4">
@@ -224,6 +235,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
   const [businessAccountId, setBusinessAccountId] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [displayLabel, setDisplayLabel] = useState('')
+  const [connectionType, setConnectionType] = useState<WhatsAppConnectionType>('coexistence')
   const [testResult, setTestResult] = useState<{ displayPhoneNumber?: string | null; verifiedName?: string | null } | null>(null)
   const [testError, setTestError] = useState<string | null>(null)
 
@@ -294,6 +306,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
       businessAccountId: businessAccountId.trim(),
       accessToken: accessToken.trim(),
       displayLabel: displayLabel.trim(),
+      connectionType,
     })
   }
 
@@ -357,6 +370,39 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             onChange={(e) => setDisplayLabel(e.target.value)}
             className="max-w-sm"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tipo de número</Label>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="connectionTypeCoexistence" className="flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                id="connectionTypeCoexistence"
+                type="radio"
+                name="connectionType"
+                value="coexistence"
+                checked={connectionType === 'coexistence'}
+                onChange={() => setConnectionType('coexistence')}
+              />
+              Coexistência (app do WhatsApp Business no celular + API ao mesmo tempo)
+            </label>
+            <label htmlFor="connectionTypeOfficialApi" className="flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                id="connectionTypeOfficialApi"
+                type="radio"
+                name="connectionType"
+                value="official_api"
+                checked={connectionType === 'official_api'}
+                onChange={() => setConnectionType('official_api')}
+              />
+              API oficial (sem app no celular)
+            </label>
+          </div>
+          {connectionType === 'coexistence' && (
+            <p className="text-xs text-zinc-500">
+              Pra funcionar, o vínculo do app do WhatsApp Business no celular com essa conta precisa estar concluído na Meta — sem isso a ativação do webhook pode falhar.
+            </p>
+          )}
         </div>
 
         {testError && (

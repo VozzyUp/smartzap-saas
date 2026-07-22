@@ -71,8 +71,14 @@ export async function subscribeWabaToWebhook(params: {
   accessToken: string
   callbackUrl: string
   verifyToken: string
+  // Campos a assinar. Números API oficial (sem app no celular) devem passar
+  // 'messages' explicitamente — smb_message_echoes só existe pra coexistência
+  // e, se pedido sem sentido pro número, é só uma chamada extra pra nada.
+  // Default: tenta messages+smb_message_echoes (comportamento pré-existente).
+  fields?: string
 }): Promise<{ ok: boolean; error?: string }> {
   const { wabaId, accessToken, callbackUrl, verifyToken } = params
+  const requestedFields = params.fields ?? 'messages,smb_message_echoes'
 
   // 1) Inscrição BARE — sem nenhum parâmetro. Só isso "registra" o app como
   // inscrito no WABA; é pré-requisito pra Meta aceitar a chamada seguinte.
@@ -85,14 +91,18 @@ export async function subscribeWabaToWebhook(params: {
   // smb_message_echoes: campo separado que a Meta usa pra "ecoar" mensagens
   // enviadas pelo app do WhatsApp Business no celular (coexistência) — sem
   // essa inscrição, o V-Smart nunca recebe o que o atendente manda por lá.
-  const overrideResult = await postOverride({ wabaId, accessToken, callbackUrl, verifyToken, fields: 'messages,smb_message_echoes' })
+  const overrideResult = await postOverride({ wabaId, accessToken, callbackUrl, verifyToken, fields: requestedFields })
   if (overrideResult.ok) return overrideResult
 
-  // Fallback: smb_message_echoes é um campo mais novo — pode não estar
-  // liberado pro App do V-Smart na Meta ainda, e nesse caso a Meta rejeita a
-  // chamada INTEIRA (não só o campo problemático). Tenta de novo só com
-  // "messages", que é o essencial — mensagem recebida não pode ficar refém
-  // de um campo extra que talvez precise de habilitação manual à parte.
+  // Fallback só faz sentido se smb_message_echoes foi tentado: é um campo
+  // mais novo que pode não estar liberado pro App na Meta ainda, e nesse
+  // caso a Meta rejeita a chamada INTEIRA (não só o campo problemático).
+  // Se o chamador já pediu só "messages" (número API oficial), não há pra
+  // onde recuar — retorna o erro direto.
+  if (!requestedFields.includes('smb_message_echoes')) {
+    return { ok: false, error: overrideResult.error }
+  }
+
   const fallbackResult = await postOverride({ wabaId, accessToken, callbackUrl, verifyToken, fields: 'messages' })
   if (fallbackResult.ok) return fallbackResult
 

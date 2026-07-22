@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTenantContext } from '@/lib/tenant-context'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
+import { getWhatsAppNumberByPhoneId } from '@/lib/whatsapp-phone-numbers'
 import { subscribeWabaToWebhook, getWabaWebhookStatus } from '@/lib/meta-webhook-subscription'
 import { getVerifyToken } from '@/lib/verify-token'
 import { getAppUrl } from '@/lib/app-url'
@@ -58,16 +59,30 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Número sem credenciais salvas' }, { status: 400 })
   }
 
+  // Sem tipo definido (número cadastrado antes da coluna), assume coexistência
+  // — comportamento idêntico ao que já existia (mais permissivo).
+  const number = await getWhatsAppNumberByPhoneId(ctx.tenantId, phoneNumberId)
+  const isOfficialApi = number?.connection_type === 'official_api'
+  const webhookFields = isOfficialApi ? 'messages' : 'messages,smb_message_echoes'
+
   const verifyToken = await getVerifyToken()
   const result = await subscribeWabaToWebhook({
     wabaId: creds.businessAccountId,
     accessToken: creds.accessToken,
     callbackUrl: webhookCallbackUrl(),
     verifyToken,
+    fields: webhookFields,
   })
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error || 'Falha ao ativar o webhook' }, { status: 502 })
+    let error = result.error || 'Falha ao ativar o webhook'
+    // Erro #100 em coexistência costuma significar que o vínculo do app do
+    // WhatsApp Business no celular (linked device) ainda não foi concluído
+    // do lado da Meta — não é um problema de credenciais nem de código.
+    if (!isOfficialApi && error.includes('#100')) {
+      error += ' — em números de coexistência, esse erro geralmente indica que o vínculo do app do WhatsApp Business no celular ainda não foi concluído na Meta.'
+    }
+    return NextResponse.json({ error }, { status: 502 })
   }
   return NextResponse.json({ success: true })
 }

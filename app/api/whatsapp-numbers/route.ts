@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const body = await request.json().catch(() => null)
-    const { phoneNumberId, businessAccountId, accessToken, displayLabel } = body ?? {}
+    const { phoneNumberId, businessAccountId, accessToken, displayLabel, connectionType } = body ?? {}
     if (!phoneNumberId || !businessAccountId || !accessToken) {
       return NextResponse.json(
         { error: 'Missing required fields: phoneNumberId, businessAccountId, accessToken' },
@@ -70,12 +70,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // API oficial (sem app no celular) não precisa de smb_message_echoes —
+    // só coexistência ecoa mensagens mandadas pelo celular. Sem tipo definido
+    // (retrocompat), assume coexistência: mais permissivo, igual ao comportamento anterior.
+    const normalizedConnectionType = connectionType === 'official_api' || connectionType === 'coexistence' ? connectionType : null
+    const webhookFields = normalizedConnectionType === 'official_api' ? 'messages' : 'messages,smb_message_echoes'
+
     await addWhatsAppNumber(ctx.tenantId, {
       phoneNumberId,
       businessAccountId,
       accessToken,
       displayLabel,
       displayPhoneNumber: phoneData?.display_phone_number,
+      connectionType: normalizedConnectionType,
     })
     await mirrorActiveToSettings(ctx.tenantId)
 
@@ -92,6 +99,7 @@ export async function POST(request: NextRequest) {
         accessToken,
         callbackUrl: `${getAppUrl()}/api/webhook`,
         verifyToken,
+        fields: webhookFields,
       })
       webhookSubscribed = sub.ok
       webhookError = sub.ok ? undefined : sub.error

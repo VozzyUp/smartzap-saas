@@ -72,6 +72,8 @@ export async function clearWhatsAppPhoneNumber(tenantId: string): Promise<void> 
   if (error) throw error
 }
 
+export type WhatsAppConnectionType = 'official_api' | 'coexistence'
+
 export type WhatsAppNumberRow = {
   phone_number_id: string
   tenant_id: string
@@ -80,10 +82,11 @@ export type WhatsAppNumberRow = {
   display_label: string | null
   display_phone_number: string | null
   is_active: boolean
+  connection_type: WhatsAppConnectionType | null
 }
 export type WhatsAppNumberPublic = Omit<WhatsAppNumberRow, 'access_token'>
 
-const PUBLIC_COLS = 'phone_number_id, tenant_id, business_account_id, display_label, display_phone_number, is_active'
+const PUBLIC_COLS = 'phone_number_id, tenant_id, business_account_id, display_label, display_phone_number, is_active, connection_type'
 const FULL_COLS = `${PUBLIC_COLS}, access_token`
 
 export async function getActiveWhatsAppNumber(tenantId: string): Promise<WhatsAppNumberRow | null> {
@@ -109,7 +112,14 @@ export async function listWhatsAppNumbers(tenantId: string): Promise<WhatsAppNum
 
 export async function addWhatsAppNumber(
   tenantId: string,
-  params: { phoneNumberId: string; businessAccountId?: string | null; accessToken: string; displayLabel?: string | null; displayPhoneNumber?: string | null }
+  params: {
+    phoneNumberId: string
+    businessAccountId?: string | null
+    accessToken: string
+    displayLabel?: string | null
+    displayPhoneNumber?: string | null
+    connectionType?: WhatsAppConnectionType | null
+  }
 ): Promise<WhatsAppNumberRow> {
   const db = getSupabaseAdmin()!
   const existingActive = await getActiveWhatsAppNumber(tenantId)
@@ -121,6 +131,7 @@ export async function addWhatsAppNumber(
       access_token: params.accessToken,
       display_label: params.displayLabel ?? null,
       display_phone_number: params.displayPhoneNumber ?? null,
+      connection_type: params.connectionType ?? null,
       is_active: existingActive === null, // 1º número do tenant já entra ativo
       updated_at: new Date().toISOString(),
     },

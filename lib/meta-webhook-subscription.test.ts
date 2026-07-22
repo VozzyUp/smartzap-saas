@@ -109,6 +109,47 @@ describe('subscribeWabaToWebhook', () => {
     expect(body3.get('override_callback_uri')).toBe('https://app.vsmart.com/api/webhook')
   })
 
+  it('quando fields="messages" é passado explicitamente (número API oficial), assina só messages — sem tentar smb_message_echoes nem fallback', async () => {
+    fetchWithTimeout
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 1) bare
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 2) override só messages
+
+    const result = await subscribeWabaToWebhook({
+      wabaId: 'waba_1',
+      accessToken: 'tok_1',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+      fields: 'messages',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2)
+
+    const [, init2] = fetchWithTimeout.mock.calls[1]
+    const body2 = new URLSearchParams(String(init2.body))
+    expect(body2.get('subscribed_fields')).toBe('messages')
+  })
+
+  it('quando fields="messages" é passado explicitamente e a 2ª chamada falha, NÃO tenta fallback (já é o mínimo) — retorna ok=false direto', async () => {
+    fetchWithTimeout
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 1) bare
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: { message: 'Before override the current callback uri...' } }),
+      }) // 2) override só messages falha
+
+    const result = await subscribeWabaToWebhook({
+      wabaId: 'waba_1',
+      accessToken: 'tok_1',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+      fields: 'messages',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2)
+  })
+
   it('retorna ok=false quando a 2ª chamada E o fallback (só messages) também falham', async () => {
     fetchWithTimeout
       .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) }) // 1) bare

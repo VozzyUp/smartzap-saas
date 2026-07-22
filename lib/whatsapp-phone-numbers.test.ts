@@ -267,6 +267,28 @@ describe('whatsapp-phone-numbers', () => {
     expect(r).toEqual(inserted)
   })
 
+  it('addWhatsAppNumber grava connection_type quando informado', async () => {
+    selectActiveFn.mockResolvedValueOnce({ data: null, error: null })
+    const inserted = { phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', access_token: 'tok', display_label: null, is_active: true, connection_type: 'coexistence' }
+    upsertSelectFn.mockResolvedValueOnce({ data: inserted, error: null })
+    await addWhatsAppNumber('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok', connectionType: 'coexistence' })
+    expect(upsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ connection_type: 'coexistence' }),
+      expect.objectContaining({ onConflict: 'phone_number_id' })
+    )
+  })
+
+  it('addWhatsAppNumber grava connection_type=null quando não informado (retrocompat)', async () => {
+    selectActiveFn.mockResolvedValueOnce({ data: null, error: null })
+    const inserted = { phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', access_token: 'tok', display_label: null, is_active: true, connection_type: null }
+    upsertSelectFn.mockResolvedValueOnce({ data: inserted, error: null })
+    await addWhatsAppNumber('t1', { phoneNumberId: 'pn_1', businessAccountId: 'ba_1', accessToken: 'tok' })
+    expect(upsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ connection_type: null }),
+      expect.objectContaining({ onConflict: 'phone_number_id' })
+    )
+  })
+
   it('addWhatsAppNumber insere is_active=false quando o tenant já tem um número ativo', async () => {
     selectActiveFn.mockResolvedValueOnce({
       data: { phone_number_id: 'pn_1', tenant_id: 't1', business_account_id: 'ba_1', access_token: 'tok', display_label: null, is_active: true },

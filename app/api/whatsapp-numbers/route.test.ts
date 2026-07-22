@@ -121,6 +121,7 @@ describe('POST /api/whatsapp-numbers', () => {
       accessToken: 'tok',
       displayLabel: 'Loja 2',
       displayPhoneNumber: '+551199999999',
+      connectionType: null,
     })
     expect(mirrorMock).toHaveBeenCalledWith('t1')
   })
@@ -138,8 +139,31 @@ describe('POST /api/whatsapp-numbers', () => {
       accessToken: 'tok',
       callbackUrl: 'https://app.vsmart.com/api/webhook',
       verifyToken: 'vt_1',
+      fields: 'messages,smb_message_echoes',
     })
     expect(body.webhookSubscribed).toBe(true)
+  })
+
+  it('connectionType="official_api": grava connection_type e assina o webhook só com "messages" (sem smb_message_echoes)', async () => {
+    const req = new NextRequest('http://localhost/api/whatsapp-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok', connectionType: 'official_api' }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    expect(addMock).toHaveBeenCalledWith('t1', expect.objectContaining({ connectionType: 'official_api' }))
+    expect(subscribeMock).toHaveBeenCalledWith(expect.objectContaining({ fields: 'messages' }))
+  })
+
+  it('connectionType="coexistence": grava connection_type e assina o webhook com messages+smb_message_echoes', async () => {
+    const req = new NextRequest('http://localhost/api/whatsapp-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok', connectionType: 'coexistence' }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    expect(addMock).toHaveBeenCalledWith('t1', expect.objectContaining({ connectionType: 'coexistence' }))
+    expect(subscribeMock).toHaveBeenCalledWith(expect.objectContaining({ fields: 'messages,smb_message_echoes' }))
   })
 
   it('falha ao assinar webhook NÃO derruba o cadastro (retorna 200 com webhookSubscribed=false)', async () => {

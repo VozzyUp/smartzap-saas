@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Smartphone, Plus, Trash2, CheckCircle2, Loader2, Webhook, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Smartphone, Plus, Trash2, CheckCircle2, Loader2, Webhook, AlertTriangle, RefreshCw, ShieldCheck } from 'lucide-react'
 import { Page, PageDescription, PageHeader, PageTitle } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,17 @@ async function addNumber(input: AddNumberInput) {
 
 async function activateNumber(phoneNumberId: string) {
   return api.post(`/api/whatsapp-numbers/${phoneNumberId}/activate`)
+}
+
+type TestConnectionResult = {
+  ok: boolean
+  displayPhoneNumber?: string | null
+  verifiedName?: string | null
+  error?: string
+}
+
+async function testConnection(input: { phoneNumberId: string; businessAccountId: string; accessToken: string }) {
+  return api.post<TestConnectionResult>('/api/settings/test-connection', input)
 }
 
 async function removeNumber(phoneNumberId: string) {
@@ -208,13 +219,36 @@ function NumberCard({
   )
 }
 
-function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
+export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
   const [phoneNumberId, setPhoneNumberId] = useState('')
   const [businessAccountId, setBusinessAccountId] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [displayLabel, setDisplayLabel] = useState('')
+  const [testResult, setTestResult] = useState<{ displayPhoneNumber?: string | null; verifiedName?: string | null } | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
+
+  const canTest = Boolean(phoneNumberId.trim() && businessAccountId.trim() && accessToken.trim())
+
+  // Editar qualquer campo depois de um teste invalida o resultado — o que foi
+  // testado pode não ser mais o que está nos campos.
+  const invalidateTest = () => {
+    setTestResult(null)
+    setTestError(null)
+  }
+
+  const testMutation = useMutation({
+    mutationFn: testConnection,
+    onSuccess: (result) => {
+      setTestResult({ displayPhoneNumber: result.displayPhoneNumber, verifiedName: result.verifiedName })
+      setTestError(null)
+    },
+    onError: (error: unknown) => {
+      setTestResult(null)
+      setTestError(error instanceof Error ? error.message : 'Erro ao testar conexão')
+    },
+  })
 
   const mutation = useMutation({
     mutationFn: addNumber,
@@ -229,6 +263,7 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
       setBusinessAccountId('')
       setAccessToken('')
       setDisplayLabel('')
+      invalidateTest()
       queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] })
       onSuccess()
     },
@@ -250,11 +285,24 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
       toast.error('Preencha ID do número, ID da conta e token de acesso')
       return
     }
+    if (!testResult) {
+      toast.error('Teste a conexão antes de adicionar o número')
+      return
+    }
     mutation.mutate({
       phoneNumberId: phoneNumberId.trim(),
       businessAccountId: businessAccountId.trim(),
       accessToken: accessToken.trim(),
       displayLabel: displayLabel.trim(),
+    })
+  }
+
+  const handleTest = () => {
+    if (!canTest) return
+    testMutation.mutate({
+      phoneNumberId: phoneNumberId.trim(),
+      businessAccountId: businessAccountId.trim(),
+      accessToken: accessToken.trim(),
     })
   }
 
@@ -272,7 +320,7 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             id="phoneNumberId"
             placeholder="Ex: 123456789012345"
             value={phoneNumberId}
-            onChange={(e) => setPhoneNumberId(e.target.value)}
+            onChange={(e) => { setPhoneNumberId(e.target.value); invalidateTest() }}
             className="max-w-sm"
           />
         </div>
@@ -283,7 +331,7 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             id="businessAccountId"
             placeholder="Ex: 987654321098765"
             value={businessAccountId}
-            onChange={(e) => setBusinessAccountId(e.target.value)}
+            onChange={(e) => { setBusinessAccountId(e.target.value); invalidateTest() }}
             className="max-w-sm"
           />
         </div>
@@ -295,7 +343,7 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             type="password"
             placeholder="Token permanente da Meta"
             value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
+            onChange={(e) => { setAccessToken(e.target.value); invalidateTest() }}
             className="max-w-sm"
           />
         </div>
@@ -311,19 +359,58 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
           />
         </div>
 
-        <Button type="submit" disabled={mutation.isPending} className="w-full sm:w-auto">
-          {mutation.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
-              Adicionando...
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-              Adicionar Número
-            </>
-          )}
-        </Button>
+        {testError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+            <p className="text-red-200">{testError}</p>
+          </div>
+        )}
+
+        {testResult && (
+          <div className="flex items-start gap-2 rounded-lg border border-green-500/20 bg-green-500/10 p-3 text-sm">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-400" aria-hidden="true" />
+            <div className="text-green-200">
+              <p className="font-medium">Conexão válida</p>
+              {testResult.displayPhoneNumber && <p>{testResult.displayPhoneNumber}</p>}
+              {testResult.verifiedName && <p className="text-green-300/80">{testResult.verifiedName}</p>}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleTest}
+            disabled={!canTest || testMutation.isPending}
+          >
+            {testMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                Testando...
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4 mr-2" aria-hidden="true" />
+                Testar Conexão
+              </>
+            )}
+          </Button>
+
+          <Button type="submit" disabled={mutation.isPending || !testResult}>
+            {mutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                Adicionando...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                Adicionar Número
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </form>
   )

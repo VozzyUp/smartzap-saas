@@ -37,7 +37,7 @@ describe('meta-webhook-subscription helpers', () => {
 describe('subscribeWabaToWebhook', () => {
   beforeEach(() => fetchWithTimeout.mockReset())
 
-  it('faz POST em subscribed_apps do WABA com messages + override_callback_uri e verify_token', async () => {
+  it('faz DUAS chamadas: 1) inscreve os campos, 2) só depois seta o override_callback_uri (a Meta rejeita as duas coisas numa chamada só pra WABA nunca inscrito antes — erro #100)', async () => {
     fetchWithTimeout.mockResolvedValue({ ok: true, json: async () => ({ success: true }) })
 
     const result = await subscribeWabaToWebhook({
@@ -48,34 +48,27 @@ describe('subscribeWabaToWebhook', () => {
     })
 
     expect(result.ok).toBe(true)
-    const [url, init] = fetchWithTimeout.mock.calls[0]
-    expect(url).toContain('/waba_1/subscribed_apps')
-    expect(init.method).toBe('POST')
-    expect(init.headers.Authorization).toBe('Bearer tok_1')
-    const body = String(init.body)
-    expect(body).toContain('override_callback_uri=')
-    expect(body).toContain('verify_token=vt_1')
-  })
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2)
 
-  it('inscreve tanto messages quanto smb_message_echoes (coexistência: mensagens enviadas pelo app do celular)', async () => {
-    fetchWithTimeout.mockResolvedValue({ ok: true, json: async () => ({ success: true }) })
-
-    await subscribeWabaToWebhook({
-      wabaId: 'waba_1',
-      accessToken: 'tok_1',
-      callbackUrl: 'https://app.vsmart.com/api/webhook',
-      verifyToken: 'vt_1',
-    })
-
-    const [, init] = fetchWithTimeout.mock.calls[0]
-    const params = new URLSearchParams(String(init.body))
-    const fields = (params.get('subscribed_fields') || '').split(',')
+    const [url1, init1] = fetchWithTimeout.mock.calls[0]
+    expect(url1).toContain('/waba_1/subscribed_apps')
+    expect(init1.method).toBe('POST')
+    expect(init1.headers.Authorization).toBe('Bearer tok_1')
+    const body1 = new URLSearchParams(String(init1.body))
+    const fields = (body1.get('subscribed_fields') || '').split(',')
     expect(fields).toContain('messages')
     expect(fields).toContain('smb_message_echoes')
+    expect(body1.get('override_callback_uri')).toBeNull()
+
+    const [url2, init2] = fetchWithTimeout.mock.calls[1]
+    expect(url2).toContain('/waba_1/subscribed_apps')
+    const body2 = new URLSearchParams(String(init2.body))
+    expect(body2.get('override_callback_uri')).toBe('https://app.vsmart.com/api/webhook')
+    expect(body2.get('verify_token')).toBe('vt_1')
   })
 
-  it('retorna ok=false com a mensagem de erro da Meta quando o POST falha', async () => {
-    fetchWithTimeout.mockResolvedValue({
+  it('retorna ok=false com a mensagem de erro da Meta quando a inscrição de campos (1ª chamada) falha, sem tentar o override', async () => {
+    fetchWithTimeout.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: { message: 'Application does not have permission' } }),
     })
@@ -89,6 +82,27 @@ describe('subscribeWabaToWebhook', () => {
 
     expect(result.ok).toBe(false)
     expect(result.error).toContain('permission')
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1)
+  })
+
+  it('retorna ok=false quando a inscrição de campos funciona mas o override (2ª chamada) falha', async () => {
+    fetchWithTimeout
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: { message: 'Before override the current callback uri...' } }),
+      })
+
+    const result = await subscribeWabaToWebhook({
+      wabaId: 'waba_1',
+      accessToken: 'tok_1',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('override')
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(2)
   })
 })
 

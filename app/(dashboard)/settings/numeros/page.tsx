@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Smartphone, Plus, Trash2, CheckCircle2, Loader2 } from 'lucide-react'
+import { Smartphone, Plus, Trash2, CheckCircle2, Loader2, Webhook, AlertTriangle, RefreshCw } from 'lucide-react'
 import { Page, PageDescription, PageHeader, PageTitle } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,9 +48,97 @@ async function removeNumber(phoneNumberId: string) {
   return api.del(`/api/whatsapp-numbers/${phoneNumberId}`)
 }
 
+type WebhookStatus = {
+  messagesSubscribed: boolean
+  overrideCallbackUri: string | null
+  expectedWebhookUrl: string
+  ok: boolean
+  error?: string
+}
+
+async function fetchWebhookStatus(phoneNumberId: string): Promise<WebhookStatus> {
+  return api.get<WebhookStatus>(`/api/whatsapp-numbers/${phoneNumberId}/webhook`)
+}
+
+async function activateWebhook(phoneNumberId: string) {
+  return api.post(`/api/whatsapp-numbers/${phoneNumberId}/webhook`)
+}
+
 // =============================================================================
 // Components
 // =============================================================================
+
+function WebhookStatusRow({ phoneNumberId }: { phoneNumberId: string }) {
+  const queryClient = useQueryClient()
+  const queryKey = ['whatsapp-number-webhook', phoneNumberId]
+
+  const { data, isFetching, isError, refetch } = useQuery({
+    queryKey,
+    queryFn: () => fetchWebhookStatus(phoneNumberId),
+    staleTime: 30_000,
+  })
+
+  const activateMutation = useMutation({
+    mutationFn: () => activateWebhook(phoneNumberId),
+    onSuccess: () => {
+      toast.success('Webhook ativado! O número já deve receber mensagens.')
+      queryClient.invalidateQueries({ queryKey })
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Erro ao ativar webhook')
+    },
+  })
+
+  const subscribed = data?.messagesSubscribed === true && data?.ok !== false
+
+  return (
+    <div className="mt-3 pt-3 border-t border-zinc-800">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Webhook size={14} className="text-zinc-500 shrink-0" aria-hidden="true" />
+          {isFetching ? (
+            <span className="text-xs text-zinc-500 inline-flex items-center gap-1.5">
+              <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+              Verificando webhook...
+            </span>
+          ) : isError || data?.ok === false ? (
+            <span className="text-xs text-amber-400 inline-flex items-center gap-1.5">
+              <AlertTriangle size={11} aria-hidden="true" />
+              Não deu pra verificar
+            </span>
+          ) : subscribed ? (
+            <span className="text-xs text-green-400 inline-flex items-center gap-1.5">
+              <CheckCircle2 size={11} aria-hidden="true" />
+              Webhook ativo — recebendo mensagens
+            </span>
+          ) : (
+            <span className="text-xs text-amber-400 inline-flex items-center gap-1.5">
+              <AlertTriangle size={11} aria-hidden="true" />
+              Webhook não ativo — o número não recebe mensagens
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw size={12} className="mr-1" aria-hidden="true" />
+            Verificar
+          </Button>
+          {!isFetching && !subscribed && (
+            <Button variant="outline" size="sm" onClick={() => activateMutation.mutate()} disabled={activateMutation.isPending}>
+              {activateMutation.isPending ? (
+                <Loader2 size={12} className="mr-1 animate-spin" aria-hidden="true" />
+              ) : (
+                <Webhook size={12} className="mr-1" aria-hidden="true" />
+              )}
+              Ativar webhook
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function NumberCard({
   number,
@@ -113,6 +201,8 @@ function NumberCard({
           Remover
         </Button>
       </div>
+
+      <WebhookStatusRow phoneNumberId={number.phone_number_id} />
     </div>
   )
 }
@@ -127,8 +217,13 @@ function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
 
   const mutation = useMutation({
     mutationFn: addNumber,
-    onSuccess: () => {
-      toast.success('Número adicionado com sucesso!')
+    onSuccess: (result: unknown) => {
+      const webhookOk = (result as { webhookSubscribed?: boolean })?.webhookSubscribed === true
+      if (webhookOk) {
+        toast.success('Número adicionado e webhook ativado — já pronto pra receber mensagens!')
+      } else {
+        toast.warning('Número adicionado, mas o webhook não ativou automaticamente. Use o botão "Ativar webhook" no card do número.')
+      }
       setPhoneNumberId('')
       setBusinessAccountId('')
       setAccessToken('')

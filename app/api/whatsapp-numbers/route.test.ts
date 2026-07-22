@@ -35,6 +35,13 @@ vi.mock('@/lib/server-http', () => ({
   isAbortError: () => false,
 }))
 
+const subscribeMock = vi.fn(async () => ({ ok: true }))
+vi.mock('@/lib/meta-webhook-subscription', () => ({
+  subscribeWabaToWebhook: (...a: any[]) => subscribeMock(...a),
+}))
+vi.mock('@/lib/verify-token', () => ({ getVerifyToken: async () => 'vt_1' }))
+vi.mock('@/lib/app-url', () => ({ getAppUrl: () => 'https://app.vsmart.com' }))
+
 import { GET, POST } from './route'
 
 describe('GET /api/whatsapp-numbers', () => {
@@ -75,9 +82,10 @@ describe('GET /api/whatsapp-numbers', () => {
 describe('POST /api/whatsapp-numbers', () => {
   beforeEach(() => {
     ctxMock = { tenantId: 't1', userId: 'u1', isPlatformAdmin: false }
-    addMock.mockClear(); mirrorMock.mockClear(); canAddMock.mockClear(); resolveMock.mockClear()
+    addMock.mockClear(); mirrorMock.mockClear(); canAddMock.mockClear(); resolveMock.mockClear(); subscribeMock.mockClear()
     resolveMock.mockResolvedValue(null)
     canAddMock.mockResolvedValue({ allowed: true, limit: 5, current: 1 })
+    subscribeMock.mockResolvedValue({ ok: true })
   })
 
   it('401 sem sessão', async () => {
@@ -115,6 +123,37 @@ describe('POST /api/whatsapp-numbers', () => {
       displayPhoneNumber: '+551199999999',
     })
     expect(mirrorMock).toHaveBeenCalledWith('t1')
+  })
+
+  it('assina o webhook do WABA automaticamente ao adicionar e retorna webhookSubscribed=true', async () => {
+    const req = new NextRequest('http://localhost/api/whatsapp-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok' }),
+    })
+    const res = await POST(req)
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(subscribeMock).toHaveBeenCalledWith({
+      wabaId: 'ba_2',
+      accessToken: 'tok',
+      callbackUrl: 'https://app.vsmart.com/api/webhook',
+      verifyToken: 'vt_1',
+    })
+    expect(body.webhookSubscribed).toBe(true)
+  })
+
+  it('falha ao assinar webhook NÃO derruba o cadastro (retorna 200 com webhookSubscribed=false)', async () => {
+    subscribeMock.mockResolvedValueOnce({ ok: false, error: 'Application does not have permission' })
+    const req = new NextRequest('http://localhost/api/whatsapp-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumberId: 'pn_2', businessAccountId: 'ba_2', accessToken: 'tok' }),
+    })
+    const res = await POST(req)
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(addMock).toHaveBeenCalled()
+    expect(body.webhookSubscribed).toBe(false)
+    expect(body.webhookError).toContain('permission')
   })
 
   it('não checa o gate quando o número já é do tenant (reconexão)', async () => {

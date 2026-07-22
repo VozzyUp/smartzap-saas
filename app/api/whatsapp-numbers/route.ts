@@ -9,6 +9,9 @@ import {
 } from '@/lib/whatsapp-phone-numbers'
 import { canAddWhatsAppNumber, planLimitResponse } from '@/lib/plan-limits'
 import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
+import { subscribeWabaToWebhook } from '@/lib/meta-webhook-subscription'
+import { getVerifyToken } from '@/lib/verify-token'
+import { getAppUrl } from '@/lib/app-url'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -76,12 +79,34 @@ export async function POST(request: NextRequest) {
     })
     await mirrorActiveToSettings(ctx.tenantId)
 
+    // Assina o webhook do WABA na hora — é o passo que faz a Meta começar a
+    // entregar as mensagens recebidas no inbox. Sem isso o número fica
+    // cadastrado mas "mudo". Best-effort: se falhar (ex.: permissão/coexistência
+    // incompleta), o cadastro segue e a UI mostra o botão pra ativar manualmente.
+    let webhookSubscribed = false
+    let webhookError: string | undefined
+    try {
+      const verifyToken = await getVerifyToken()
+      const sub = await subscribeWabaToWebhook({
+        wabaId: businessAccountId,
+        accessToken,
+        callbackUrl: `${getAppUrl()}/api/webhook`,
+        verifyToken,
+      })
+      webhookSubscribed = sub.ok
+      webhookError = sub.ok ? undefined : sub.error
+    } catch (e) {
+      webhookError = e instanceof Error ? e.message : 'Falha ao assinar o webhook'
+    }
+
     return NextResponse.json({
       success: true,
       phoneNumberId,
       businessAccountId,
       displayPhoneNumber: phoneData?.display_phone_number,
       verifiedName: phoneData?.verified_name,
+      webhookSubscribed,
+      webhookError,
     })
   } catch (error) {
     console.error('Error adding WhatsApp number:', error)

@@ -19,7 +19,11 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // microphone=(self): a página de inbox grava áudio via getUserMedia — com
+  // microphone=() a policy bloqueia a captura pro próprio site também, então
+  // nenhuma concessão de permissão do usuário no navegador resolve (o popup
+  // nem chega a aparecer de novo depois de negado uma vez).
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
   ...(isProd

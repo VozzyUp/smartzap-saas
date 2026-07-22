@@ -25,16 +25,17 @@ export function isMessagesSubscribed(apps: MetaSubscribedApp[]): boolean {
 async function postSubscribedApps(params: {
   wabaId: string
   accessToken: string
-  body: URLSearchParams
+  body?: URLSearchParams
 }): Promise<{ ok: boolean; error?: string }> {
   try {
+    const hasBody = params.body !== undefined && params.body.toString().length > 0
     const response = await fetchWithTimeout(`${META_API_BASE}/${params.wabaId}/subscribed_apps`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${params.accessToken}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(hasBody ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
       },
-      body: params.body.toString(),
+      ...(hasBody ? { body: params.body!.toString() } : {}),
       cache: 'no-store',
       timeoutMs: 12000,
     })
@@ -55,11 +56,14 @@ async function postSubscribedApps(params: {
  * Este é o passo que faz a Meta começar a entregar as mensagens — sem ele, o
  * número fica cadastrado mas nunca recebe nada no inbox.
  *
- * IMPORTANTE: são DUAS chamadas separadas, não uma. A Meta rejeita com erro
+ * IMPORTANTE: são DUAS chamadas separadas, não uma, e a 1ª precisa ser
+ * TOTALMENTE VAZIA (sem subscribed_fields, sem nada). A Meta rejeita com erro
  * #100 ("Before override the current callback uri, your app must be
- * subscribed to receive messages") se você tentar inscrever os campos E
- * setar o override_callback_uri na mesma chamada, quando o WABA nunca foi
- * inscrito antes (todo WABA novo entrando via coexistência cai nesse caso).
+ * subscribed to receive messages") qualquer chamada que inclua
+ * override_callback_uri se o app nunca foi inscrito antes no WABA — mesmo
+ * que a chamada também inclua subscribed_fields (confirmado tanto na doc
+ * oficial da Meta quanto em relatos de terceiros com o mesmo erro usando uma
+ * chamada só com override_callback_uri, sem subscribed_fields nenhum).
  * https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/override/
  */
 export async function subscribeWabaToWebhook(params: {
@@ -70,22 +74,27 @@ export async function subscribeWabaToWebhook(params: {
 }): Promise<{ ok: boolean; error?: string }> {
   const { wabaId, accessToken, callbackUrl, verifyToken } = params
 
-  // 1) Inscreve os campos primeiro, SEM override_callback_uri.
-  const subscribeBody = new URLSearchParams()
+  // 1) Inscrição BARE — sem nenhum parâmetro. Só isso "registra" o app como
+  // inscrito no WABA; é pré-requisito pra Meta aceitar a chamada seguinte.
+  const subscribeResult = await postSubscribedApps({ wabaId, accessToken })
+  if (!subscribeResult.ok) {
+    return { ok: false, error: `Passo 1/2 (inscrição): ${subscribeResult.error}` }
+  }
+
+  // 2) Só depois, com o app já inscrito, campos + override_callback_uri juntos.
+  const overrideBody = new URLSearchParams()
   // smb_message_echoes: campo separado que a Meta usa pra "ecoar" mensagens
   // enviadas pelo app do WhatsApp Business no celular (coexistência) — sem
   // essa inscrição, o V-Smart nunca recebe o que o atendente manda por lá.
-  subscribeBody.set('subscribed_fields', 'messages,smb_message_echoes')
-
-  const subscribeResult = await postSubscribedApps({ wabaId, accessToken, body: subscribeBody })
-  if (!subscribeResult.ok) return subscribeResult
-
-  // 2) Só depois, com o app já inscrito, seta o override_callback_uri.
-  const overrideBody = new URLSearchParams()
+  overrideBody.set('subscribed_fields', 'messages,smb_message_echoes')
   overrideBody.set('override_callback_uri', callbackUrl)
   overrideBody.set('verify_token', verifyToken)
 
-  return postSubscribedApps({ wabaId, accessToken, body: overrideBody })
+  const overrideResult = await postSubscribedApps({ wabaId, accessToken, body: overrideBody })
+  if (!overrideResult.ok) {
+    return { ok: false, error: `Passo 2/2 (override): ${overrideResult.error}` }
+  }
+  return overrideResult
 }
 
 /**

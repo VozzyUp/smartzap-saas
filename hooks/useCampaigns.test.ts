@@ -106,6 +106,17 @@ describe('useCampaignsQuery', () => {
     expect(result.current.data).toEqual(mockListResult)
   })
 
+  it('refetches empty initial data on mount', async () => {
+    const params = { page: 1, search: '', status: 'All' }
+    const emptyInitialData = { data: [], total: 0, limit: 20, offset: 0 }
+
+    renderHookWithProviders(() => useCampaignsQuery(params, emptyInitialData))
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('deve passar busca e filtros', async () => {
     const params = { page: 1, search: 'Black', status: 'COMPLETED', folderId: 'folder-1', tagIds: ['tag-1'] }
     renderHookWithProviders(() => useCampaignsQuery(params))

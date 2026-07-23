@@ -61,6 +61,10 @@ export const useCampaignsQuery = (
     initialData,
     placeholderData: (previous) => previous,
     staleTime: CACHE.campaigns,
+    // Uma lista vazia do RSC pode ser transitória enquanto o contexto de
+    // tenant/sessão está sendo restaurado. Reconsulta ao montar para não
+    // congelar esse estado vazio durante todo o staleTime.
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // Realtime configuration

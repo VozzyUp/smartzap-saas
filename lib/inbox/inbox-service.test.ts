@@ -8,6 +8,7 @@ vi.mock('./inbox-db', () => ({
   createMessage: vi.fn(),
   getConversationById: vi.fn(),
   updateMessageDeliveryStatus: vi.fn(),
+  updateConversation: vi.fn(),
 }))
 
 vi.mock('@/lib/whatsapp-send', () => ({
@@ -23,12 +24,18 @@ vi.mock('@/lib/kanban-automation', () => ({
   triggerAutomationEvent: (...a: unknown[]) => triggerAutomationEventMock(...a),
 }))
 
+const cancelDebounceMock = vi.fn()
+vi.mock('@/lib/ai/agents/chat-agent', () => ({
+  cancelDebounce: (...a: unknown[]) => cancelDebounceMock(...a),
+}))
+
 import {
   findMessageByWhatsAppId,
   getOrCreateConversation,
   createMessage,
   getConversationById,
   updateMessageDeliveryStatus,
+  updateConversation,
 } from './inbox-db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
@@ -38,6 +45,7 @@ const mockGetOrCreateConversation = getOrCreateConversation as Mock
 const mockCreateMessage = createMessage as Mock
 const mockGetConversationById = getConversationById as Mock
 const mockUpdateMessageDeliveryStatus = updateMessageDeliveryStatus as Mock
+const mockUpdateConversation = updateConversation as Mock
 const mockSendWhatsAppMessage = sendWhatsAppMessage as Mock
 const mockGetWhatsAppCredentialsForNumber = getWhatsAppCredentialsForNumber as Mock
 
@@ -353,5 +361,65 @@ describe('sendMessage (Fase 4: reply pelo numero da conversa)', () => {
     await sendMessage('tenant_1', 'conv_6', 'oi')
 
     expect(triggerAutomationEventMock).not.toHaveBeenCalled()
+  })
+
+  it('atendente responde manualmente pelo V-Smart numa conversa em modo bot: desativa a IA (muda pra modo humano) e cancela debounce pendente', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_7',
+      tenant_id: 'tenant_1',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: 'contact_7',
+      mode: 'bot',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+
+    await sendMessage('tenant_1', 'conv_7', 'oi')
+
+    expect(mockUpdateConversation).toHaveBeenCalledWith('tenant_1', 'conv_7', { mode: 'human' })
+    expect(cancelDebounceMock).toHaveBeenCalledWith('conv_7')
+  })
+
+  it('conversa já em modo humano: não escreve de novo no banco (evita update redundante a cada mensagem)', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_8',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: 'contact_8',
+      mode: 'human',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+
+    await sendMessage('tenant_1', 'conv_8', 'oi')
+
+    expect(mockUpdateConversation).not.toHaveBeenCalled()
+  })
+
+  it('falha no envio: não muda o modo da conversa', async () => {
+    mockGetConversationById.mockResolvedValue({
+      id: 'conv_9',
+      phone: '5511999999999',
+      whatsapp_number_id: 'pn_1',
+      contact_id: 'contact_9',
+      mode: 'bot',
+    })
+    mockGetWhatsAppCredentialsForNumber.mockResolvedValue({
+      phoneNumberId: 'pn_1',
+      businessAccountId: 'ba_1',
+      accessToken: 'tok_1',
+    })
+    mockSendWhatsAppMessage.mockResolvedValueOnce({ error: 'falha no envio' })
+
+    await sendMessage('tenant_1', 'conv_9', 'oi')
+
+    expect(mockUpdateConversation).not.toHaveBeenCalled()
   })
 })

@@ -29,6 +29,7 @@ import {
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
 import { triggerAutomationEvent } from '@/lib/kanban-automation'
+import { cancelDebounce } from '@/lib/ai/agents/chat-agent'
 import type {
   InboxConversation,
   InboxMessage,
@@ -194,6 +195,14 @@ export async function sendMessage(
     } catch (e) {
       console.warn('[Inbox] Falha na automação de Kanban (best-effort):', e)
     }
+  }
+
+  // Atendente respondeu de verdade pelo próprio V-Smart — desliga a IA pra
+  // essa conversa (mesma regra do echo de coexistência), senão ela continua
+  // respondendo por cima do que o humano já respondeu manualmente por aqui.
+  if (!whatsappResult.error && conversation.mode !== 'human') {
+    await updateConversation(tenantId, conversationId, { mode: 'human' })
+    cancelDebounce(conversationId)
   }
 
   return message

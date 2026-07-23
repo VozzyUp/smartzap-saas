@@ -7,6 +7,7 @@ export const revalidate = 0
 import { validateBodyOrError } from '@/lib/api-validation'
 import { generateJSON } from '@/lib/ai'
 import { getAiPromptsConfig, isAiRouteEnabled } from '@/lib/ai/ai-center-config'
+import { getTenantContext } from '@/lib/tenant-context'
 import { buildFlowFormPrompt } from '@/lib/ai/prompts/flow-form'
 import {
   generateFlowJsonFromFormSpec,
@@ -95,7 +96,11 @@ function buildPrompt(
 
 export async function POST(request: NextRequest) {
   try {
-    const routeEnabled = await isAiRouteEnabled('generateFlowForm')
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
+    const routeEnabled = await isAiRouteEnabled(tenantId, 'generateFlowForm')
     if (!routeEnabled) {
       return NextResponse.json(
         { error: 'Rota desativada nas configurações de IA.' },
@@ -109,8 +114,9 @@ export async function POST(request: NextRequest) {
 
     const { prompt: userPrompt, titleHint, maxQuestions } = validation.data
 
-    const promptsConfig = await getAiPromptsConfig()
+    const promptsConfig = await getAiPromptsConfig(tenantId)
     const aiRaw = await generateJSON<unknown>({
+      tenantId,
       system:
         'Você é um gerador de JSON estrito. Responda SOMENTE com um JSON válido que respeite o contrato solicitado. Não inclua explicações.',
       prompt: buildPrompt(userPrompt, titleHint || null, maxQuestions, promptsConfig.flowFormTemplate),

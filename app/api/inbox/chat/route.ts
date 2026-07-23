@@ -221,7 +221,7 @@ export async function POST(req: Request) {
     const inputText = lastUserMessage?.content || ''
 
     // Criar modelo direto via provider
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(tenantId)
     const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
     let model
     if (config.provider === 'google') {

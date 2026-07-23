@@ -9,6 +9,10 @@ vi.mock('@/lib/ai/ai-center-config', () => ({
   getAiDirectConfig: vi.fn(),
 }))
 
+vi.mock('@/lib/tenant-context', () => ({
+  getTenantContext: vi.fn(),
+}))
+
 vi.mock('@ai-sdk/google', () => ({
   createGoogleGenerativeAI: vi.fn(),
 }))
@@ -41,6 +45,7 @@ vi.mock('ai', async () => {
 import { POST } from '@/app/api/ai-agents/[id]/chat/route'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
+import { getTenantContext } from '@/lib/tenant-context'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { hasIndexedContent } from '@/lib/ai/rag-store'
 import { generateText } from 'ai'
@@ -77,6 +82,7 @@ const mockSupabase = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(getTenantContext).mockResolvedValue({ tenantId: 'tenant-1' } as any)
   vi.mocked(getSupabaseAdmin).mockReturnValue(mockSupabase as any)
   vi.mocked(getAiDirectConfig).mockResolvedValue({
     provider: 'google',

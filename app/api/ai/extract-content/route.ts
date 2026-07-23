@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { validateBodyOrError } from '@/lib/api-validation'
 import { generateJSON } from '@/lib/ai'
 import { isAiRouteEnabled } from '@/lib/ai/ai-center-config'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * POST /api/ai/extract-content
@@ -110,8 +111,12 @@ IMPORTANTE: Retorne APENAS o JSON, sem markdown ou explicações.
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     // Verificar se rota está habilitada
-    const routeEnabled = await isAiRouteEnabled('generateUtilityTemplates')
+    const routeEnabled = await isAiRouteEnabled(tenantId, 'generateUtilityTemplates')
     if (!routeEnabled) {
       return NextResponse.json(
         { error: 'Rota de IA desativada nas configurações.' },
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
     const prompt = EXTRACTION_PROMPT.replace('{{content}}', content)
 
     // Chamar IA para extrair
-    const extracted = await generateJSON<ExtractedContent>({ prompt })
+    const extracted = await generateJSON<ExtractedContent>({ tenantId, prompt })
 
     // Validar resultado mínimo
     if (!extracted.productName || !extracted.mainBenefit) {

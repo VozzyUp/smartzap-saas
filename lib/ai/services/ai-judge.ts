@@ -13,6 +13,8 @@ import { DEFAULT_MODEL_ID } from '../model'
 // ============================================================================
 
 export interface JudgeOptions {
+    /** Tenant dono da requisição — determina de qual conta ler a config/chave de IA. */
+    tenantId: string
     apiKey?: string
     model?: string
 }
@@ -25,7 +27,7 @@ export async function judgeTemplate(
     options: JudgeOptions,
     promptTemplate?: string
 ): Promise<Judgment> {
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(options.tenantId)
     const targetModelId = options.model || config.model || DEFAULT_MODEL_ID
 
     let model
@@ -75,7 +77,7 @@ export async function judgeTemplates(
 ): Promise<Judgment[]> {
     console.log(`[AI_JUDGE] Analyzing ${templates.length} templates...`)
 
-    const promptsConfig = await getAiPromptsConfig()
+    const promptsConfig = await getAiPromptsConfig(options.tenantId)
 
     const judgments = await Promise.all(
         templates.map(t => judgeTemplate(t, options, promptsConfig.utilityJudgeTemplate))

@@ -360,7 +360,7 @@ export async function processChatAgent(
   }
 
   // Obter configuração de provider direto (Google / OpenAI)
-  const directConfig = await getAiDirectConfig()
+  const directConfig = await getAiDirectConfig(tenantId)
   if (!directConfig.googleApiKey && !directConfig.openaiApiKey) {
     return {
       success: false,

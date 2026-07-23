@@ -322,6 +322,7 @@ function normalizeTemplate(
 // ============================================================================
 
 async function generateWithUnifiedPrompt(
+  tenantId: string,
   userPrompt: string,
   quantity: number,
   language: string,
@@ -338,7 +339,7 @@ async function generateWithUnifiedPrompt(
   })
 
   const rawTemplates = await generateJSON<Array<Record<string, unknown>>>(
-    { prompt: utilityPrompt }
+    { tenantId, prompt: utilityPrompt }
   )
 
   if (!Array.isArray(rawTemplates)) throw new Error('Response is not an array')
@@ -354,8 +355,9 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantContext()
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
 
-    const routeEnabled = await isAiRouteEnabled('generateUtilityTemplates')
+    const routeEnabled = await isAiRouteEnabled(tenantId, 'generateUtilityTemplates')
     if (!routeEnabled) {
       return NextResponse.json(
         { error: 'Rota desativada nas configurações de IA.' },
@@ -387,7 +389,7 @@ export async function POST(request: NextRequest) {
       ? (detectedUrls[0].startsWith('http') ? detectedUrls[0] : `https://${detectedUrls[0]}`)
       : null
 
-    const promptsConfig = await getAiPromptsConfig()
+    const promptsConfig = await getAiPromptsConfig(tenantId)
     let templates: GeneratedTemplate[]
 
     // Seleciona o prompt correto baseado na estratégia
@@ -400,6 +402,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[GENERATE] Using strategy "${strategy}" prompt (${selectedPrompt.length} chars)`)
     templates = await generateWithUnifiedPrompt(
+      tenantId,
       userPrompt,
       quantity,
       language,
@@ -431,7 +434,7 @@ export async function POST(request: NextRequest) {
             header: t.header?.text || null,
             body: t.content
           })),
-          { apiKey }
+          { tenantId, apiKey }
         )
 
         // Confidence thresholds
@@ -467,7 +470,7 @@ export async function POST(request: NextRequest) {
             // Re-judge the fixed version
             const [retryJudgment] = await judgeTemplates(
               [{ name: template.name, header: currentHeader, body: currentContent }],
-              { apiKey }
+              { tenantId, apiKey }
             )
             currentJudgment = retryJudgment
           }
@@ -537,6 +540,7 @@ export async function POST(request: NextRequest) {
     let batchTitle = 'Submissão em Lote'
     try {
       const titlePromise = generateText({
+        tenantId,
         prompt: `Resuma em NO MÁXIMO 4 palavras (sem pontuação) o tema: "${userPrompt.substring(0, 200)}". Retorne APENAS as palavras.`,
       })
 

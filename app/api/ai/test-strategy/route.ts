@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { validateBodyOrError } from '@/lib/api-validation'
 import { generateJSON } from '@/lib/ai'
 import { getAiPromptsConfig } from '@/lib/ai/ai-center-config'
+import { getTenantContext } from '@/lib/tenant-context'
 import { MARKETING_PROMPT } from '@/lib/ai/prompts/marketing'
 import { UTILITY_PROMPT } from '@/lib/ai/prompts/utility'
 import { BYPASS_PROMPT } from '@/lib/ai/prompts/bypass'
@@ -68,6 +69,10 @@ interface GeneratedTemplate {
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const body = await request.json()
     console.log('[TEST_STRATEGY] Received:', JSON.stringify(body, null, 2))
 
@@ -81,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Buscar prompt customizado do AI Center ou usar default
     let strategyPrompt = config.defaultPrompt
     try {
-      const promptsConfig = await getAiPromptsConfig()
+      const promptsConfig = await getAiPromptsConfig(tenantId)
       const customPrompt = promptsConfig[config.configKey]
       if (customPrompt && typeof customPrompt === 'string' && customPrompt.trim()) {
         strategyPrompt = customPrompt
@@ -119,6 +124,7 @@ Retorne APENAS o JSON, sem markdown.`
     console.log(`[TEST_STRATEGY] ${config.emoji} Generating with strategy: ${strategy.toUpperCase()}`)
 
     const template = await generateJSON<GeneratedTemplate>({
+      tenantId,
       prompt: fullPrompt
     })
 

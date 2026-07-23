@@ -27,6 +27,8 @@ export type ChatMessage = {
 }
 
 export interface GenerateTextOptions {
+    /** Tenant dono da requisição — determina de qual conta ler a config/chave de IA. */
+    tenantId: string;
     /** Prompt simples (mutuamente exclusivo com `messages`). */
     prompt?: string;
     /** Mensagens da conversa (mutuamente exclusivo com `prompt`). */
@@ -131,7 +133,7 @@ function buildArgs(
  * A chave de API é lida do Supabase — configurada pelo usuário nas settings de IA.
  */
 export async function generateText(options: GenerateTextOptions): Promise<GenerateTextResult> {
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(options.tenantId)
     const modelId = options.model || config.model
     console.log(`[AI Service] Generating with ${config.provider}/${modelId}`)
 
@@ -150,7 +152,7 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
  * Gera texto em streaming usando o provider configurado.
  */
 export async function streamText(options: StreamTextOptions): Promise<GenerateTextResult> {
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(options.tenantId)
     const modelId = options.model || config.model
     console.log(`[AI Service] Streaming with ${config.provider}/${modelId}`)
 

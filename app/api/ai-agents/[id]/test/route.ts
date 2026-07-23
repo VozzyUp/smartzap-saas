@@ -11,6 +11,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
+import { getTenantContext } from '@/lib/tenant-context'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 import {
@@ -100,6 +101,10 @@ interface RouteContext {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
+
     const { id } = await context.params
     const supabase = getClient()
     const body = await request.json()
@@ -120,6 +125,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .from('ai_agents')
       .select('*')
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .single()
 
     if (agentError || !agent) {
@@ -148,7 +154,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { withDevTools } = await import('@/lib/ai/devtools')
 
     // Criar modelo direto via provider
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(tenantId)
     const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
     let baseModel
     if (config.provider === 'google') {

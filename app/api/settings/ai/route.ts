@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantContext()
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
 
     const body = await request.json()
     const {
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     // Salva provider + model em ai_direct (JSON unificado)
     if (provider || model) {
-      const current = await getAiDirectConfig()
+      const current = await getAiDirectConfig(tenantId)
       const normalized = prepareAiDirectUpdate({
         provider: provider ?? current.provider,
         model: model ?? current.model,
@@ -200,14 +201,14 @@ export async function POST(request: NextRequest) {
 
     // Rotas de IA
     if (routes) {
-      const current = await getAiRoutesConfig()
+      const current = await getAiRoutesConfig(tenantId)
       const normalized = prepareAiRoutesUpdate({ ...current, ...routes })
       updates.push({ key: 'ai_routes', value: JSON.stringify(normalized), updated_at: now })
     }
 
     // Prompts
     if (prompts) {
-      const current = await getAiPromptsConfig()
+      const current = await getAiPromptsConfig(tenantId)
       const { strategyMarketing, strategyUtility, strategyBypass, ...basePromptsInput } = {
         ...current,
         ...prompts,
@@ -244,7 +245,7 @@ export async function POST(request: NextRequest) {
     }
 
     clearSettingsCache()
-    clearAiCenterCache()
+    clearAiCenterCache(tenantId)
 
     return NextResponse.json({
       success: true,
@@ -265,6 +266,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const ctx = await getTenantContext()
     if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const tenantId = ctx.tenantId
 
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
@@ -282,7 +284,7 @@ export async function DELETE(request: NextRequest) {
       ?.from('settings')
       .delete()
       .eq('key', keyName)
-      .eq('tenant_id', ctx.tenantId) || { error: new Error('Supabase not configured') }
+      .eq('tenant_id', tenantId) || { error: new Error('Supabase not configured') }
 
     if (error) {
       console.error('Supabase error:', error)
@@ -290,7 +292,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     clearSettingsCache()
-    clearAiCenterCache()
+    clearAiCenterCache(tenantId)
 
     return NextResponse.json({
       success: true,

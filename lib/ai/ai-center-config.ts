@@ -22,10 +22,24 @@ const SETTINGS_KEYS = {
 } as const
 
 const CACHE_TTL = 60000
-let cacheTime = 0
-let cachedRoutes: AiRoutesConfig | null = null
-let cachedDirect: AiDirectConfig | null = null
-let cachedPrompts: AiPromptsConfig | null = null
+
+// Caches por-tenant: a config de IA (chaves, provider, prompts, rotas) é
+// isolada por tenant. Um cache global vazaria a config de um tenant pra
+// outro — exatamente o bug que esta estrutura corrige.
+type CacheEntry<T> = { value: T; time: number }
+const cachedRoutesByTenant = new Map<string, CacheEntry<AiRoutesConfig>>()
+const cachedDirectByTenant = new Map<string, CacheEntry<AiDirectConfig>>()
+const cachedPromptsByTenant = new Map<string, CacheEntry<AiPromptsConfig>>()
+
+function readCache<T>(map: Map<string, CacheEntry<T>>, tenantId: string): T | null {
+  const entry = map.get(tenantId)
+  if (entry && Date.now() - entry.time < CACHE_TTL) return entry.value
+  return null
+}
+
+function writeCache<T>(map: Map<string, CacheEntry<T>>, tenantId: string, value: T): void {
+  map.set(tenantId, { value, time: Date.now() })
+}
 
 function parseJsonSetting<T>(value: string | null, fallback: T): T {
   if (!value) return fallback
@@ -103,71 +117,71 @@ function normalizePrompts(input?: Partial<AiPromptsConfig> | null): AiPromptsCon
   }
 }
 
-async function getSettingValue(key: string): Promise<string | null> {
+async function getSettingValue(tenantId: string, key: string): Promise<string | null> {
   const { data, error } = await supabase.admin
     ?.from('settings')
     .select('value')
     .eq('key', key)
+    .eq('tenant_id', tenantId)
     .single() || { data: null, error: null }
 
   if (error || !data) return null
   return data.value
 }
 
-function isCacheValid(): boolean {
-  return Date.now() - cacheTime < CACHE_TTL
-}
-
-export async function getAiRoutesConfig(): Promise<AiRoutesConfig> {
-  if (cachedRoutes && isCacheValid()) return cachedRoutes
-  const raw = await getSettingValue(SETTINGS_KEYS.routes)
+export async function getAiRoutesConfig(tenantId: string): Promise<AiRoutesConfig> {
+  const cached = readCache(cachedRoutesByTenant, tenantId)
+  if (cached) return cached
+  const raw = await getSettingValue(tenantId, SETTINGS_KEYS.routes)
   const parsed = parseJsonSetting<Partial<AiRoutesConfig>>(raw, DEFAULT_AI_ROUTES)
-  cachedRoutes = normalizeRoutes(parsed)
-  cacheTime = Date.now()
-  return cachedRoutes
+  const routes = normalizeRoutes(parsed)
+  writeCache(cachedRoutesByTenant, tenantId, routes)
+  return routes
 }
 
 /**
  * Retorna a configuração de provider direto, incluindo as chaves de API do Supabase.
  * As chaves não são expostas na UI — apenas presença é verificada.
  */
-export async function getAiDirectConfig(): Promise<AiDirectConfig> {
-  if (cachedDirect && isCacheValid()) return cachedDirect
+export async function getAiDirectConfig(tenantId: string): Promise<AiDirectConfig> {
+  const cached = readCache(cachedDirectByTenant, tenantId)
+  if (cached) return cached
 
   const [rawDirect, googleApiKey, geminiApiKeyLegacy, openaiApiKey] = await Promise.all([
-    getSettingValue(SETTINGS_KEYS.direct),
-    getSettingValue(SETTINGS_KEYS.googleApiKey),
-    getSettingValue('gemini_api_key'), // retrocompatibilidade: chave pode estar salva com nome antigo
-    getSettingValue(SETTINGS_KEYS.openaiApiKey),
+    getSettingValue(tenantId, SETTINGS_KEYS.direct),
+    getSettingValue(tenantId, SETTINGS_KEYS.googleApiKey),
+    getSettingValue(tenantId, 'gemini_api_key'), // retrocompatibilidade: chave pode estar salva com nome antigo
+    getSettingValue(tenantId, SETTINGS_KEYS.openaiApiKey),
   ])
 
   const parsed = parseJsonSetting<Partial<Pick<AiDirectConfig, 'provider' | 'model'>>>(rawDirect, {})
-  cachedDirect = normalizeDirect(parsed, googleApiKey || geminiApiKeyLegacy, openaiApiKey)
-  cacheTime = Date.now()
-  return cachedDirect
+  const direct = normalizeDirect(parsed, googleApiKey || geminiApiKeyLegacy, openaiApiKey)
+  writeCache(cachedDirectByTenant, tenantId, direct)
+  return direct
 }
 
-export async function getAiPromptsConfig(): Promise<AiPromptsConfig> {
-  if (cachedPrompts && isCacheValid()) return cachedPrompts
+export async function getAiPromptsConfig(tenantId: string): Promise<AiPromptsConfig> {
+  const cached = readCache(cachedPromptsByTenant, tenantId)
+  if (cached) return cached
 
-  const rawBase = await getSettingValue(SETTINGS_KEYS.prompts)
+  const rawBase = await getSettingValue(tenantId, SETTINGS_KEYS.prompts)
   const parsedBase = parseJsonSetting<Partial<AiPromptsConfig>>(rawBase, {})
   const basePrompts = normalizeBasePrompts(parsedBase)
 
   const [marketing, utility, bypass] = await Promise.all([
-    getSettingValue(SETTINGS_KEYS.strategyMarketing),
-    getSettingValue(SETTINGS_KEYS.strategyUtility),
-    getSettingValue(SETTINGS_KEYS.strategyBypass),
+    getSettingValue(tenantId, SETTINGS_KEYS.strategyMarketing),
+    getSettingValue(tenantId, SETTINGS_KEYS.strategyUtility),
+    getSettingValue(tenantId, SETTINGS_KEYS.strategyBypass),
   ])
   const strategyPrompts = normalizeStrategyPrompts({ marketing, utility, bypass })
 
-  cachedPrompts = { ...basePrompts, ...strategyPrompts }
-  cacheTime = Date.now()
-  return cachedPrompts
+  const prompts = { ...basePrompts, ...strategyPrompts }
+  writeCache(cachedPromptsByTenant, tenantId, prompts)
+  return prompts
 }
 
-export async function isAiRouteEnabled(routeKey: keyof AiRoutesConfig): Promise<boolean> {
-  const routes = await getAiRoutesConfig()
+export async function isAiRouteEnabled(tenantId: string, routeKey: keyof AiRoutesConfig): Promise<boolean> {
+  const routes = await getAiRoutesConfig(tenantId)
   return routes[routeKey]
 }
 
@@ -183,9 +197,8 @@ export function prepareAiPromptsUpdate(input?: Partial<AiPromptsConfig> | null):
   return normalizePrompts(input)
 }
 
-export function clearAiCenterCache() {
-  cacheTime = 0
-  cachedRoutes = null
-  cachedDirect = null
-  cachedPrompts = null
+export function clearAiCenterCache(tenantId: string) {
+  cachedRoutesByTenant.delete(tenantId)
+  cachedDirectByTenant.delete(tenantId)
+  cachedPromptsByTenant.delete(tenantId)
 }

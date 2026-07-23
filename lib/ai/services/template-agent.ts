@@ -167,6 +167,8 @@ function getValidationRules() {
 import { PromptFactory, AIStrategy } from '../prompts/factory'
 
 export interface AgentOptions {
+    /** Tenant dono da requisição — determina de qual conta ler a config/chave de IA. */
+    tenantId: string
     /** @deprecated Não mais necessário — Gateway usa env vars do Vercel automaticamente */
     apiKey?: string
     model?: string
@@ -179,7 +181,7 @@ export async function generateTemplatesWithAgent(
     options: AgentOptions
 ): Promise<AgentGenerationResult> {
     const startTime = Date.now()
-    const config = await getAiDirectConfig()
+    const config = await getAiDirectConfig(options.tenantId)
     const targetModelId = options.model || config.model || DEFAULT_MODEL_ID
     let model
     if (config.provider === 'google') {

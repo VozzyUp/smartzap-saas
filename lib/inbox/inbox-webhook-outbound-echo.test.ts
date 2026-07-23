@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const contactsSingleMock = vi.fn()
+const campaignContactsMaybeSingleMock = vi.fn()
 const supabaseAdminMock = {
   from: (table: string) => {
     if (table === 'contacts') {
       return { select: () => ({ eq: () => ({ eq: () => ({ single: contactsSingleMock }) }) }) }
+    }
+    if (table === 'campaign_contacts') {
+      return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: campaignContactsMaybeSingleMock }) }) }) }
     }
     throw new Error(`unexpected table ${table}`)
   },
@@ -18,11 +22,13 @@ vi.mock('@/lib/phone-formatter', () => ({ normalizePhoneNumber: (p: string) => p
 const getOrCreateConversationMock = vi.fn()
 const createMessageMock = vi.fn()
 const updateConversationMock = vi.fn()
+const findMessageByWhatsAppIdMock = vi.fn()
 vi.mock('./inbox-db', () => ({
   inboxDb: {
     getOrCreateConversation: (...a: unknown[]) => getOrCreateConversationMock(...a),
     createMessage: (...a: unknown[]) => createMessageMock(...a),
     updateConversation: (...a: unknown[]) => updateConversationMock(...a),
+    findMessageByWhatsAppId: (...a: unknown[]) => findMessageByWhatsAppIdMock(...a),
   },
   isHumanModeExpired: vi.fn(() => false),
   switchToBotMode: vi.fn(),
@@ -49,6 +55,8 @@ describe('handleOutboundMessageEcho — coexistência (mensagem enviada pelo app
   beforeEach(() => {
     vi.clearAllMocks()
     contactsSingleMock.mockResolvedValue({ data: { id: 'contact_1' } })
+    campaignContactsMaybeSingleMock.mockResolvedValue({ data: null })
+    findMessageByWhatsAppIdMock.mockResolvedValue(null)
     getOrCreateConversationMock.mockResolvedValue({ id: 'conv_1' })
     createMessageMock.mockResolvedValue({ id: 'msg_1' })
   })
@@ -140,5 +148,42 @@ describe('handleOutboundMessageEcho — coexistência (mensagem enviada pelo app
     })
 
     expect(updateConversationMock).not.toHaveBeenCalled()
+  })
+
+  it('wamid já persistido no inbox (IA/resposta manual/campanha via workflow já registrou): não duplica mensagem, não dispara Kanban nem desativa a IA', async () => {
+    findMessageByWhatsAppIdMock.mockResolvedValueOnce({ id: 'msg_existing', conversation_id: 'conv_1' })
+
+    const result = await handleOutboundMessageEcho({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.already-known',
+      to: '5511999999999',
+      type: 'text',
+      text: 'Mensagem que já é nossa',
+    })
+
+    expect(result).toEqual({ conversationId: 'conv_1', messageId: 'msg_existing' })
+    expect(createMessageMock).not.toHaveBeenCalled()
+    expect(getOrCreateConversationMock).not.toHaveBeenCalled()
+    expect(triggerAutomationEventMock).not.toHaveBeenCalled()
+    expect(updateConversationMock).not.toHaveBeenCalled()
+  })
+
+  it('wamid bate com campaign_contacts.message_id (campanha disparada direto, sem sync prévio pro inbox): persiste a mensagem, mas não dispara automação de Kanban nem desativa a IA', async () => {
+    campaignContactsMaybeSingleMock.mockResolvedValueOnce({ data: { id: 'cc_1' } })
+    getOrCreateConversationMock.mockResolvedValueOnce({ id: 'conv_1', mode: 'bot' })
+
+    const result = await handleOutboundMessageEcho({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.campaign-1',
+      to: '5511999999999',
+      type: 'text',
+      text: 'Template de campanha',
+    })
+
+    expect(createMessageMock).toHaveBeenCalled()
+    expect(result).toEqual({ conversationId: 'conv_1', messageId: 'msg_1' })
+    expect(triggerAutomationEventMock).not.toHaveBeenCalled()
+    expect(updateConversationMock).not.toHaveBeenCalled()
+    expect(cancelDebounceMock).not.toHaveBeenCalled()
   })
 })

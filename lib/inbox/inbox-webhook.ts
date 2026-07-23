@@ -748,6 +748,27 @@ async function findContactId(tenantId: string, phone: string): Promise<string | 
 }
 
 /**
+ * Um `smb_message_echoes` chega pra QUALQUER envio outbound do número em
+ * coexistência, não só pro que o atendente digitou no celular — inclui
+ * disparo de campanha feito pela própria API do V-Smart. Sem essa checagem,
+ * toda campanha desligaria a IA da conversa como se um humano tivesse
+ * assumido, o que não é o caso.
+ */
+async function wasSentByCampaign(tenantId: string, whatsappMessageId: string): Promise<boolean> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return false
+
+  const { data } = await supabase
+    .from('campaign_contacts')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('message_id', whatsappMessageId)
+    .maybeSingle()
+
+  return !!data
+}
+
+/**
  * Map WhatsApp message types to inbox message types
  */
 function mapMessageType(waType: string): InboxMessage['message_type'] {
@@ -771,11 +792,13 @@ function mapMessageType(waType: string): InboxMessage['message_type'] {
 const ECHO_TYPES_NOT_PERSISTED = new Set(['revoke', 'edit'])
 
 /**
- * Processa um `smb_message_echoes` (coexistência): mensagem que o atendente
- * mandou pelo app do WhatsApp Business no celular, não pela API do V-Smart.
- * Persiste como mensagem outbound na conversa do cliente, pra aparecer no
- * inbox igual a qualquer outra resposta — sem isso, ela some (foi enviada de
- * verdade, o cliente recebeu, mas o V-Smart nunca fica sabendo).
+ * Processa um `smb_message_echoes` (coexistência): a Meta ecoa QUALQUER envio
+ * outbound do número em coexistência por esse campo, não só o que o
+ * atendente digitou no app do celular — inclui mensagens que a própria API
+ * do V-Smart já mandou (IA, resposta manual do inbox, campanha). Persiste
+ * como mensagem outbound na conversa do cliente, pra aparecer no inbox igual
+ * a qualquer outra resposta — sem isso, ela some (foi enviada de verdade, o
+ * cliente recebeu, mas o V-Smart nunca fica sabendo).
  *
  * `revoke`/`edit` (apagar/editar mensagem no app) ainda não têm uma
  * representação no inbox — ignorados por ora, sem lançar erro.
@@ -786,6 +809,21 @@ export async function handleOutboundMessageEcho(
   if (ECHO_TYPES_NOT_PERSISTED.has(payload.type)) {
     return null
   }
+
+  // Já sabemos dessa mensagem (IA, resposta manual do inbox ou campanha via
+  // workflow já persistiram com esse wamid ao enviar) — é só a Meta
+  // espelhando de volta um envio que já é nosso. Não duplica, não mexe no
+  // modo da conversa.
+  if (payload.messageId) {
+    const existing = await inboxDb.findMessageByWhatsAppId(payload.messageId)
+    if (existing) {
+      return { conversationId: existing.conversation_id, messageId: existing.id }
+    }
+  }
+
+  const isCampaignSend = payload.messageId
+    ? await wasSentByCampaign(payload.tenantId, payload.messageId)
+    : false
 
   const normalizedTo = normalizePhoneNumber(payload.to)
   const contactId = await findContactId(payload.tenantId, normalizedTo)
@@ -807,6 +845,13 @@ export async function handleOutboundMessageEcho(
     whatsapp_message_id: payload.messageId || undefined,
     delivery_status: 'sent',
   })
+
+  // Disparo de campanha não é resposta manual de atendente — não deve mexer
+  // no Kanban nem no modo da conversa (mesma regra de
+  // app/api/campaign/dispatch/route.ts, que nunca aciona automação).
+  if (isCampaignSend) {
+    return { conversationId: conversation.id, messageId: message.id }
+  }
 
   // Mesma automação de Kanban de qualquer resposta manual (inbox/telefone) —
   // best-effort, nunca derruba o processamento do echo.

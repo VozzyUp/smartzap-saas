@@ -17,20 +17,24 @@ vi.mock('@/lib/phone-formatter', () => ({ normalizePhoneNumber: (p: string) => p
 
 const getOrCreateConversationMock = vi.fn()
 const createMessageMock = vi.fn()
+const updateConversationMock = vi.fn()
 vi.mock('./inbox-db', () => ({
   inboxDb: {
     getOrCreateConversation: (...a: unknown[]) => getOrCreateConversationMock(...a),
     createMessage: (...a: unknown[]) => createMessageMock(...a),
+    updateConversation: (...a: unknown[]) => updateConversationMock(...a),
   },
   isHumanModeExpired: vi.fn(() => false),
   switchToBotMode: vi.fn(),
   findConversationByPhoneLightweight: vi.fn(),
 }))
 
+const cancelDebounceMock = vi.fn()
+
 vi.mock('@upstash/qstash', () => ({ Client: class { publishJSON = vi.fn() } }))
 vi.mock('@/lib/redis', () => ({ redis: null }))
 vi.mock('@/lib/app-url', () => ({ getAppUrl: () => 'https://app.vsmart.com' }))
-vi.mock('@/lib/ai/agents/chat-agent', () => ({ cancelDebounce: vi.fn() }))
+vi.mock('@/lib/ai/agents/chat-agent', () => ({ cancelDebounce: (...a: unknown[]) => cancelDebounceMock(...a) }))
 vi.mock('@/lib/whatsapp-send', () => ({ sendWhatsAppMessage: vi.fn() }))
 const triggerAutomationEventMock = vi.fn()
 vi.mock('@/lib/kanban-automation', () => ({
@@ -105,6 +109,36 @@ describe('handleOutboundMessageEcho — coexistência (mensagem enviada pelo app
     })
 
     expect(createMessageMock).not.toHaveBeenCalled()
+    expect(updateConversationMock).not.toHaveBeenCalled()
     expect(result).toBeNull()
+  })
+
+  it('atendente respondeu pelo app do celular numa conversa em modo bot: desativa a IA (muda pra modo humano) e cancela debounce pendente', async () => {
+    getOrCreateConversationMock.mockResolvedValueOnce({ id: 'conv_1', mode: 'bot' })
+
+    await handleOutboundMessageEcho({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.echo4',
+      to: '5511999999999',
+      type: 'text',
+      text: 'Já te atendo por aqui!',
+    })
+
+    expect(updateConversationMock).toHaveBeenCalledWith('tenant_1', 'conv_1', { mode: 'human' })
+    expect(cancelDebounceMock).toHaveBeenCalledWith('conv_1')
+  })
+
+  it('conversa já em modo humano: não escreve de novo no banco (evita update redundante a cada echo)', async () => {
+    getOrCreateConversationMock.mockResolvedValueOnce({ id: 'conv_1', mode: 'human' })
+
+    await handleOutboundMessageEcho({
+      tenantId: 'tenant_1',
+      messageId: 'wamid.echo5',
+      to: '5511999999999',
+      type: 'text',
+      text: 'Mais uma mensagem',
+    })
+
+    expect(updateConversationMock).not.toHaveBeenCalled()
   })
 })

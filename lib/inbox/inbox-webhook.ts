@@ -818,6 +818,14 @@ export async function handleOutboundMessageEcho(
     }
   }
 
+  // Atendente respondeu direto pelo app do WhatsApp Business no celular
+  // (coexistência) — desliga a IA pra essa conversa, senão ela continua
+  // respondendo por cima do que o humano já respondeu manualmente.
+  if (conversation.mode !== 'human') {
+    await inboxDb.updateConversation(payload.tenantId, conversation.id, { mode: 'human' })
+    cancelDebounce(conversation.id)
+  }
+
   return { conversationId: conversation.id, messageId: message.id }
 }
 

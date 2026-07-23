@@ -23,7 +23,7 @@ describe('dashboardService', () => {
     vi.resetAllMocks()
   })
 
-  it('getStats deve combinar stats e campanhas', async () => {
+  it('getStats deve usar a projeção única retornada pela API', async () => {
     mockFetch.mockResolvedValueOnce(createMockFetchResponse({
       totalSent: 10,
       totalDelivered: 8,
@@ -31,6 +31,7 @@ describe('dashboardService', () => {
       totalFailed: 2,
       activeCampaigns: 1,
       deliveryRate: 80,
+      chartData: [{ name: '22/07', sent: 10, delivered: 8, read: 5, failed: 2, active: 1 }],
     }))
 
     ;(campaignService.getAll as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
@@ -53,7 +54,8 @@ describe('dashboardService', () => {
 
     expect(result.sent24h).toBe('10')
     expect(result.deliveryRate).toBe('80%')
-    expect(result.chartData).toHaveLength(30)
+    expect(result.chartData).toEqual([{ name: '22/07', sent: 10, delivered: 8, read: 5, failed: 2, active: 1 }])
+    expect(campaignService.getAll).not.toHaveBeenCalled()
   })
 
   it('getStats deve usar defaults quando stats falha', async () => {

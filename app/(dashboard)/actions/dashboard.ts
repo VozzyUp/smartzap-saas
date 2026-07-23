@@ -3,13 +3,14 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase-server'
 import { getTenantContext } from '@/lib/tenant-context'
-import type { DashboardStats, ChartDataPoint } from '@/services/dashboardService'
+import { formatDashboardStats } from '@/lib/dashboard-metrics'
+import { getDashboardMetricsForTenant } from '@/lib/dashboard-metrics.server'
+import type { DashboardStats } from '@/services/dashboardService'
 import type { Campaign } from '@/types'
 
 /**
- * Busca dados do dashboard no servidor (RSC).
- * Executa queries em paralelo para stats e campanhas recentes.
- * Usa cache() para deduplicação per-request (evita queries duplicadas no mesmo render).
+ * Busca o primeiro render do Dashboard. As métricas e a rota HTTP usam a
+ * mesma projeção para que a hidratação não altere os números apresentados.
  */
 export const getDashboardData = cache(async (): Promise<{
   stats: DashboardStats
@@ -23,135 +24,29 @@ export const getDashboardData = cache(async (): Promise<{
         deliveryRate: '0%',
         activeCampaigns: '0',
         failedMessages: '0',
-        chartData: []
+        chartData: [],
       },
-      recentCampaigns: []
+      recentCampaigns: [],
     }
   }
 
   const supabase = await createClient()
-
-  // Buscar stats agregados e campanhas recentes em PARALELO
-  const [statsResult, campaignsResult, allCampaignsResult] = await Promise.all([
-    // Stats agregados
-    supabase
-      .from('campaigns')
-      .select('sent, delivered, read, failed, status')
-      .eq('tenant_id', ctx.tenantId)
-      .not('status', 'eq', 'Rascunho'),
-
-    // Campanhas recentes (top 5)
+  const [metrics, campaignsResult] = await Promise.all([
+    getDashboardMetricsForTenant(ctx.tenantId),
     supabase
       .from('campaigns')
       .select('*')
       .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .limit(5),
-
-    // Todas campanhas para chart (últimos 30 dias)
-    supabase
-      .from('campaigns')
-      .select('sent, delivered, read, failed, status, created_at, started_at, last_sent_at, total_recipients')
-      .eq('tenant_id', ctx.tenantId)
-      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
   ])
 
-  // Calcular stats agregados
-  const campaigns = statsResult.data || []
-  let totalSent = 0
-  let totalDelivered = 0
-  let totalFailed = 0
-  let activeCampaigns = 0
-
-  campaigns.forEach((c) => {
-    totalSent += c.sent || 0
-    totalDelivered += c.delivered || 0
-    totalFailed += c.failed || 0
-    if (c.status === 'Enviando' || c.status === 'Agendado') {
-      activeCampaigns++
-    }
-  })
-
-  const deliveryRate = totalSent > 0
-    ? Math.round((totalDelivered / totalSent) * 100)
-    : 0
-
-  // Gerar chartData dos últimos 30 dias
-  const chartData = generateChartData(allCampaignsResult.data || [])
-
-  // Mapear campanhas recentes para formato esperado
-  const recentCampaigns = (campaignsResult.data || []).map(mapCampaignFromDb)
-
   return {
-    stats: {
-      sent24h: totalSent.toLocaleString('pt-BR'),
-      deliveryRate: `${deliveryRate}%`,
-      activeCampaigns: activeCampaigns.toString(),
-      failedMessages: totalFailed.toString(),
-      chartData
-    },
-    recentCampaigns
+    stats: formatDashboardStats(metrics),
+    recentCampaigns: (campaignsResult.data || []).map(mapCampaignFromDb),
   }
 })
 
-/**
- * Gera dados do gráfico para os últimos 30 dias
- */
-function generateChartData(campaigns: any[]): ChartDataPoint[] {
-  const today = new Date()
-  const start = new Date(today)
-  start.setDate(start.getDate() - 29)
-  start.setHours(0, 0, 0, 0)
-
-  const bucket = new Map<string, ChartDataPoint>()
-
-  // Inicializar bucket com zeros
-  for (let i = 0; i < 30; i++) {
-    const day = new Date(start)
-    day.setDate(start.getDate() + i)
-    const key = day.toISOString().slice(0, 10)
-    bucket.set(key, { name: '', sent: 0, read: 0, delivered: 0, failed: 0, active: 0 })
-  }
-
-  // Agregar dados das campanhas
-  campaigns.forEach((campaign) => {
-    const rawDate = campaign.last_sent_at || campaign.started_at || campaign.created_at
-    if (!rawDate) return
-
-    const date = new Date(rawDate)
-    if (Number.isNaN(date.getTime())) return
-
-    const key = date.toISOString().slice(0, 10)
-    const entry = bucket.get(key)
-    if (!entry) return
-
-    entry.sent += campaign.sent || campaign.total_recipients || 0
-    entry.read += campaign.read || 0
-    entry.delivered += campaign.delivered || 0
-    entry.failed += campaign.failed || 0
-
-    if (campaign.status === 'Enviando' || campaign.status === 'Agendado') {
-      entry.active += 1
-    }
-  })
-
-  // Converter para array com formatação de data
-  return Array.from(bucket.entries()).map(([key, value]) => {
-    const [, month, day] = key.split('-')
-    return {
-      name: `${day}/${month}`,
-      sent: value.sent,
-      read: value.read,
-      delivered: value.delivered,
-      failed: value.failed,
-      active: value.active
-    }
-  })
-}
-
-/**
- * Mapeia campanha do formato DB para formato da aplicação
- */
 function mapCampaignFromDb(dbCampaign: any): Campaign {
   return {
     id: dbCampaign.id,
@@ -170,6 +65,6 @@ function mapCampaignFromDb(dbCampaign: any): Campaign {
     scheduledAt: dbCampaign.scheduled_at,
     lastSentAt: dbCampaign.last_sent_at,
     folderId: dbCampaign.folder_id,
-    tags: []
+    tags: [],
   }
 }

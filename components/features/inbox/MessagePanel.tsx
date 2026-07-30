@@ -39,6 +39,8 @@ export interface MessagePanelProps {
   quickRepliesLoading: boolean
   /** Callback to refresh quick replies after CRUD operations */
   onRefreshQuickReplies?: () => void
+  /** Atualiza a lista após o upload de uma mídia. */
+  onRefreshMessages?: () => void
 
   // Pagination
   hasMoreMessages: boolean
@@ -76,6 +78,7 @@ export function MessagePanel({
   isSending,
   quickRepliesLoading,
   onRefreshQuickReplies,
+  onRefreshMessages,
   hasMoreMessages,
   onLoadMore,
   onSendMessage,
@@ -297,6 +300,7 @@ export function MessagePanel({
         quickReplies={quickReplies}
         quickRepliesLoading={quickRepliesLoading}
         onRefreshQuickReplies={onRefreshQuickReplies}
+        onAttachmentSent={onRefreshMessages}
         conversationId={conversation?.id}
         showAISuggest={isOpen && conversation?.mode === 'human'}
       />

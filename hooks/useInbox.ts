@@ -140,6 +140,7 @@ export function useInbox(options: UseInboxOptions = {}) {
     sendMessage,
     isSending,
     loadMoreMessages,
+    refreshMessages,
   } = useConversationWithMessages(selectedId)
 
   // Labels
@@ -337,6 +338,7 @@ export function useInbox(options: UseInboxOptions = {}) {
     isLoadingMoreMessages,
     hasMoreMessages,
     onLoadMoreMessages: loadMoreMessages,
+    onRefreshMessages: refreshMessages,
     onSendMessage: handleSendMessage,
     isSending,
 

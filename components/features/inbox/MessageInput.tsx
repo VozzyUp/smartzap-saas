@@ -35,6 +35,8 @@ export interface MessageInputProps {
   onRefreshQuickReplies?: () => void
   /** Conversation ID for AI suggestions and for sending attachments */
   conversationId?: string | null
+  /** Atualiza as mensagens depois que o arquivo foi persistido no Storage. */
+  onAttachmentSent?: () => void | Promise<void>
   /** Whether to show AI suggest button */
   showAISuggest?: boolean
 }
@@ -87,6 +89,7 @@ export function MessageInput({
   quickRepliesLoading,
   onRefreshQuickReplies,
   conversationId,
+  onAttachmentSent,
   showAISuggest = false,
 }: MessageInputProps) {
   const [value, setValue] = useState('')
@@ -174,6 +177,7 @@ export function MessageInput({
         throw new Error(data?.error || 'Erro ao enviar arquivo')
       }
 
+      await onAttachmentSent?.()
       toast.success('Arquivo enviado')
       clearAttachment()
     } catch (error) {
@@ -182,7 +186,7 @@ export function MessageInput({
     } finally {
       setIsUploadingAttachment(false)
     }
-  }, [attachedFile, attachmentCaption, conversationId, isUploadingAttachment, disabled, clearAttachment])
+  }, [attachedFile, attachmentCaption, conversationId, isUploadingAttachment, disabled, clearAttachment, onAttachmentSent])
 
   // Voice recording (Fase 5B - Task 4)
   const [voiceState, setVoiceState] = useState<VoiceRecordingState>('idle')

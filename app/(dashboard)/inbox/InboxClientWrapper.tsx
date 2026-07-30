@@ -57,6 +57,7 @@ export function InboxClientWrapper({ initialData, initialConversationId }: Inbox
         quickReplies={inbox.quickReplies}
         quickRepliesLoading={inbox.quickRepliesLoading}
         onRefreshQuickReplies={inbox.refetchQuickReplies}
+        onRefreshMessages={inbox.onRefreshMessages}
         // Filters
         search={inbox.search}
         onSearchChange={inbox.onSearchChange}

@@ -52,6 +52,7 @@ function InboxConversationPageContent({ conversationId }: { conversationId: stri
         // Quick Replies
         quickReplies={inbox.quickReplies}
         quickRepliesLoading={inbox.quickRepliesLoading}
+        onRefreshMessages={inbox.onRefreshMessages}
         // Filters
         search={inbox.search}
         onSearchChange={inbox.onSearchChange}

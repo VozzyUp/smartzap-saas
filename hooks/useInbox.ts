@@ -3,7 +3,7 @@
  * Orchestrates conversations, messages, labels, and quick replies
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useConversations, useConversationMutations } from './useConversations'
@@ -16,6 +16,7 @@ import type { ConversationStatus, ConversationMode, ConversationPriority, AIAgen
 
 export interface InboxInitialData {
   conversations?: InboxConversation[]
+  conversationTotal?: number
   labels?: InboxLabel[]
   quickReplies?: InboxQuickReply[]
   totalUnread?: number
@@ -40,6 +41,9 @@ export function useInbox(options: UseInboxOptions = {}) {
   const [modeFilter, setModeFilter] = useState<ConversationMode | null>(null)
   const [labelFilter, setLabelFilter] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [loadedConversations, setLoadedConversations] = useState<InboxConversation[]>(
+    () => options.initialData?.conversations ?? []
+  )
 
   // Selected conversation ID (from URL or state)
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -64,12 +68,62 @@ export function useInbox(options: UseInboxOptions = {}) {
     hasNextPage,
   } = useConversations({
     page,
+    limit: 50,
     status: statusFilter ?? undefined,
     mode: modeFilter ?? undefined,
     labelId: labelFilter ?? undefined,
     search: search || undefined,
     initialData: options.initialData?.conversations,
+    initialTotal: options.initialData?.conversationTotal,
   })
+
+  useEffect(() => {
+    setLoadedConversations((current) => {
+      if (page === 1) return conversations
+
+      const updates = new Map(conversations.map((conversation) => [conversation.id, conversation]))
+      const existingIds = new Set(current.map((conversation) => conversation.id))
+      const currentWithUpdates = current.map((conversation) => updates.get(conversation.id) ?? conversation)
+      const newConversations = conversations.filter((conversation) => !existingIds.has(conversation.id))
+
+      return [...currentWithUpdates, ...newConversations]
+    })
+  }, [conversations, page])
+
+  const resetConversationPagination = useCallback(() => {
+    setPage(1)
+    setLoadedConversations([])
+  }, [])
+
+  const handleSearchChange = useCallback((value: string) => {
+    resetConversationPagination()
+    setSearch(value)
+  }, [resetConversationPagination])
+
+  const handleStatusFilterChange = useCallback((value: ConversationStatus | null) => {
+    resetConversationPagination()
+    setStatusFilter(value)
+  }, [resetConversationPagination])
+
+  const handleModeFilterChange = useCallback((value: ConversationMode | null) => {
+    resetConversationPagination()
+    setModeFilter(value)
+  }, [resetConversationPagination])
+
+  const handleLabelFilterChange = useCallback((value: string | null) => {
+    resetConversationPagination()
+    setLabelFilter(value)
+  }, [resetConversationPagination])
+
+  const loadMoreConversations = useCallback(() => {
+    if (!hasNextPage || isLoadingConversations) return
+    setPage((currentPage) => currentPage + 1)
+  }, [hasNextPage, isLoadingConversations])
+
+  const loadedTotalUnread = useMemo(
+    () => loadedConversations.reduce((sum, conversation) => sum + (conversation.unread_count || 0), 0),
+    [loadedConversations]
+  )
 
   // Conversation mutations
   const conversationMutations = useConversationMutations()
@@ -260,14 +314,16 @@ export function useInbox(options: UseInboxOptions = {}) {
 
   return {
     // Conversations
-    conversations,
+    conversations: loadedConversations,
     total,
     totalPages,
-    totalUnread,
+    totalUnread: loadedTotalUnread || totalUnread,
     isLoadingConversations,
+    isLoadingMoreConversations: isLoadingConversations && page > 1,
     page,
     setPage,
     hasNextPage,
+    onLoadMoreConversations: loadMoreConversations,
 
     // Selected conversation
     selectedConversationId: selectedId,
@@ -295,13 +351,13 @@ export function useInbox(options: UseInboxOptions = {}) {
 
     // Filters
     search,
-    onSearchChange: setSearch,
+    onSearchChange: handleSearchChange,
     statusFilter,
-    onStatusFilterChange: setStatusFilter,
+    onStatusFilterChange: handleStatusFilterChange,
     modeFilter,
-    onModeFilterChange: setModeFilter,
+    onModeFilterChange: handleModeFilterChange,
     labelFilter,
-    onLabelFilterChange: setLabelFilter,
+    onLabelFilterChange: handleLabelFilterChange,
 
     // Conversation actions
     onModeToggle: handleModeToggle,

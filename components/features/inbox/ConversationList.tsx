@@ -10,8 +10,8 @@
  * - Clean filter UI
  */
 
-import React, { useState, useMemo } from 'react'
-import { Search, SlidersHorizontal, Bot, User, X, Inbox } from 'lucide-react'
+import React, { useState, useMemo, useCallback } from 'react'
+import { Search, SlidersHorizontal, Bot, User, X, Inbox, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import {
@@ -33,6 +33,9 @@ export interface ConversationListProps {
   onSelect: (id: string) => void
   isLoading: boolean
   totalUnread: number
+  hasMore: boolean
+  isLoadingMore: boolean
+  onLoadMore: () => void
 
   // Filters
   labels: InboxLabel[]
@@ -52,6 +55,9 @@ export function ConversationList({
   onSelect,
   isLoading,
   totalUnread,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   labels,
   search,
   onSearchChange,
@@ -80,6 +86,12 @@ export function ConversationList({
     onLabelFilterChange(null)
     onSearchChange('')
   }
+
+  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 96
+    if (isNearBottom && hasMore && !isLoadingMore) onLoadMore()
+  }, [hasMore, isLoadingMore, onLoadMore])
 
   return (
     <div className="flex flex-col h-full bg-[var(--ds-bg-elevated)]">
@@ -237,7 +249,7 @@ export function ConversationList({
       </div>
 
       {/* Conversation list - no ScrollArea wrapper for native feel */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
         {isLoading ? (
           // Skeleton loading - minimal
           <div className="px-2 py-1 space-y-0.5">
@@ -282,6 +294,21 @@ export function ConversationList({
                 onClick={() => onSelect(conversation.id)}
               />
             ))}
+            {(hasMore || isLoadingMore) && (
+              <div className="flex justify-center py-2">
+                {isLoadingMore ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin text-[var(--ds-text-muted)]" aria-label="Carregando mais conversas" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onLoadMore}
+                    className="text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    Carregar mais conversas
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

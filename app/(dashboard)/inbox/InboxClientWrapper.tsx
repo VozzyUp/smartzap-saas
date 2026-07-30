@@ -21,6 +21,7 @@ export function InboxClientWrapper({ initialData, initialConversationId }: Inbox
     initialConversationId,
     initialData: initialData ? {
       conversations: initialData.conversations,
+      conversationTotal: initialData.conversationTotal,
       labels: initialData.labels,
       quickReplies: initialData.quickReplies,
       totalUnread: initialData.totalUnread,
@@ -32,8 +33,11 @@ export function InboxClientWrapper({ initialData, initialConversationId }: Inbox
       <InboxView
         // Conversations
         conversations={inbox.conversations}
-        isLoadingConversations={inbox.isLoadingConversations && !initialData}
+        isLoadingConversations={inbox.isLoadingConversations && inbox.conversations.length === 0}
         totalUnread={inbox.totalUnread}
+        hasMoreConversations={inbox.hasNextPage}
+        isLoadingMoreConversations={inbox.isLoadingMoreConversations}
+        onLoadMoreConversations={inbox.onLoadMoreConversations}
         // Selected conversation
         selectedConversationId={inbox.selectedConversationId}
         onSelectConversation={inbox.onSelectConversation}

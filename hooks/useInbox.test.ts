@@ -331,6 +331,33 @@ describe('useInbox', () => {
   })
 
   // ---------------------------------------------------------------------------
+  // Pagina\u00e7\u00e3o de conversas
+  // ---------------------------------------------------------------------------
+
+  describe('pagina\u00e7\u00e3o de conversas', () => {
+    it('deve acrescentar a pr\u00f3xima p\u00e1gina sem esconder as conversas j\u00e1 carregadas', async () => {
+      const firstPage = [mockConversationList[0]]
+      const secondPage = [mockConversationList[1]]
+
+      mockConversations.mockImplementation(({ page = 1 }: { page?: number }) => ({
+        ...defaultConversationsReturn,
+        conversations: page === 1 ? firstPage : secondPage,
+        total: 2,
+        totalPages: 2,
+        hasNextPage: page === 1,
+      }))
+
+      const { result } = renderHookWithProviders(() => useInbox())
+
+      await act(async () => {
+        await (result.current as any).onLoadMoreConversations()
+      })
+
+      expect(result.current.conversations).toEqual([...firstPage, ...secondPage])
+    })
+  })
+
+  // ---------------------------------------------------------------------------
   // Conversation Selection
   // ---------------------------------------------------------------------------
 

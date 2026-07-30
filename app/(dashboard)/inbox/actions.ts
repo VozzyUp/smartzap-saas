@@ -7,12 +7,13 @@ import type { InboxConversation, InboxLabel, InboxQuickReply } from '@/types'
 
 export interface InboxInitialData {
   conversations: InboxConversation[]
+  conversationTotal: number
   labels: InboxLabel[]
   quickReplies: InboxQuickReply[]
   totalUnread: number
 }
 
-const EMPTY: InboxInitialData = { conversations: [], labels: [], quickReplies: [], totalUnread: 0 }
+const EMPTY: InboxInitialData = { conversations: [], conversationTotal: 0, labels: [], quickReplies: [], totalUnread: 0 }
 
 /**
  * Busca dados iniciais do inbox no servidor (RSC).
@@ -36,7 +37,7 @@ export const getInboxInitialData = cache(async (): Promise<InboxInitialData> => 
 
   // Buscar tudo em paralelo, tudo escopado por tenant
   const [conversationsResult, labelsResult, quickRepliesResult] = await Promise.all([
-    // Conversas recentes (últimas 50)
+    // Primeira página de conversas. A contagem permite buscar os próximos lotes.
     supabase
       .from('inbox_conversations')
       .select(`
@@ -45,7 +46,7 @@ export const getInboxInitialData = cache(async (): Promise<InboxInitialData> => 
         labels:inbox_conversation_labels(
           label:inbox_labels(id, name, color)
         )
-      `)
+      `, { count: 'exact' })
       .eq('tenant_id', tenantId)
       .order('last_message_at', { ascending: false })
       .limit(50),
@@ -78,6 +79,7 @@ export const getInboxInitialData = cache(async (): Promise<InboxInitialData> => 
 
   return {
     conversations,
+    conversationTotal: conversationsResult.count ?? conversations.length,
     labels: (labelsResult.data || []) as InboxLabel[],
     quickReplies: (quickRepliesResult.data || []) as InboxQuickReply[],
     totalUnread

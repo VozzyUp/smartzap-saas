@@ -39,11 +39,12 @@ export interface UseConversationsParams {
   labelId?: string
   search?: string
   initialData?: InboxConversation[]
+  initialTotal?: number
 }
 
 export function useConversations(params: UseConversationsParams = {}) {
   const queryClient = useQueryClient()
-  const { page = 1, limit = 20, status, mode, labelId, search, initialData } = params
+  const { page = 1, limit = 20, status, mode, labelId, search, initialData, initialTotal } = params
 
   const queryParams: ConversationListParams = useMemo(
     () => ({ page, limit, status, mode, labelId, search }),
@@ -55,13 +56,15 @@ export function useConversations(params: UseConversationsParams = {}) {
   // Se temos initialData e estamos na página 1 sem filtros, usamos como dados iniciais
   const isFirstPageNoFilters = page === 1 && !status && !mode && !labelId && !search
   const queryInitialData = isFirstPageNoFilters && initialData
-    ? {
-        conversations: initialData,
-        total: initialData.length,
-        page: 1,
-        limit,
-        totalPages: 1
-      }
+    ? (() => {
+        const total = initialTotal ?? initialData.length
+        return {
+          conversations: initialData,
+          total,
+          page: 1,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+        }
+      })()
     : undefined
 
   // Query with real-time subscription

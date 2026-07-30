@@ -31,6 +31,9 @@ function InboxConversationPageContent({ conversationId }: { conversationId: stri
         conversations={inbox.conversations}
         isLoadingConversations={inbox.isLoadingConversations}
         totalUnread={inbox.totalUnread}
+        hasMoreConversations={inbox.hasNextPage}
+        isLoadingMoreConversations={inbox.isLoadingMoreConversations}
+        onLoadMoreConversations={inbox.onLoadMoreConversations}
         // Selected conversation
         selectedConversationId={inbox.selectedConversationId}
         onSelectConversation={inbox.onSelectConversation}

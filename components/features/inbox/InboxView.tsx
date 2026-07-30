@@ -36,6 +36,9 @@ export interface InboxViewProps {
   conversations: InboxConversation[]
   isLoadingConversations: boolean
   totalUnread: number
+  hasMoreConversations: boolean
+  isLoadingMoreConversations: boolean
+  onLoadMoreConversations: () => void
 
   // Selected conversation
   selectedConversationId: string | null
@@ -96,6 +99,9 @@ export function InboxView({
   conversations,
   isLoadingConversations,
   totalUnread,
+  hasMoreConversations,
+  isLoadingMoreConversations,
+  onLoadMoreConversations,
   selectedConversationId,
   onSelectConversation,
   selectedConversation,
@@ -195,6 +201,9 @@ export function InboxView({
                   onSelect={handleSelectConversation}
                   isLoading={isLoadingConversations}
                   totalUnread={totalUnread}
+                  hasMore={hasMoreConversations}
+                  isLoadingMore={isLoadingMoreConversations}
+                  onLoadMore={onLoadMoreConversations}
                   labels={labels}
                   search={search}
                   onSearchChange={onSearchChange}

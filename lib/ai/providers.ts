@@ -4,10 +4,12 @@
  * Lista mínima de fallback. Modelos reais são carregados dinamicamente
  * via GET /api/ai/models?provider=google|openai após o usuário configurar a chave.
  *
- * Providers suportados: Google Gemini e OpenAI.
+ * Providers suportados: Google Gemini, OpenAI e Anthropic (Claude).
  */
 
-export type AIProvider = 'google' | 'openai';
+import { ANTHROPIC_MODELS } from './anthropic-support';
+
+export type AIProvider = 'google' | 'openai' | 'anthropic';
 
 export interface AIModel {
     id: string;
@@ -41,6 +43,12 @@ export const AI_PROVIDERS: AIProviderConfig[] = [
             { id: 'gpt-4o', name: 'GPT-4o', description: 'Modelo principal' },
             { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Rápido e econômico' },
         ],
+    },
+    {
+        id: 'anthropic',
+        name: 'Anthropic (Claude)',
+        icon: '🧠',
+        models: ANTHROPIC_MODELS,
     },
 ];
 

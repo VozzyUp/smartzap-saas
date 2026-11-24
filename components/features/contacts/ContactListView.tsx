@@ -253,7 +253,7 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
           <PageDescription>Gerencie sua audiência e listas</PageDescription>
         </div>
 
-        <PageActions className="flex-nowrap sm:flex-wrap justify-start sm:justify-end">
+        <PageActions className="flex-wrap justify-start sm:justify-end">
           {/* Ações de seleção + Import agrupados */}
           <div className="flex items-center gap-2">
             {isSomeSelected && (

@@ -49,7 +49,7 @@ export function AIAgentCompactCard({
   return (
     <div
       className={cn(
-        'group flex items-center gap-3 p-3 rounded-xl transition-all',
+        'group flex flex-wrap items-center gap-3 p-3 rounded-xl transition-all',
         'bg-zinc-900/50 hover:bg-zinc-800/50',
         'border border-zinc-800/50 hover:border-zinc-700/50',
         !agent.is_active && 'opacity-60'
@@ -78,7 +78,7 @@ export function AIAgentCompactCard({
                 onClick={() => onToggleActive(agent, !agent.is_active)}
                 disabled={isUpdating || disabled}
                 className={cn(
-                  'w-2 h-2 rounded-full transition-all flex-shrink-0',
+                  'relative w-2 h-2 rounded-full transition-all flex-shrink-0 max-sm:after:absolute max-sm:after:-inset-4 max-sm:after:content-[""]',
                   agent.is_active
                     ? 'bg-primary-400 shadow-[0_0_6px] shadow-primary-400/50'
                     : 'bg-zinc-600 hover:bg-zinc-500'
@@ -96,7 +96,7 @@ export function AIAgentCompactCard({
       </div>
 
       {/* Ações - aparecem no hover */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex w-full flex-wrap items-center justify-end gap-1 transition-opacity sm:w-auto sm:flex-nowrap sm:opacity-0 sm:group-hover:opacity-100">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

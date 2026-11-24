@@ -43,13 +43,13 @@ export function AIAgentHeroCard({
 
       <div className="p-5">
         {/* Layout principal */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           {/* Lado esquerdo - Info do agente */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             {/* Avatar */}
             <div
               className={cn(
-                'flex items-center justify-center w-11 h-11 rounded-xl text-base font-semibold',
+                'flex items-center justify-center w-11 h-11 shrink-0 rounded-xl text-base font-semibold',
                 isActive
                   ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20'
                   : 'bg-zinc-800 text-zinc-500'
@@ -59,8 +59,8 @@ export function AIAgentHeroCard({
             </div>
 
             {/* Texto */}
-            <div>
-              <h2 className="text-base font-medium text-white">{agent.name}</h2>
+            <div className="min-w-0">
+              <h2 className="text-base font-medium text-white truncate">{agent.name}</h2>
               <p className="text-sm text-zinc-500">
                 {isActive
                   ? 'Respondendo automaticamente'
@@ -71,7 +71,7 @@ export function AIAgentHeroCard({
           </div>
 
           {/* Lado direito - Status + Ações */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-start sm:gap-4">
             {/* Status indicator */}
             <div className="flex items-center gap-2">
               <span

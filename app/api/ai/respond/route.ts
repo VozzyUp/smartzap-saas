@@ -207,6 +207,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ skipped: true, reason: 'no-messages' })
     }
 
+    // 6.6. Se a última mensagem da conversa já é nossa, não há nada novo do contato para responder.
+    // Acontece quando chegam duas mensagens seguidas: a primeira execução responde às duas e a
+    // segunda encontraria o histórico terminando em resposta nossa. A Anthropic recusa isso
+    // ("conversation must end with a user message") e a conversa caía para humano sem motivo.
+    const lastRelevant = [...messages].reverse().find((m) => m.message_type !== 'internal_note')
+    if (lastRelevant && lastRelevant.direction !== 'inbound') {
+      console.log(`⏭️ [AI-RESPOND] Skipping - última mensagem já é nossa (contato já foi respondido)`)
+      return NextResponse.json({ skipped: true, reason: 'already-answered' })
+    }
+
     // 7. Busca dados do contato (se existir)
     let contactData: ContactContext | undefined
     if (conversation.contact_id) {

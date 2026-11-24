@@ -23,6 +23,11 @@ vi.mock('@/lib/kanban-automation', () => ({
   listCardAutomationLog: (...a: unknown[]) => listCardAutomationLog(...a),
 }))
 
+const ensureFollowupSweepSchedule = vi.fn().mockResolvedValue(true)
+vi.mock('@/lib/kanban-automation-schedule', () => ({
+  ensureFollowupSweepSchedule: (...a: unknown[]) => ensureFollowupSweepSchedule(...a),
+}))
+
 const authedCtx = { tenantId: 't1', userId: 'u1', isPlatformAdmin: false, trialExpired: false, suspended: false }
 
 function jsonRequest(body: unknown, method = 'POST') {
@@ -88,7 +93,36 @@ describe('GET/PUT /api/kanban/stages/[id]/followup-rules', () => {
     const { PATCH } = await import('./stages/[id]/followup-rules/route')
     const res = await PATCH(jsonRequest({ rules }, 'PATCH'), { params: Promise.resolve({ id: 's1' }) })
     expect(res.status).toBe(200)
-    expect(saveFollowupRules).toHaveBeenCalledWith('t1', 's1', rules)
+    expect(saveFollowupRules).toHaveBeenCalledWith('t1', 's1', [{ ...rules[0], template: null }])
+    expect(ensureFollowupSweepSchedule).toHaveBeenCalled()
+  })
+
+  it('PATCH valida o modelo associado e aceita valores fixos e "enviar sempre"', async () => {
+    getTenantContext.mockResolvedValue(authedCtx)
+    saveFollowupRules.mockResolvedValue(undefined)
+    const rules = [
+      {
+        dayOffset: 1,
+        templateText: 'Oi',
+        position: 0,
+        template: { templateName: 'marcoo_teste_lembrete', language: 'pt_BR', bodyParams: ['{{nome}}', 'https://x.test'], alwaysSend: true },
+      },
+      { dayOffset: 2, templateText: 'b', position: 1, template: { templateName: '  ' } },
+    ]
+    const { PATCH } = await import('./stages/[id]/followup-rules/route')
+    await PATCH(jsonRequest({ rules }, 'PATCH'), { params: Promise.resolve({ id: 's1' }) })
+    const saved = saveFollowupRules.mock.calls.at(-1)![2]
+    expect(saved[0].template).toEqual(rules[0].template)
+    expect(saved[1].template).toBeNull()
+  })
+
+  it('PATCH com lista vazia não registra o schedule', async () => {
+    getTenantContext.mockResolvedValue(authedCtx)
+    saveFollowupRules.mockResolvedValue(undefined)
+    ensureFollowupSweepSchedule.mockClear()
+    const { PATCH } = await import('./stages/[id]/followup-rules/route')
+    await PATCH(jsonRequest({ rules: [] }, 'PATCH'), { params: Promise.resolve({ id: 's1' }) })
+    expect(ensureFollowupSweepSchedule).not.toHaveBeenCalled()
   })
 })
 

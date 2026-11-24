@@ -30,6 +30,7 @@ const PUBLIC_API_ROUTES = [
     '/api/system',            // Info básica do sistema
     '/api/installer',         // Setup inicial (protegido separadamente após install)
     '/api/campaign/workflow', // Chamado internamente pelo QStash
+    '/api/kanban/followup-sweep', // Cron do QStash (a própria rota verifica assinatura QStash ou x-workflow-secret)
     '/api/public',            // Rotas explicitamente públicas (lead forms, etc)
 ]
 

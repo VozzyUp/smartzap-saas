@@ -9,7 +9,6 @@
  */
 
 import webpush from 'web-push'
-import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 // =============================================================================
@@ -74,7 +73,8 @@ export interface PushSubscriptionData {
  */
 export async function sendPushNotification(
   subscription: PushSubscriptionData,
-  payload: PushPayload
+  payload: PushPayload,
+  tenantId?: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!setupWebPush()) {
     return { success: false, error: 'VAPID não configurado' }
@@ -95,7 +95,7 @@ export async function sendPushNotification(
 
     // Se subscription expirou ou foi invalidada, remover do banco
     if (err.statusCode === 410 || err.statusCode === 404) {
-      await removeInvalidSubscription(subscription.endpoint)
+      await removeInvalidSubscription(subscription.endpoint, tenantId)
       return { success: false, error: 'Subscription expirada' }
     }
 
@@ -105,51 +105,15 @@ export async function sendPushNotification(
 }
 
 /**
- * Envia notificação para todas as subscriptions ativas
- */
-export async function broadcastPushNotification(
-  payload: PushPayload
-): Promise<{ sent: number; failed: number }> {
-  if (!setupWebPush()) {
-    return { sent: 0, failed: 0 }
-  }
-
-  const supabase = await createClient()
-  const { data: subscriptions } = await supabase.from('push_subscriptions').select('endpoint, keys')
-
-  if (!subscriptions || subscriptions.length === 0) {
-    return { sent: 0, failed: 0 }
-  }
-
-  let sent = 0
-  let failed = 0
-
-  const results = await Promise.allSettled(
-    subscriptions.map((sub) =>
-      sendPushNotification(sub as PushSubscriptionData, payload)
-    )
-  )
-
-  results.forEach((result) => {
-    if (result.status === 'fulfilled' && result.value.success) {
-      sent++
-    } else {
-      failed++
-    }
-  })
-
-  return { sent, failed }
-}
-
-/**
  * Envia notificação de nova mensagem
  */
 export async function sendNewMessageNotification(
+  tenantId: string,
   contactName: string,
   preview: string,
   conversationId: string
 ): Promise<{ sent: number; failed: number }> {
-  return broadcastPushNotification({
+  return broadcastPushNotificationToTenant(tenantId, {
     title: contactName,
     body: preview.slice(0, 100),
     icon: '/icons/icon-192.png',
@@ -194,7 +158,7 @@ export async function broadcastPushNotificationToTenant(
     if (!subscriptions || subscriptions.length === 0) return { sent: 0, failed: 0 }
 
     const results = await Promise.allSettled(
-      subscriptions.map((sub) => sendPushNotification(sub as PushSubscriptionData, payload))
+      subscriptions.map((sub) => sendPushNotification(sub as PushSubscriptionData, payload, tenantId))
     )
     const sent = results.filter((r) => r.status === 'fulfilled' && r.value.success).length
     return { sent, failed: results.length - sent }
@@ -232,10 +196,14 @@ export async function sendHandoffNotification(
 /**
  * Remove subscription inválida do banco
  */
-async function removeInvalidSubscription(endpoint: string): Promise<void> {
+async function removeInvalidSubscription(endpoint: string, tenantId?: string): Promise<void> {
   try {
-    const supabase = await createClient()
-    await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
+    // Client admin (sem sessão): workers como /api/ai/respond não têm cookie.
+    const admin = getSupabaseAdmin()
+    if (!admin) return
+    let q = admin.from('push_subscriptions').delete().eq('endpoint', endpoint)
+    if (tenantId) q = q.eq('tenant_id', tenantId)
+    await q
     console.log('[Push] Subscription inválida removida:', endpoint.slice(0, 50))
   } catch (error) {
     console.error('[Push] Erro ao remover subscription inválida:', error)

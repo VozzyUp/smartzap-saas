@@ -7,6 +7,7 @@ import { getAppUrl } from '@/lib/app-url'
 import { getSupabaseAdmin, supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
+import { notifyOpsAlert } from '@/lib/ops-alert'
 import { isOptOutKeyword } from '@/lib/opt-out-keywords'
 import { maybeAutoSuppressByFailure } from '@/lib/auto-suppression'
 import {
@@ -1019,6 +1020,7 @@ export async function POST(request: NextRequest) {
           } catch (inboxError) {
             // Best-effort: don't fail webhook if inbox persist fails
             console.warn('[Webhook] Failed to persist to inbox:', inboxError)
+            await notifyOpsAlert({ tenantId, type: 'inbox_save_failed', error: inboxError })
           }
 
           // =================================================================
@@ -1638,6 +1640,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Error processing webhook:', error)
+    await notifyOpsAlert({ tenantId, type: 'webhook_error', error })
   }
 
   // Always return 200 to acknowledge receipt (Meta requirement)

@@ -18,6 +18,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { recordInboundActivity, triggerAutomationEvent, detectQuoteKeyword } from '@/lib/kanban-automation'
 import { Client } from '@upstash/qstash'
 import { redis } from '@/lib/redis'
+import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
 import { getAppUrl } from '@/lib/app-url'
 import type {
   InboxConversation,
@@ -196,7 +197,7 @@ export async function handleInboundMessage(
               whatsapp_message_id: payload.messageId, // Necessário para deduplicação
             } as InboxMessage
 
-            triggeredAI = await triggerAIProcessing(conversationForTrigger, messageForTrigger)
+            triggeredAI = await triggerAIProcessing(conversationForTrigger, messageForTrigger, payload.tenantId)
           }
         }
 
@@ -326,7 +327,7 @@ async function handleInboundMessageLegacy(
   }
 
   if (currentMode === 'bot' && !isAutomationPaused(conversation.automation_paused_until)) {
-    triggeredAI = await triggerAIProcessing(conversation as InboxConversation, message)
+    triggeredAI = await triggerAIProcessing(conversation as InboxConversation, message, payload.tenantId)
   }
 
   await triggerKanbanAutomationForInbound(payload.tenantId, normalizedPhone, legacyContent)
@@ -359,7 +360,8 @@ async function handleInboundMessageLegacy(
  */
 async function triggerAIProcessing(
   conversation: InboxConversation,
-  message: InboxMessage
+  message: InboxMessage,
+  tenantId: string
 ): Promise<boolean> {
   const conversationId = conversation.id
   const messageId = message.whatsapp_message_id // Usado para deduplicação
@@ -371,11 +373,15 @@ async function triggerAIProcessing(
 
   if (!qstash) {
     console.log('[Inbox] QStash client not available, skipping AI processing')
+    // Em produção, fila fora do ar = lead sem resposta do robô. Em dev, fila ausente é esperado.
+    if (process.env.NODE_ENV === 'production') {
+      await reportAiTriggerFailure(tenantId, conversationId, 'QSTASH_TOKEN não configurado')
+    }
     return false
   }
 
   // 1. Busca o agente para pegar o debounce_ms configurado (usa RPC otimizada)
-  const agent = await getAgentForTrigger(conversation.ai_agent_id, conversationId)
+  const agent = await getAgentForTrigger(conversation.ai_agent_id, conversationId, tenantId)
   const debounceMs = agent?.debounce_ms ?? 3000 // default 3s (padrão do mercado)
   const debounceSeconds = Math.ceil(debounceMs / 1000)
 
@@ -384,7 +390,7 @@ async function triggerAIProcessing(
   // 2. Se debounce desabilitado (0), dispara imediatamente
   if (debounceMs === 0) {
     console.log(`🔥 [TRIGGER] Debounce disabled, dispatching immediately`)
-    return await dispatchToQStash(conversationId, debounceMs, 0, messageId)
+    return await dispatchToQStash(tenantId, conversationId, debounceMs, 0, messageId)
   }
 
   // 3. Atualiza timestamp da ÚLTIMA MENSAGEM no Redis (isso é o "reset" do timer)
@@ -398,7 +404,7 @@ async function triggerAIProcessing(
   }
 
   // 4. Agenda job com delay - quando executar, vai verificar se passou tempo suficiente
-  return await dispatchToQStash(conversationId, debounceMs, debounceSeconds, messageId)
+  return await dispatchToQStash(tenantId, conversationId, debounceMs, debounceSeconds, messageId)
 }
 
 /**
@@ -409,6 +415,7 @@ async function triggerAIProcessing(
  * - Evita reprocessamento em caso de retry automático do QStash
  */
 async function dispatchToQStash(
+  tenantId: string,
   conversationId: string,
   debounceMs: number,
   delaySeconds: number,
@@ -454,8 +461,18 @@ async function dispatchToQStash(
     return true
   } catch (error) {
     console.error('❌ [TRIGGER] Failed to dispatch AI processing:', error)
+    await reportAiTriggerFailure(tenantId, conversationId, error)
     return false
   }
+}
+
+/**
+ * A IA não vai responder esta conversa: avisa o tenant e entrega para um humano,
+ * para o lead aparecer como pendente no atendimento em vez de ficar sem resposta.
+ */
+async function reportAiTriggerFailure(tenantId: string, conversationId: string, error: unknown): Promise<void> {
+  await notifyOpsAlert({ tenantId, conversationId, type: 'ai_queue_failed', error })
+  await moveConversationToHumanForOps(tenantId, conversationId, 'Falha ao acionar o robô (fila indisponível)')
 }
 
 /**
@@ -467,7 +484,7 @@ async function dispatchToQStash(
  *
  * Versão leve que só busca os campos necessários
  */
-async function getAgentForTrigger(agentId: string | null, conversationId?: string): Promise<Pick<AIAgent, 'debounce_ms'> | null> {
+async function getAgentForTrigger(agentId: string | null, conversationId?: string, tenantId?: string): Promise<Pick<AIAgent, 'debounce_ms'> | null> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return null
 
@@ -503,13 +520,14 @@ async function getAgentForTrigger(agentId: string | null, conversationId?: strin
     if (data) return data
   }
 
-  // Fallback para agente padrão
-  const { data } = await supabase
+  // Fallback para agente padrão (do MESMO tenant quando conhecido)
+  let defaultQuery = supabase
     .from('ai_agents')
     .select('debounce_ms')
     .eq('is_active', true)
     .eq('is_default', true)
-    .single()
+  if (tenantId) defaultQuery = defaultQuery.eq('tenant_id', tenantId)
+  const { data } = await defaultQuery.single()
 
   return data || null
 }

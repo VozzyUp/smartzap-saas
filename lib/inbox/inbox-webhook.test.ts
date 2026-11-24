@@ -33,6 +33,12 @@ vi.mock('@upstash/qstash', () => ({
   },
 }))
 
+const notifyOpsAlertMock = vi.fn()
+const moveHumanMock = vi.fn()
+vi.mock('@/lib/ops-alert', () => ({
+  notifyOpsAlert: (...a: unknown[]) => notifyOpsAlertMock(...a),
+  moveConversationToHumanForOps: (...a: unknown[]) => moveHumanMock(...a),
+}))
 vi.mock('@/lib/redis', () => ({ redis: null }))
 vi.mock('@/lib/app-url', () => ({ getAppUrl: () => 'https://app.example.com' }))
 vi.mock('@/lib/ai/agents/chat-agent', () => ({ cancelDebounce: vi.fn() }))
@@ -182,5 +188,48 @@ describe('handleInboundMessage — mídia recebida (Fase 5A / T4)', () => {
       mediaId: 'mid_doc_1',
       accessToken: 'meta_token_1',
     })
+  })
+})
+
+describe('handleInboundMessage — falha ao acionar o robô (F08)', () => {
+  const originalToken = process.env.QSTASH_TOKEN
+  const payload = { tenantId: 'tenant_1', messageId: 'wamid_9', from: '5511999999999', type: 'text', text: 'oi' } as any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getSupabaseAdminMock.mockReturnValue(supabaseAdminMock)
+    rpcMock.mockResolvedValue({ data: { ...RPC_RESULT_BASE, conversation_mode: 'bot' }, error: null })
+    process.env.QSTASH_TOKEN = 'qstash_test_token'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env.QSTASH_TOKEN
+    else process.env.QSTASH_TOKEN = originalToken
+    vi.unstubAllEnvs()
+  })
+
+  it('publicação no QStash falha: alerta ai_queue_failed e passa a conversa para humano', async () => {
+    publishJSONMock.mockRejectedValue(new Error('qstash 500'))
+    const r = await handleInboundMessage(payload)
+    expect(r.triggeredAI).toBe(false)
+    expect(notifyOpsAlertMock).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant_1', conversationId: 'conv_1', type: 'ai_queue_failed' }))
+    expect(moveHumanMock).toHaveBeenCalledWith('tenant_1', 'conv_1', expect.any(String))
+  })
+
+  it('publicação ok: nenhum alerta', async () => {
+    publishJSONMock.mockResolvedValue({ messageId: 'q1' })
+    const r = await handleInboundMessage(payload)
+    expect(r.triggeredAI).toBe(true)
+    expect(notifyOpsAlertMock).not.toHaveBeenCalled()
+    expect(moveHumanMock).not.toHaveBeenCalled()
+  })
+
+  it('produção sem QSTASH_TOKEN: alerta e passa para humano', async () => {
+    delete process.env.QSTASH_TOKEN
+    vi.stubEnv('NODE_ENV', 'production')
+    await handleInboundMessage(payload)
+    expect(notifyOpsAlertMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'ai_queue_failed' }))
+    expect(moveHumanMock).toHaveBeenCalled()
   })
 })

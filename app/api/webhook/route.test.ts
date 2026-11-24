@@ -87,6 +87,12 @@ vi.mock('@/lib/builder/workflow-conversations', () => ({
   getPendingConversation: vi.fn(async () => null),
 }))
 
+const notifyOpsAlertMock = vi.fn()
+vi.mock('@/lib/ops-alert', () => ({
+  notifyOpsAlert: (...a: any[]) => notifyOpsAlertMock(...a),
+}))
+
+import { handleInboundMessage } from '@/lib/inbox/inbox-webhook'
 import { POST } from './route'
 
 describe('webhook route — resolução de tenant', () => {
@@ -333,5 +339,48 @@ describe('webhook route — smb_message_echoes (coexistência: mensagem enviada 
     const res = await POST(req)
 
     expect(res.status).toBe(200)
+  })
+})
+
+describe('webhook route — alerta quando a mensagem recebida não é salva (F08)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.META_APP_SECRET
+    resolveTenantMock.mockResolvedValue('tenant_1')
+    isTenantBlockedMock.mockResolvedValue(false)
+    settingsGetMock.mockResolvedValue(null)
+    workflowVersionsOrderMock.mockResolvedValue({ data: [], error: null })
+    notifyOpsAlertMock.mockResolvedValue(undefined)
+  })
+
+  const inbound = () =>
+    new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [{
+          changes: [{
+            field: 'messages',
+            value: {
+              metadata: { phone_number_id: 'pn_1' },
+              contacts: [{ profile: { name: 'Maria' }, wa_id: '5511999999999' }],
+              messages: [{ from: '5511999999999', id: 'wamid.in1', timestamp: '1700000000', type: 'text', text: { body: 'oi' } }],
+            },
+          }],
+        }],
+      }),
+    })
+
+  it('falha ao gravar no inbox: alerta inbox_save_failed e ainda responde 200 para a Meta', async () => {
+    vi.mocked(handleInboundMessage).mockRejectedValueOnce(new Error('db fora'))
+    const res = await POST(inbound())
+    expect(res.status).toBe(200)
+    expect(notifyOpsAlertMock).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant_1', type: 'inbox_save_failed' }))
+  })
+
+  it('gravou normalmente: nenhum alerta', async () => {
+    vi.mocked(handleInboundMessage).mockResolvedValueOnce({ conversationId: 'c', messageId: 'm', triggeredAI: false })
+    await POST(inbound())
+    expect(notifyOpsAlertMock).not.toHaveBeenCalled()
   })
 })

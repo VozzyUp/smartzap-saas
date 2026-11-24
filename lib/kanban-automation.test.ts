@@ -98,6 +98,39 @@ vi.mock('@/lib/whatsapp-send', () => ({
   sendWhatsAppMessage: (...a: any[]) => sendWhatsAppMessageMock(...a),
 }))
 
+const suppressionsFn = vi.fn()
+vi.mock('@/lib/phone-suppressions', () => ({
+  getActiveSuppressionsByPhone: (...a: any[]) => suppressionsFn(...a),
+}))
+const isTenantBlockedFn = vi.fn()
+vi.mock('@/lib/trial', () => ({ isTenantBlocked: (...a: any[]) => isTenantBlockedFn(...a) }))
+const getOrCreateConversationFn = vi.fn()
+const createInboxMessageFn = vi.fn()
+vi.mock('@/lib/inbox/inbox-db', () => ({
+  inboxDb: {
+    getOrCreateConversation: (...a: any[]) => getOrCreateConversationFn(...a),
+    createMessage: (...a: any[]) => createInboxMessageFn(...a),
+  },
+}))
+const notifyOpsAlertFn = vi.fn()
+vi.mock('@/lib/ops-alert', () => ({ notifyOpsAlert: (...a: any[]) => notifyOpsAlertFn(...a) }))
+const templateMapFn = vi.fn()
+const saveTemplatesFn = vi.fn()
+vi.mock('@/lib/kanban-followup-config', () => ({
+  getFollowupTemplateMap: (...a: any[]) => templateMapFn(...a),
+  saveStageFollowupTemplates: (...a: any[]) => saveTemplatesFn(...a),
+}))
+const prepareTemplateFn = vi.fn()
+vi.mock('@/lib/kanban-followup-send', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/kanban-followup-send')>('@/lib/kanban-followup-send')
+  return { ...actual, prepareFollowupTemplate: (...a: any[]) => prepareTemplateFn(...a) }
+})
+vi.mock('@/lib/redis', () => ({ redis: null }))
+beforeEach(() => {
+  templateMapFn.mockResolvedValue({})
+})
+
+import { __resetFollowupState } from '@/lib/kanban-followup-state'
 import {
   triggerAutomationEvent,
   detectQuoteKeyword,
@@ -327,7 +360,35 @@ describe('listFollowupRules / saveFollowupRules', () => {
 
     const rules = await listFollowupRules('tenant_1', 'stage_1')
 
-    expect(rules).toEqual([{ id: 'r1', dayOffset: 1, templateText: 'Oi', position: 0 }])
+    expect(rules).toEqual([{ id: 'r1', dayOffset: 1, templateText: 'Oi', position: 0, template: null }])
+  })
+
+  it('listFollowupRules devolve o modelo associado (settings) pelo índice da regra', async () => {
+    templateMapFn.mockResolvedValueOnce({
+      stage_1: [{ templateName: 'marcoo_teste_lembrete', language: 'pt_BR', bodyParams: ['{{nome}}', 'https://x.test'], alwaysSend: true }],
+    })
+    followupRulesSelectFn.mockReturnValueOnce({
+      data: [{ id: 'r1', day_offset: 1, template_text: 'Oi', position: 0 }],
+      error: null,
+    })
+    const rules = await listFollowupRules('tenant_1', 'stage_1')
+    expect(rules[0].template).toEqual({
+      templateName: 'marcoo_teste_lembrete',
+      language: 'pt_BR',
+      bodyParams: ['{{nome}}', 'https://x.test'],
+      alwaysSend: true,
+    })
+  })
+
+  it('saveFollowupRules grava as associações de modelo do estágio', async () => {
+    followupRulesDeleteFn.mockReturnValueOnce({ data: null, error: null })
+    followupRulesInsertFn.mockReturnValueOnce({ data: null, error: null })
+    const template = { templateName: 'm', language: 'pt_BR' }
+    await saveFollowupRules('tenant_1', 'stage_1', [
+      { dayOffset: 3, templateText: 'a', position: 0, template },
+      { dayOffset: 5, templateText: 'b', position: 1 },
+    ])
+    expect(saveTemplatesFn).toHaveBeenCalledWith('tenant_1', 'stage_1', [template, null])
   })
 
   it('saveFollowupRules apaga as regras antigas e insere a lista nova em ordem', async () => {
@@ -429,6 +490,21 @@ describe('recordInboundActivity', () => {
 describe('runFollowupSweep', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetFollowupState()
+    suppressionsFn.mockResolvedValue(new Map())
+    isTenantBlockedFn.mockResolvedValue(false)
+    templateMapFn.mockResolvedValue({})
+    getOrCreateConversationFn.mockResolvedValue({ id: 'conv_1' })
+    createInboxMessageFn.mockResolvedValue({})
+    prepareTemplateFn.mockResolvedValue({
+      ok: true,
+      templateName: 'marcoo_estetica_segundo_contato',
+      language: 'pt_BR',
+      bodyParams: ['Maria'],
+      renderedText: 'Oi Maria, tudo bem?',
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   const baseCard = {
@@ -438,105 +514,194 @@ describe('runFollowupSweep', () => {
     stage_id: 'stage_1',
     contact_id: 'contact_1',
     moved_at: '2026-07-17T10:00:00.000Z',
-    last_inbound_at: null,
+    last_inbound_at: null as string | null,
     next_followup_index: 0,
   }
-
-  it('dispara o follow-up quando dentro da janela e do prazo, e incrementa o índice', async () => {
-    const now = new Date('2026-07-20T10:00:00') // segunda, 10h — dentro da janela default
-
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: [baseCard], error: null }) // candidates
-    followupRulesSelectFn
-      .mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'Oi {{nome}}, tudo bem?' }], error: null })
-    automationSettingsSelectFn.mockReturnValueOnce({
-      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: null },
-      error: null,
+  const withTemplate = (over: Record<string, unknown> = {}) =>
+    templateMapFn.mockResolvedValue({
+      stage_1: [{ templateName: 'marcoo_estetica_segundo_contato', language: 'pt_BR', alwaysSend: true, ...over }],
     })
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: 'card_1' }], error: null }) // contactCards p/ dedup
-    automationLogInsertFn.mockReturnValueOnce({ data: [], error: null }) // recentSent (nenhum)
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: { last_inbound_at: null }, error: null }) // revalidação
-    contactsSelectFn.mockReturnValueOnce({ data: { id: 'contact_1', name: 'Maria', phone: '+5511999999999' }, error: null })
+  const settingsOk = { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: null }
+  const now = new Date('2026-07-20T10:00:00') // segunda, 10h — dentro da janela de horário
+
+  /** Enfileira as leituras de uma rodada completa até o envio. */
+  function queueRound(card: any = baseCard, rules: any[] = [{ id: 'rule_1', day_offset: 3, template_text: 'Oi {{nome}}' }], settings: any = settingsOk) {
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [card], error: null })
+    followupRulesSelectFn.mockReturnValueOnce({ data: rules, error: null })
+    automationSettingsSelectFn.mockReturnValueOnce({ data: settings, error: null })
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: card.id }], error: null })
+    automationLogInsertFn.mockReturnValueOnce({ data: [], error: null })
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: { last_inbound_at: card.last_inbound_at }, error: null })
+    contactsSelectFn.mockReturnValueOnce({ data: { id: 'contact_1', name: 'Maria Silva', phone: '+5511999999999' }, error: null })
+  }
+
+  it('fora da janela de 24h COM modelo: envia o modelo, avança o índice e grava no inbox', async () => {
+    withTemplate()
+    queueRound()
     sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'wamid.1' })
 
     await runFollowupSweep(now)
 
     expect(sendWhatsAppMessageMock).toHaveBeenCalledWith('tenant_1', {
       to: '+5511999999999',
-      type: 'text',
-      text: 'Oi Maria, tudo bem?',
+      type: 'template',
+      templateName: 'marcoo_estetica_segundo_contato',
+      templateLanguage: 'pt_BR',
+      templateParams: { body: ['Maria'] },
     })
     expect(kanbanCardsUpdateFn).toHaveBeenCalledWith({ next_followup_index: 1 }, expect.objectContaining({ id: 'card_1' }))
+    expect(getOrCreateConversationFn).toHaveBeenCalledWith('tenant_1', expect.any(String), 'contact_1')
+    expect(createInboxMessageFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: 'tenant_1',
+        conversation_id: 'conv_1',
+        direction: 'outbound',
+        content: 'Oi Maria, tudo bem?',
+        message_type: 'template',
+        whatsapp_message_id: 'wamid.1',
+      })
+    )
+  })
+
+  it('fora da janela de 24h SEM modelo: não envia e registra o motivo uma única vez', async () => {
+    queueRound()
+    await runFollowupSweep(now)
+    queueRound()
+    await runFollowupSweep(new Date(now.getTime() + 3600_000))
+
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledTimes(1)
+    expect(console.warn).toHaveBeenCalledWith(
+      '[Kanban] Follow-up não enviado:',
+      expect.objectContaining({ reason: 'outside_24h_window_no_template' })
+    )
+  })
+
+  it('modelo com problema (não aprovado): não envia', async () => {
+    withTemplate()
+    prepareTemplateFn.mockResolvedValue({ ok: false, reason: 'template_not_approved' })
+    queueRound()
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('telefone suprimido (qualquer source): não envia', async () => {
+    withTemplate()
+    suppressionsFn.mockResolvedValue(new Map([['+5511999999999', { source: 'auto_failure_policy' }]]))
+    queueRound()
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('erro ao consultar supressão: não envia (falha segura)', async () => {
+    withTemplate()
+    suppressionsFn.mockRejectedValue(new Error('db'))
+    queueRound()
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('tenant bloqueado (trial/suspensão): não processa', async () => {
+    withTemplate()
+    isTenantBlockedFn.mockResolvedValue(true)
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [baseCard], error: null })
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('falha de envio: conta tentativas, não avança o índice, e desiste na 3ª com alerta', async () => {
+    withTemplate()
+    sendWhatsAppMessageMock.mockResolvedValue({ success: false, error: 'janela fechada' })
+
+    for (let i = 0; i < 2; i++) {
+      queueRound()
+      await runFollowupSweep(now)
+    }
+    expect(kanbanCardsUpdateFn).not.toHaveBeenCalled()
+    expect(notifyOpsAlertFn).not.toHaveBeenCalled()
+
+    queueRound()
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).toHaveBeenCalledTimes(3)
+    expect(kanbanCardsUpdateFn).toHaveBeenCalledWith({ next_followup_index: 1 }, expect.objectContaining({ id: 'card_1' }))
+    expect(notifyOpsAlertFn).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant_1', type: 'followup_gave_up' }))
+  })
+
+  it('prazo conta da ENTRADA na fase: inbound antigo não antecipa a regra', async () => {
+    withTemplate()
+    // entrou na fase há 1 dia; último inbound há 10 dias; regra de 3 dias => ainda não vence
+    const card = { ...baseCard, moved_at: '2026-07-19T10:00:00.000Z', last_inbound_at: '2026-07-10T10:00:00.000Z' }
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [card], error: null })
+    followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'r', day_offset: 3, template_text: 'x' }], error: null })
+    automationSettingsSelectFn.mockReturnValueOnce({ data: settingsOk, error: null })
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('prazo vencido a partir da entrada na fase (3 dias): dispara', async () => {
+    withTemplate()
+    const card = { ...baseCard, moved_at: '2026-07-17T09:00:00.000Z' }
+    queueRound(card)
+    sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'w' })
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uma vez por entrada na fase: regra já usada (índice 1 com 1 regra) não repete a cada hora', async () => {
+    withTemplate()
+    const card = { ...baseCard, next_followup_index: 1 }
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [card], error: null })
+    followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'r', day_offset: 3, template_text: 'x' }], error: null })
+    await runFollowupSweep(now)
+    expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('falha ao gravar no inbox não desfaz o envio', async () => {
+    withTemplate()
+    queueRound()
+    sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'w' })
+    getOrCreateConversationFn.mockRejectedValue(new Error('db'))
+    await runFollowupSweep(now)
+    expect(kanbanCardsUpdateFn).toHaveBeenCalledWith({ next_followup_index: 1 }, expect.anything())
   })
 
   it('fora da janela de horário: não envia', async () => {
-    const now = new Date('2026-07-20T03:00:00') // 3h da manhã
-
+    withTemplate()
     kanbanCardsSelectFn.mockReturnValueOnce({ data: [baseCard], error: null })
     followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'Oi' }], error: null })
-    automationSettingsSelectFn.mockReturnValueOnce({
-      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: null },
-      error: null,
-    })
-
-    await runFollowupSweep(now)
-
+    automationSettingsSelectFn.mockReturnValueOnce({ data: settingsOk, error: null })
+    await runFollowupSweep(new Date('2026-07-20T03:00:00'))
     expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
   })
 
   it('cliente respondeu enquanto processava (race): revalidação aborta o envio', async () => {
-    const now = new Date('2026-07-20T10:00:00')
-
+    withTemplate()
     kanbanCardsSelectFn.mockReturnValueOnce({ data: [baseCard], error: null })
     followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'Oi' }], error: null })
-    automationSettingsSelectFn.mockReturnValueOnce({
-      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: null },
-      error: null,
-    })
+    automationSettingsSelectFn.mockReturnValueOnce({ data: settingsOk, error: null })
     kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: 'card_1' }], error: null })
     automationLogInsertFn.mockReturnValueOnce({ data: [], error: null })
-    // Revalidação: last_inbound_at mudou (cliente respondeu nesse meio-tempo)
     kanbanCardsSelectFn.mockReturnValueOnce({ data: { last_inbound_at: '2026-07-20T09:59:00.000Z' }, error: null })
-
     await runFollowupSweep(now)
-
     expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
   })
 
   it('já houve follow-up pro mesmo contato em outro board nas últimas 24h: não duplica', async () => {
-    const now = new Date('2026-07-20T10:00:00')
-
+    withTemplate()
     kanbanCardsSelectFn.mockReturnValueOnce({ data: [baseCard], error: null })
     followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'Oi' }], error: null })
-    automationSettingsSelectFn.mockReturnValueOnce({
-      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: null },
-      error: null,
-    })
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: 'card_1' }, { id: 'card_2' }], error: null }) // 2 boards
-    automationLogInsertFn.mockReturnValueOnce({ data: [{ id: 'log_1' }], error: null }) // já tem envio recente
-
+    automationSettingsSelectFn.mockReturnValueOnce({ data: settingsOk, error: null })
+    kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: 'card_1' }, { id: 'card_2' }], error: null })
+    automationLogInsertFn.mockReturnValueOnce({ data: [{ id: 'log_1' }], error: null })
     await runFollowupSweep(now)
-
     expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
   })
 
-  it('última regra sem resposta + stale_stage_id configurado: move pro estágio frio', async () => {
-    const now = new Date('2026-07-20T10:00:00')
-    const cardOnLastRule = { ...baseCard, next_followup_index: 0 }
-
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: [cardOnLastRule], error: null })
-    followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'Oi' }], error: null }) // só 1 regra
-    automationSettingsSelectFn.mockReturnValueOnce({
-      data: { window_start: '09:00', window_end: '18:00', weekdays_mask: 62, stale_stage_id: 'stage_frio' },
-      error: null,
-    })
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: 'card_1' }], error: null })
-    automationLogInsertFn.mockReturnValueOnce({ data: [], error: null })
-    kanbanCardsSelectFn.mockReturnValueOnce({ data: { last_inbound_at: null }, error: null })
-    contactsSelectFn.mockReturnValueOnce({ data: { id: 'contact_1', name: 'Maria', phone: '+5511999999999' }, error: null })
+  it('última regra + stale_stage_id configurado: move pro estágio frio', async () => {
+    withTemplate()
+    queueRound(baseCard, undefined, { ...settingsOk, stale_stage_id: 'stage_frio' })
     sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'wamid.1' })
-
     await runFollowupSweep(now)
-
     expect(moveCardMock).toHaveBeenCalledWith('tenant_1', 'card_1', { stageId: 'stage_frio', position: 0 })
   })
 })

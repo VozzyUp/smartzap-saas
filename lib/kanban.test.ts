@@ -334,6 +334,33 @@ describe('kanban', () => {
     ])
   })
 
+  it('syncStageTag deixa no máximo UMA tag funil/<quadro>: (remove resíduo de nome antigo de fase)', async () => {
+    contactsSelectFn.mockReturnValueOnce({
+      data: { tags: ['funil/Vendas: Concluído', 'funil/Vendas: Em teste', 'funil/Outro: Novo', 'vip'] },
+      error: null,
+    })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await syncStageTag('t1', 'ct1', 'Vendas', 'Em teste', 'Link enviado')
+
+    expect(contactsUpdateFn).toHaveBeenCalledWith(
+      { tags: ['funil/Outro: Novo', 'vip', 'funil/Vendas: Link enviado'] },
+      expect.objectContaining({ tenant_id: 't1', id: 'ct1' })
+    )
+  })
+
+  it('syncStageTag ao criar cartão também limpa resíduo do mesmo quadro', async () => {
+    contactsSelectFn.mockReturnValueOnce({ data: { tags: ['funil/Vendas: Concluído'] }, error: null })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await syncStageTag('t1', 'ct1', 'Vendas', null, 'Novo')
+
+    expect(contactsUpdateFn).toHaveBeenCalledWith(
+      { tags: ['funil/Vendas: Novo'] },
+      expect.objectContaining({ tenant_id: 't1', id: 'ct1' })
+    )
+  })
+
   it('syncStageTag é best-effort: não lança quando a leitura do contato falha', async () => {
     contactsSelectFn.mockReturnValueOnce({ data: null, error: new Error('db down') })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})

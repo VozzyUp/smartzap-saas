@@ -2,7 +2,7 @@
  * Chat Agent - Tool-based RAG (Vercel AI SDK pattern)
  *
  * Agente de chat que processa conversas do inbox usando IA.
- * Suporta Google Gemini e OpenAI diretamente com chave do usuário.
+ * Suporta Google Gemini, OpenAI e Anthropic (Claude) diretamente com chave do usuário.
  *
  * Usa RAG próprio com Supabase pgvector seguindo o padrão recomendado pela Vercel:
  * - O LLM recebe uma tool `searchKnowledgeBase` e DECIDE quando usá-la
@@ -19,6 +19,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
+import { buildLlmCallSettings, resolveAnthropicModelId } from '@/lib/ai/anthropic-support'
 import { buildFunnelPromptSection, type FunnelContext } from '@/lib/ai/funnel-classifier'
 import type { AIAgent, InboxConversation, InboxMessage } from '@/types'
 
@@ -338,6 +339,7 @@ export async function processChatAgent(
   const { generateText, tool, stepCountIs } = await import('ai')
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
   const { createOpenAI } = await import('@ai-sdk/openai')
+  const { createAnthropic } = await import('@ai-sdk/anthropic')
   const { withDevTools } = await import('@/lib/ai/devtools')
   const {
     findRelevantContent,
@@ -379,9 +381,9 @@ export async function processChatAgent(
     mem0Enabled = false
   }
 
-  // Obter configuração de provider direto (Google / OpenAI)
+  // Obter configuração de provider direto (Google / OpenAI / Anthropic)
   const directConfig = await getAiDirectConfig(tenantId)
-  if (!directConfig.googleApiKey && !directConfig.openaiApiKey) {
+  if (!directConfig.googleApiKey && !directConfig.openaiApiKey && !directConfig.anthropicApiKey) {
     return {
       success: false,
       error: 'Nenhuma chave de API configurada. Acesse Configurações → IA.',
@@ -389,20 +391,27 @@ export async function processChatAgent(
     }
   }
 
-  const modelId = agent.model || directConfig.model || DEFAULT_MODEL_ID
+  const isAnthropic = directConfig.provider === 'anthropic'
+  // Anthropic: id de outro provedor (ex.: agente antigo com gemini-*) cai em claude-opus-5-5
+  const modelId = isAnthropic
+    ? resolveAnthropicModelId(agent.model || directConfig.model)
+    : agent.model || directConfig.model || DEFAULT_MODEL_ID
 
   // Criar instância do modelo com a chave do usuário
   let rawModel
-  if (directConfig.provider === 'openai' && directConfig.openaiApiKey) {
+  if (isAnthropic && directConfig.anthropicApiKey) {
+    const anthropic = createAnthropic({ apiKey: directConfig.anthropicApiKey })
+    rawModel = anthropic(modelId)
+  } else if (directConfig.provider === 'openai' && directConfig.openaiApiKey) {
     const openai = createOpenAI({ apiKey: directConfig.openaiApiKey })
     rawModel = openai(modelId)
-  } else if (directConfig.googleApiKey) {
+  } else if (!isAnthropic && directConfig.googleApiKey) {
     const google = createGoogleGenerativeAI({ apiKey: directConfig.googleApiKey })
     rawModel = google(modelId)
   } else {
     return {
       success: false,
-      error: `Chave ${directConfig.provider === 'openai' ? 'OpenAI' : 'Google'} não configurada. Acesse Configurações → IA.`,
+      error: `Chave ${isAnthropic ? 'Anthropic' : directConfig.provider === 'openai' ? 'OpenAI' : 'Google'} não configurada. Acesse Configurações → IA.`,
       latencyMs: Date.now() - startTime,
     }
   }
@@ -682,6 +691,12 @@ ${buildFunnelPromptSection(config.funnel)}`
     // Issue #8992: toolChoice: 'required' não é garantia, LLM pode retornar texto puro
     // Solução: retry com prompt reforçado até MAX_TOOL_RETRIES tentativas
     // =======================================================================
+    // Parâmetros dependentes do provedor (Anthropic: sem temperature, toolChoice auto, piso de tokens)
+    const callSettings = buildLlmCallSettings(directConfig.provider, {
+      temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
+      maxOutputTokens: agent.max_tokens ?? DEFAULT_MAX_TOKENS,
+      forceTool: true,
+    })
     let retryCount = 0
     let lastLLMText = '' // Guarda texto que o LLM gerou sem chamar tool
 
@@ -694,7 +709,7 @@ ${buildFunnelPromptSection(config.funnel)}`
       }, AI_TIMEOUT_MS)
 
       // Se é retry, adiciona instrução reforçada ao system prompt
-      let currentSystemPrompt = systemPrompt
+      let currentSystemPrompt = systemPrompt + callSettings.systemSuffix
       // Usa cópia do array base para não acumular contexto de retries entre iterações
       let currentMessages = [...aiMessages]
       if (retryCount > 0) {
@@ -723,11 +738,14 @@ ${buildFunnelPromptSection(config.funnel)}`
           system: currentSystemPrompt,
           messages: currentMessages,
           tools,
-          toolChoice: 'required', // FORÇA o LLM a chamar uma tool (respond)
+          // Google/OpenAI: 'required' FORÇA o LLM a chamar uma tool (respond).
+          // Anthropic: 'auto' (forçar tool dá 400 em Opus/Sonnet; o prompt exige a tool respond)
+          toolChoice: callSettings.toolChoice,
           // Para quando respond for chamado OU após 3 steps (o que vier primeiro)
           stopWhen: (event) => stopCondition() || stepCountIs(3)(event),
-          temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
-          maxOutputTokens: agent.max_tokens ?? DEFAULT_MAX_TOKENS,
+          // temperature só vai para Google/OpenAI (Anthropic: valor não padrão => 400)
+          ...(callSettings.temperature !== undefined ? { temperature: callSettings.temperature } : {}),
+          maxOutputTokens: callSettings.maxOutputTokens,
           abortSignal: abortController.signal,
         })
 
@@ -771,6 +789,9 @@ ${buildFunnelPromptSection(config.funnel)}`
         if (!hasResponded && result.text) {
           lastLLMText = result.text
           console.log(`[chat-agent] ⚠️ LLM retornou texto sem chamar respond: "${result.text.slice(0, 100)}..."`)
+          // Anthropic (toolChoice auto): texto direto é uma resposta válida — usa como mensagem
+          // (fallback abaixo: sem handoff, optOut ou fase de funil) sem gastar retries.
+          if (isAnthropic) break
         }
 
       } catch (genError) {

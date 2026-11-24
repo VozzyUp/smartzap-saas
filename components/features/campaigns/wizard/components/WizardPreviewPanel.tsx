@@ -110,7 +110,7 @@ export const WizardPreviewPanel: React.FC<WizardPreviewPanelProps> = ({
         {/* Phone Mockup - Universal Component */}
         <div className={`flex-1 min-h-0 flex items-center justify-center ${step === 2 && isOverLimit ? 'opacity-30 pointer-events-none' : ''}`}>
           <WhatsAppPhonePreview
-            className="w-[320px] h-155 max-h-full"
+            className="w-[320px] max-w-full h-155 max-h-full"
             components={previewTemplate?.components}
             fallbackContent={previewTemplate?.content}
             headerMediaPreviewUrl={previewTemplate?.headerMediaPreviewUrl || null}

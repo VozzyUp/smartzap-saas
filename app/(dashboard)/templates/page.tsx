@@ -430,7 +430,7 @@ export default function TemplatesPage() {
               <input
                 type="text"
                 placeholder="Buscar projetos..."
-                className="bg-transparent border-none outline-none text-sm w-full text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]"
+                className="bg-transparent border-none outline-none text-base sm:text-sm w-full text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] max-sm:min-h-11"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -502,7 +502,7 @@ export default function TemplatesPage() {
                                       if (e.key === 'Escape') handleCancelEdit(e as unknown as React.MouseEvent);
                                     }}
                                     autoFocus
-                                    className="px-2 py-1 rounded-lg border border-emerald-500 bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                    className="px-2 py-1 rounded-lg border border-emerald-500 bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 max-sm:min-h-11"
                                   />
                                   <button
                                     onClick={handleSaveEdit}

@@ -6,7 +6,7 @@ export default function DashboardLoading() {
             {/* Header Skeleton */}
             <div className="flex flex-col gap-2">
                 <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-4 w-96" />
+                <Skeleton className="h-4 w-96 max-w-full" />
             </div>
 
             {/* Stats Grid Skeleton */}

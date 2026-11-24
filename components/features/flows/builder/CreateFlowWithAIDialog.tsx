@@ -35,7 +35,7 @@ export function CreateFlowWithAIDialog(props: {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-xl bg-zinc-950 border-white/10 text-white">
+      <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-xl bg-zinc-950 border-white/10 text-white">
         <DialogHeader>
           <DialogTitle>Criar MiniApp com IA</DialogTitle>
           <DialogDescription className="text-zinc-400">

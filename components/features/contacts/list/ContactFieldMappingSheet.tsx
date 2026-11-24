@@ -51,7 +51,7 @@ export const ContactFieldMappingSheet: React.FC<ContactFieldMappingSheetProps> =
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetContent className="w-100 sm:w-135 border-l border-white/10 bg-zinc-950 p-0 flex flex-col z-60">
+      <SheetContent className="w-full sm:w-135 border-l border-white/10 bg-zinc-950 p-0 flex flex-col z-60">
         <SheetHeader className="p-6 border-b border-white/10">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-white flex items-center gap-2">

@@ -121,7 +121,7 @@ export function TestContactPanel({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Meu Teste"
-                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-[var(--ds-status-warning)]/50 focus:border-[var(--ds-status-warning)]/50 outline-none text-sm text-[var(--ds-text-primary)] transition-all"
+                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-[var(--ds-status-warning)]/50 focus:border-[var(--ds-status-warning)]/50 outline-none text-base sm:text-sm text-[var(--ds-text-primary)] transition-all max-sm:min-h-11"
               />
             </div>
             <div>
@@ -133,7 +133,7 @@ export function TestContactPanel({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Ex: +5511999999999"
-                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-[var(--ds-status-warning)]/50 focus:border-[var(--ds-status-warning)]/50 outline-none text-sm text-[var(--ds-text-primary)] font-mono transition-all"
+                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-[var(--ds-status-warning)]/50 focus:border-[var(--ds-status-warning)]/50 outline-none text-base sm:text-sm text-[var(--ds-text-primary)] font-mono transition-all max-sm:min-h-11"
               />
             </div>
           </div>

@@ -7,7 +7,7 @@ export default function CampaignsLoading() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <Skeleton className="h-8 w-48 mb-2" />
-                    <Skeleton className="h-4 w-96" />
+                    <Skeleton className="h-4 w-96 max-w-full" />
                 </div>
                 <Skeleton className="h-10 w-40 rounded-xl" />
             </div>

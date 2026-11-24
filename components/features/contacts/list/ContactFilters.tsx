@@ -50,7 +50,7 @@ export const ContactFilters: React.FC<ContactFiltersProps> = ({
         <input
           type="text"
           placeholder="Buscar por nome ou telefone..."
-          className="bg-transparent border-none outline-none text-base sm:text-sm w-full min-w-0 text-[var(--ds-text-primary)] placeholder-[var(--ds-text-muted)]"
+          className="bg-transparent border-none outline-none text-base sm:text-sm w-full min-w-0 text-[var(--ds-text-primary)] placeholder-[var(--ds-text-muted)] max-sm:min-h-11"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
           aria-label="Buscar contatos por nome ou telefone"

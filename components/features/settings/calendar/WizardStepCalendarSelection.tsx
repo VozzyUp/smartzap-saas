@@ -67,7 +67,7 @@ export function WizardStepCalendarSelection({
               value={calendarListQuery}
               onChange={(e) => setCalendarListQuery(e.target.value)}
               placeholder="Filtrar calendarios..."
-              className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+              className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-base sm:text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
             />
           </div>
 
@@ -76,7 +76,7 @@ export function WizardStepCalendarSelection({
             <select
               value={calendarSelectionId}
               onChange={(e) => setCalendarSelectionId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+              className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-base sm:text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
             >
               <option value="">Selecione...</option>
               {filteredCalendarList.map((item) => (

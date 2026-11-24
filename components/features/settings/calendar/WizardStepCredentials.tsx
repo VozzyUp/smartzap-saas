@@ -64,7 +64,7 @@ export function WizardStepCredentials({
             value={calendarClientIdDraft}
             onChange={(e) => setCalendarClientIdDraft(e.target.value)}
             placeholder="xxxxx.apps.googleusercontent.com"
-            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-base sm:text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
           />
           {!calendarClientIdValid && calendarClientIdDraft && (
             <p className="mt-1 text-xs text-[var(--ds-status-warning-text)]">Deve terminar com .apps.googleusercontent.com</p>
@@ -78,7 +78,7 @@ export function WizardStepCredentials({
             value={calendarClientSecretDraft}
             onChange={(e) => setCalendarClientSecretDraft(e.target.value)}
             placeholder="GOCSPX-..."
-            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] text-[var(--ds-text-primary)] text-base sm:text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
           />
         </div>
 

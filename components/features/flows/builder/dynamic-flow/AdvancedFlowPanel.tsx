@@ -81,7 +81,7 @@ export function AdvancedFlowPanel({
   }
 
   return (
-    <div data-advanced-panel-root="true" className="fixed inset-y-0 right-0 w-[600px] bg-zinc-900 border-l border-white/10 shadow-2xl z-50 overflow-auto">
+    <div data-advanced-panel-root="true" className="fixed inset-y-0 right-0 w-full sm:w-[600px] max-w-full bg-zinc-900 border-l border-white/10 shadow-2xl z-50 overflow-auto">
       <div className="sticky top-0 bg-zinc-900 border-b border-white/10 p-4 flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold text-white">Modo Avançado</div>

@@ -112,7 +112,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
           <input
             type="text"
             placeholder="Buscar templates..."
-            className="bg-transparent border-none outline-none text-base sm:text-sm w-full min-w-0 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]"
+            className="bg-transparent border-none outline-none text-base sm:text-sm w-full min-w-0 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] max-sm:min-h-11"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Buscar templates por nome ou conteudo"

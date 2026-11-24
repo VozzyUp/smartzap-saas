@@ -90,7 +90,7 @@ export const AIGeneratorModal = ({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex: Sou dono de uma pizzaria delivery e preciso de templates para confirmar pedidos, avisar sobre tempo de entrega, e informar quando o motoboy saiu..."
-                className="w-full h-32 px-4 py-3 bg-zinc-950/40 rounded-xl border border-white/10 focus:border-emerald-500/50 focus:outline-none resize-none text-sm text-white placeholder:text-gray-600"
+                className="w-full h-32 px-4 py-3 bg-zinc-950/40 rounded-xl border border-white/10 focus:border-emerald-500/50 focus:outline-none resize-none text-base sm:text-sm text-white placeholder:text-gray-600"
               />
               <p className="text-xs text-zinc-500 mt-1">
                 Mínimo 10 caracteres. Quanto mais detalhes, melhor a IA entende seu negócio.

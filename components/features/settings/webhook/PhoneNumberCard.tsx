@@ -177,7 +177,7 @@ export function PhoneNumberCard({
                 value={overrideUrl}
                 onChange={(e) => setOverrideUrl(e.target.value)}
                 placeholder="https://seu-sistema.com/webhook"
-                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm font-mono text-[var(--ds-text-primary)] focus:ring-2 focus:ring-[var(--ds-status-info)]/50 focus:border-[var(--ds-status-info)]/50 outline-none"
+                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm font-mono text-[var(--ds-text-primary)] focus:ring-2 focus:ring-[var(--ds-status-info)]/50 focus:border-[var(--ds-status-info)]/50 outline-none max-sm:min-h-11"
               />
             </div>
             <div className="flex justify-end gap-2">

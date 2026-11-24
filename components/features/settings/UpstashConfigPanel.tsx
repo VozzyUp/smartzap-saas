@@ -152,7 +152,7 @@ export function UpstashConfigPanel({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none text-sm text-[var(--ds-text-primary)] transition-all"
+                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none text-base sm:text-sm text-[var(--ds-text-primary)] transition-all max-sm:min-h-11"
               />
             </div>
             <div>
@@ -164,7 +164,7 @@ export function UpstashConfigPanel({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="••••••••••••••••"
-                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none text-sm text-[var(--ds-text-primary)] font-mono transition-all"
+                className="w-full px-4 py-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none text-base sm:text-sm text-[var(--ds-text-primary)] font-mono transition-all max-sm:min-h-11"
               />
             </div>
           </div>

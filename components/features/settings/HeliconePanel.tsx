@@ -274,7 +274,7 @@ export function HeliconePanel() {
                   placeholder="sk-helicone-..."
                   value={apiKeyDraft}
                   onChange={(e) => setApiKeyDraft(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-2 pr-10 text-sm text-[var(--ds-text-primary)] font-mono outline-none transition focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/10"
+                  className="w-full rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-2 pr-10 text-base sm:text-sm text-[var(--ds-text-primary)] font-mono outline-none transition focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/10 max-sm:min-h-11"
                 />
                 <button
                   type="button"

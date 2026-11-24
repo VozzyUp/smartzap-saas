@@ -40,7 +40,7 @@ export function NewStageColumn({ boardId }: { boardId: string }) {
 
   if (isAdding) {
     return (
-      <div className="flex h-fit w-72 shrink-0 flex-col gap-2 rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-surface)] p-3">
+      <div className="flex h-fit w-[85%] shrink-0 snap-start flex-col sm:w-72 gap-2 rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-surface)] p-3">
         <Input
           autoFocus
           placeholder="Nome da fase"
@@ -77,7 +77,7 @@ export function NewStageColumn({ boardId }: { boardId: string }) {
     <button
       type="button"
       onClick={() => setIsAdding(true)}
-      className="flex h-14 w-72 shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--ds-border-subtle)] text-sm font-medium text-[var(--ds-text-muted)] hover:border-[var(--ds-border-default)] hover:text-[var(--ds-text-primary)] transition-colors"
+      className="flex h-14 w-[85%] shrink-0 snap-start items-center sm:w-72 justify-center gap-2 rounded-2xl border border-dashed border-[var(--ds-border-subtle)] text-sm font-medium text-[var(--ds-text-muted)] hover:border-[var(--ds-border-default)] hover:text-[var(--ds-text-primary)] transition-colors"
     >
       <Plus size={16} aria-hidden="true" />
       Nova fase

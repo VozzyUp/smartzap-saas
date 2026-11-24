@@ -11,7 +11,7 @@ export interface ContactStatsProps {
 
 export const ContactStats: React.FC<ContactStatsProps> = ({ stats }) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+    <div className="grid grid-cols-3 gap-2 sm:gap-6">
       <StatCard
         title="Total de Contatos"
         value={(stats?.total ?? 0).toLocaleString()}

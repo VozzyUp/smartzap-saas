@@ -136,7 +136,7 @@ function WebhookStatusRow({ phoneNumberId }: { phoneNumberId: string }) {
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw size={12} className="mr-1" aria-hidden="true" />
             Verificar
@@ -178,21 +178,21 @@ export function NumberCard({
         number.is_active ? 'border-primary-500/40' : 'border-zinc-800'
       }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
+        <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
           <div className="w-10 h-10 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
             <Smartphone className="w-5 h-5 text-primary-400" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <h4 className="font-medium text-zinc-100 truncate">{label}</h4>
-            <p className="text-xs text-zinc-500 truncate">
+            <p className="text-xs text-zinc-500 break-all sm:truncate">
               ID: {number.phone_number_id}
               {number.business_account_id ? ` · Conta: ${number.business_account_id}` : ''}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end sm:shrink-0">
           {number.is_active && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
               <CheckCircle2 size={10} aria-hidden="true" />
@@ -207,7 +207,7 @@ export function NumberCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mt-4">
+      <div className="flex flex-wrap items-center gap-2 mt-4">
         {!number.is_active && (
           <Button variant="outline" size="sm" onClick={onActivate} disabled={isActivating}>
             {isActivating ? (
@@ -321,7 +321,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+    <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 sm:p-6">
       <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
         <Plus size={18} className="text-primary-400" aria-hidden="true" />
         Adicionar Número
@@ -335,7 +335,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             placeholder="Ex: 123456789012345"
             value={phoneNumberId}
             onChange={(e) => { setPhoneNumberId(e.target.value); invalidateTest() }}
-            className="max-w-sm"
+            className="sm:max-w-sm"
           />
         </div>
 
@@ -346,7 +346,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             placeholder="Ex: 987654321098765"
             value={businessAccountId}
             onChange={(e) => { setBusinessAccountId(e.target.value); invalidateTest() }}
-            className="max-w-sm"
+            className="sm:max-w-sm"
           />
         </div>
 
@@ -358,7 +358,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             placeholder="Token permanente da Meta"
             value={accessToken}
             onChange={(e) => { setAccessToken(e.target.value); invalidateTest() }}
-            className="max-w-sm"
+            className="sm:max-w-sm"
           />
         </div>
 
@@ -369,7 +369,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
             placeholder="Ex: Vendas SP"
             value={displayLabel}
             onChange={(e) => setDisplayLabel(e.target.value)}
-            className="max-w-sm"
+            className="sm:max-w-sm"
           />
         </div>
 
@@ -424,7 +424,7 @@ export function AddNumberForm({ onSuccess }: { onSuccess: () => void }) {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 [&>button]:w-full sm:[&>button]:w-auto">
           <Button
             type="button"
             variant="outline"
@@ -529,19 +529,19 @@ export default function NumerosPage() {
   return (
     <Page>
       <PageHeader>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between w-full min-w-0">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center shrink-0">
               <Smartphone className="w-6 h-6 text-primary-400" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <PageTitle>Números de WhatsApp</PageTitle>
               <PageDescription>
                 Gerencie os números conectados e escolha qual está ativo para novos envios
               </PageDescription>
             </div>
           </div>
-          <Button size="sm" onClick={() => setShowAddForm(!showAddForm)}>
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowAddForm(!showAddForm)}>
             <Plus size={14} className="mr-1.5" aria-hidden="true" />
             Adicionar número
           </Button>

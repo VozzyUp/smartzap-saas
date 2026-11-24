@@ -173,7 +173,7 @@ export const BulkGenerationModal: React.FC<BulkGenerationModalProps> = ({
                                         <select
                                             value={quantity}
                                             onChange={(e) => setQuantity(Number(e.target.value))}
-                                            className="w-full bg-zinc-950/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/5 transition-colors"
+                                            className="w-full bg-zinc-950/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/5 transition-colors max-sm:min-h-11"
                                         >
                                             {[3, 5, 10, 15, 20].map(n => (
                                                 <option key={n} value={n}>{n} variações</option>
@@ -190,7 +190,7 @@ export const BulkGenerationModal: React.FC<BulkGenerationModalProps> = ({
                                         <select
                                             value={language}
                                             onChange={(e) => setLanguage(e.target.value as any)}
-                                            className="w-full bg-zinc-950/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/5 transition-colors"
+                                            className="w-full bg-zinc-950/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 appearance-none cursor-pointer hover:bg-white/5 transition-colors max-sm:min-h-11"
                                         >
                                             <option value="pt_BR">🇧🇷 Português (BR)</option>
                                             <option value="en_US">🇺🇸 English (US)</option>

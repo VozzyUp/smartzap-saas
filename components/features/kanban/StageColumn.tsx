@@ -95,7 +95,7 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
   }
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-surface)]">
+    <div className="flex h-full w-[85%] shrink-0 snap-start flex-col sm:w-72 rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-surface)]">
       <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-[var(--ds-border-subtle)]">
         <div className="flex min-w-0 items-center gap-2">
           <Popover>
@@ -114,7 +114,7 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
                     key={color}
                     type="button"
                     onClick={() => colorMutation.mutate(color)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-black/10"
+                    className="flex h-6 w-6 max-sm:h-11 max-sm:w-11 items-center justify-center rounded-full ring-1 ring-black/10"
                     style={{ backgroundColor: color }}
                     aria-label={`Usar cor ${color}`}
                   >
@@ -138,7 +138,7 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
                   setNameDraft(stage.name)
                 }
               }}
-              className="h-7 text-sm"
+              className="h-7 text-base sm:text-sm"
             />
           ) : (
             <span className="truncate text-sm font-medium text-[var(--ds-text-primary)]">{stage.name}</span>
@@ -153,7 +153,7 @@ export function StageColumn({ boardId, stage }: StageColumnProps) {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="shrink-0 rounded-md p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)]"
+              className="inline-flex shrink-0 max-sm:min-h-11 max-sm:min-w-11 items-center justify-center rounded-md p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)]"
               aria-label="Opções da fase"
             >
               <MoreVertical size={16} aria-hidden="true" />

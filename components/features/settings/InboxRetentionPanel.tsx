@@ -105,7 +105,7 @@ export function InboxRetentionPanel() {
                 max={365}
                 value={retentionDays}
                 onChange={(e) => setRetentionDays(parseInt(e.target.value, 10) || 7)}
-                className="w-20 rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-2 text-sm text-[var(--ds-text-primary)] focus:border-[var(--ds-status-warning)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--ds-status-warning)]/50"
+                className="w-20 rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-2 text-base sm:text-sm text-[var(--ds-text-primary)] focus:border-[var(--ds-status-warning)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--ds-status-warning)]/50 max-sm:min-h-11"
               />
               <span className="text-sm text-[var(--ds-text-secondary)]">dias</span>
             </div>

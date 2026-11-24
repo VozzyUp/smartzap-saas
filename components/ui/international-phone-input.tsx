@@ -213,7 +213,7 @@ export function InternationalPhoneInput({
             align="start"
             sideOffset={8}
             className={cn(
-              "w-[340px] border-zinc-700 bg-zinc-900 p-0 text-zinc-100 shadow-xl",
+              "w-[min(340px,calc(100vw-2rem))] border-zinc-700 bg-zinc-900 p-0 text-zinc-100 shadow-xl",
               "rounded-xl"
             )}
           >

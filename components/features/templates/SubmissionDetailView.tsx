@@ -50,12 +50,12 @@ export function SubmissionDetailView({
     };
 
     return (
-        <div className="flex h-[calc(100vh-140px)] gap-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:h-[calc(100vh-140px)]">
             {/* --- LEFT SIDE: LIST & STATS --- */}
             <div className="flex-1 flex flex-col min-w-0">
 
                 {/* Header Actions */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={onBack}
@@ -102,7 +102,7 @@ export function SubmissionDetailView({
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                     <StatCard
                         label="Utility (Sucesso)"
                         count={groups.UTILITY.length}
@@ -193,7 +193,7 @@ export function SubmissionDetailView({
             </div>
 
             {/* --- RIGHT SIDE: PREVIEW --- */}
-            <div className="w-[380px] shrink-0 border-l border-white/10 pl-6 flex flex-col justify-center">
+            <div className="w-full lg:w-[380px] shrink-0 lg:border-l border-white/10 lg:pl-6 flex flex-col justify-center">
                 {selectedTemplate ? (
                     <div className="sticky top-6">
                         <h3 className="text-sm font-medium text-zinc-400 mb-4 text-center">

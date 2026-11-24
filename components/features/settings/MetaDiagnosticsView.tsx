@@ -366,7 +366,7 @@ export function MetaDiagnosticsView(props: MetaDiagnosticsViewProps) {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             <div className="bg-zinc-900/40 border border-white/10 rounded-lg p-2">
               <div className="text-gray-500">OK</div>
               <div className="mt-1 text-white font-medium">{props.counts.pass}</div>

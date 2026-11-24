@@ -47,7 +47,7 @@ export function WebhookUrlConfig({
           <select
             value={selectedDomainUrl}
             onChange={(e) => onDomainChange(e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] focus:ring-2 focus:ring-[var(--ds-status-info)]/50 focus:border-[var(--ds-status-info)]/50 outline-none"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] focus:ring-2 focus:ring-[var(--ds-status-info)]/50 focus:border-[var(--ds-status-info)]/50 outline-none max-sm:min-h-11"
           >
             <option value="">Automático (recomendado)</option>
             {availableDomains.map((domain) => (

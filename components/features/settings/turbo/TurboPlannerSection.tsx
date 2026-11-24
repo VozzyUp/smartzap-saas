@@ -171,7 +171,7 @@ export function TurboPlannerSection({
                 type="number"
                 value={plannerMessages}
                 onChange={(e) => setPlannerMessages(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-sm text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-base sm:text-sm text-white font-mono max-sm:min-h-11"
                 min={1}
                 max={100000}
               />
@@ -182,7 +182,7 @@ export function TurboPlannerSection({
                 type="number"
                 value={plannerSeconds}
                 onChange={(e) => setPlannerSeconds(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-sm text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-base sm:text-sm text-white font-mono max-sm:min-h-11"
                 min={1}
                 max={3600}
               />
@@ -196,7 +196,7 @@ export function TurboPlannerSection({
                   setPlannerLatencyTouched(true);
                   setPlannerLatencyMs(Number(e.target.value));
                 }}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-sm text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-base sm:text-sm text-white font-mono max-sm:min-h-11"
                 min={50}
                 max={5000}
               />
@@ -214,7 +214,7 @@ export function TurboPlannerSection({
                 type="number"
                 value={plannerHeadroom}
                 onChange={(e) => setPlannerHeadroom(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-sm text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-base sm:text-sm text-white font-mono max-sm:min-h-11"
                 min={1.0}
                 max={2.5}
                 step={0.05}

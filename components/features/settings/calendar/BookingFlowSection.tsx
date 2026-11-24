@@ -122,7 +122,7 @@ export function BookingFlowSection() {
           <select
             value={selectedFlowId}
             onChange={(e) => setSelectedFlowId(e.target.value)}
-            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-sm text-[var(--ds-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            className="w-full h-10 px-3 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-base sm:text-sm text-[var(--ds-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50 max-sm:min-h-11"
           >
             <option value="">Selecione um Flow...</option>
             {publishedFlows.map((flow) => (

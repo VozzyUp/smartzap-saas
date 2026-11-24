@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * - Glow emerald no hover para variante default (primary)
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex items-center justify-center max-sm:min-h-11 whitespace-nowrap rounded-lg text-sm font-medium outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -63,9 +63,9 @@ const buttonVariants = cva(
         default: "h-9 px-4 py-2",
         sm: "h-8 rounded-lg px-3 text-xs",
         lg: "h-10 rounded-lg px-8",
-        icon: "h-9 w-9",
-        "icon-sm": "h-8 w-8",
-        "icon-lg": "h-10 w-10",
+        icon: "h-9 w-9 max-sm:min-w-11",
+        "icon-sm": "h-8 w-8 max-sm:min-w-11",
+        "icon-lg": "h-10 w-10 max-sm:min-w-11",
       },
     },
     defaultVariants: {

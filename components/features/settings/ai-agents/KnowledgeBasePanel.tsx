@@ -179,9 +179,9 @@ export function KnowledgeBasePanel({
     <TooltipProvider>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
                 <FileText className="h-5 w-5 text-blue-400" />
               </div>
               <div>
@@ -193,6 +193,7 @@ export function KnowledgeBasePanel({
             </div>
             <Button
               size="sm"
+              className="w-full sm:w-auto"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
             >

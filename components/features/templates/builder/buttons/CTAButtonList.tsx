@@ -177,7 +177,7 @@ export function CTAButtonList({
               <button
                 type="button"
                 onClick={() => handleRemove(idx)}
-                className="absolute right-4 top-4 h-9 w-9 inline-flex items-center justify-center rounded-md text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]"
+                className="absolute right-4 top-4 h-9 w-9 max-sm:min-h-11 max-sm:min-w-11 inline-flex items-center justify-center rounded-md text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)]"
                 title="Remover"
                 aria-label="Remover"
               >

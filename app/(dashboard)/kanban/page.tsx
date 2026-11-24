@@ -107,11 +107,11 @@ export default function KanbanPage() {
   return (
     <Page className="flex h-full flex-col space-y-4">
       <PageHeader>
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/10">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-500/10">
             <KanbanSquare className="h-6 w-6 text-primary-400" aria-hidden="true" />
           </div>
-          <div>
+          <div className="min-w-0">
             <PageTitle>Funil</PageTitle>
             <PageDescription>Organize seus clientes por fase e acompanhe o progresso</PageDescription>
           </div>

@@ -206,7 +206,7 @@ interface UpdateBannerProps {
 
 function UpdateBanner({ onUpdate, onDismiss }: UpdateBannerProps) {
   return (
-    <div className="fixed top-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 animate-in slide-in-from-top-4 duration-300">
+    <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 animate-in slide-in-from-top-4 duration-300">
       <div className="bg-emerald-950/90 border border-emerald-800 rounded-xl p-4 shadow-2xl backdrop-blur-sm">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">

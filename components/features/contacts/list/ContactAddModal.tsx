@@ -43,7 +43,7 @@ export const ContactAddModal: React.FC<ContactAddModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in duration-200">
+      <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in duration-200 max-sm:max-h-[85dvh] max-sm:overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-white">Novo Contato</h2>
           <button
@@ -58,7 +58,7 @@ export const ContactAddModal: React.FC<ContactAddModalProps> = ({
           <div>
             <label className="block text-sm text-gray-400 mb-1">Nome Completo</label>
             <input
-              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors max-sm:min-h-11"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Ex: João Silva"
@@ -67,7 +67,7 @@ export const ContactAddModal: React.FC<ContactAddModalProps> = ({
           <div>
             <label className="block text-sm text-gray-400 mb-1">Telefone (WhatsApp) *</label>
             <input
-              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors max-sm:min-h-11"
               placeholder="+55 11 99999-9999"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -76,7 +76,7 @@ export const ContactAddModal: React.FC<ContactAddModalProps> = ({
           <div>
             <label className="block text-sm text-gray-400 mb-1">E-mail</label>
             <input
-              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors max-sm:min-h-11"
               placeholder="email@exemplo.com"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -85,7 +85,7 @@ export const ContactAddModal: React.FC<ContactAddModalProps> = ({
           <div>
             <label className="block text-sm text-gray-400 mb-1">Tags (separadas por vírgula)</label>
             <input
-              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+              className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors max-sm:min-h-11"
               placeholder="VIP, Lead, Cliente"
               value={form.tags}
               onChange={(e) => setForm({ ...form, tags: e.target.value })}
@@ -136,7 +136,7 @@ const CustomFieldInput: React.FC<CustomFieldInputProps> = ({ field, value, onCha
       <label className="block text-sm text-gray-400 mb-1">{field.label}</label>
       {field.type === 'select' ? (
         <select
-          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors appearance-none"
+          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors appearance-none max-sm:min-h-11"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
@@ -148,7 +148,7 @@ const CustomFieldInput: React.FC<CustomFieldInputProps> = ({ field, value, onCha
       ) : (
         <input
           type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors max-sm:min-h-11"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.type === 'date' ? '' : `Digite ${field.label}...`}

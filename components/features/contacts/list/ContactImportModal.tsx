@@ -515,7 +515,7 @@ const ImportStepMapping: React.FC<ImportStepMappingProps> = ({
             </label>
             <input
               type="text"
-              className="bg-zinc-900 border border-primary-500/30 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-primary-500"
+              className="bg-zinc-900 border border-primary-500/30 rounded-lg px-3 py-2 text-white text-base sm:text-sm outline-none focus:border-primary-500 max-sm:min-h-11"
               placeholder="Ex: Importado, Lead"
               value={columnMapping.defaultTag || ''}
               onChange={(e) => onColumnMappingChange({ ...columnMapping, defaultTag: e.target.value })}
@@ -573,7 +573,7 @@ const ImportStepMapping: React.FC<ImportStepMappingProps> = ({
           <h3 className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-3">
             Resumo da importação
           </h3>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             <div className="bg-zinc-900/50 rounded-lg p-2.5 border border-white/10 text-center">
               <div className="flex items-center justify-center gap-1 mb-0.5">
                 <Users size={12} className="text-gray-400" />
@@ -777,7 +777,7 @@ const ImportStepSuccess: React.FC<ImportStepSuccessProps> = ({ result, invalidRo
     <h3 className="text-2xl font-bold text-white mb-2">Importação Concluída!</h3>
     <p className="text-gray-400 mb-8">Seus contatos foram processados com sucesso.</p>
 
-    <div className="grid grid-cols-4 gap-3 max-w-lg mx-auto mb-8">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg mx-auto mb-8">
       <Container variant="surface" padding="md">
         <p className="text-2xl font-bold text-white">{result.total}</p>
         <p className="text-xs text-gray-500">Linhas</p>

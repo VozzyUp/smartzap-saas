@@ -44,8 +44,8 @@ export default function AIAgentsSettingsPage() {
   return (
     <Page>
       <PageHeader>
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary-500/10">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 rounded-lg bg-primary-500/10 shrink-0">
             <Bot className="h-6 w-6 text-primary-400" />
           </div>
           <div>
@@ -79,17 +79,19 @@ export default function AIAgentsSettingsPage() {
         {/* Agent details section (Knowledge Base + Test) */}
         {controller.agents.length > 0 && (
           <Tabs defaultValue="knowledge" className="w-full">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div className="min-w-0 max-w-full overflow-x-auto">
               <TabsList>
                 <TabsTrigger value="knowledge">Base de Conhecimento</TabsTrigger>
                 <TabsTrigger value="test">Testar Agente</TabsTrigger>
               </TabsList>
+              </div>
 
               {/* Agent selector */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-zinc-400">Agente:</label>
+              <div className="flex items-center gap-2 min-w-0">
+                <label className="text-sm text-zinc-400 shrink-0">Agente:</label>
                 <select
-                  className="px-3 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[200px]"
+                  className="px-3 py-2 min-h-11 sm:min-h-0 flex-1 min-w-0 sm:flex-none rounded-md bg-zinc-800 border border-zinc-700 text-base sm:text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-primary-500 sm:min-w-[200px]"
                   value={selectedAgent?.id ?? ''}
                   onChange={(e) => {
                     const agent = controller.agents.find((a) => a.id === e.target.value)

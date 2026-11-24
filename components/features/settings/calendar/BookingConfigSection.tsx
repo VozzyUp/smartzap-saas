@@ -43,7 +43,7 @@ export function BookingConfigSection({
             <select
               value={calendarDraft.timezone}
               onChange={(e) => updateCalendarDraft({ timezone: e.target.value })}
-              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             >
               <option value="America/Sao_Paulo">America/Sao_Paulo</option>
               <option value="America/Fortaleza">America/Fortaleza</option>
@@ -66,7 +66,7 @@ export function BookingConfigSection({
             <select
               value={calendarDraft.slotDurationMinutes}
               onChange={(e) => updateCalendarDraft({ slotDurationMinutes: Number(e.target.value) })}
-              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             >
               <option value={15}>15 minutos</option>
               <option value={30}>30 minutos</option>
@@ -89,7 +89,7 @@ export function BookingConfigSection({
             <select
               value={calendarDraft.slotBufferMinutes}
               onChange={(e) => updateCalendarDraft({ slotBufferMinutes: Number(e.target.value) })}
-              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="mt-2 w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             >
               <option value={0}>Sem buffer</option>
               <option value={5}>5 minutos</option>
@@ -115,7 +115,7 @@ export function BookingConfigSection({
             <select
               value={calendarDraft.minAdvanceHours ?? 4}
               onChange={(e) => updateCalendarDraft({ minAdvanceHours: Number(e.target.value) })}
-              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             >
               {MIN_ADVANCE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -138,7 +138,7 @@ export function BookingConfigSection({
             <select
               value={calendarDraft.maxAdvanceDays ?? 14}
               onChange={(e) => updateCalendarDraft({ maxAdvanceDays: Number(e.target.value) })}
-              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             >
               {MAX_ADVANCE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -198,7 +198,7 @@ export function BookingConfigSection({
               value={calendarDraft.externalWebhookUrl || ''}
               onChange={(e) => updateCalendarDraft({ externalWebhookUrl: e.target.value })}
               placeholder="https://seu-webhook.com/flow"
-              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)]"
+              className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] max-sm:min-h-11"
             />
           ) : (
             <div className="text-sm text-[var(--ds-text-primary)] font-mono">

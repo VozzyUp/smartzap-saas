@@ -83,10 +83,10 @@ export function BoardSelector({ boards, selectedBoard, onSelect, onCreated, onDe
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center gap-2 sm:w-auto">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="min-w-[180px] justify-between">
+          <Button variant="outline" className="min-w-0 flex-1 justify-between sm:min-w-[180px] sm:flex-none">
             <span className="truncate">{selectedBoard?.name ?? 'Selecionar funil'}</span>
             <ChevronDown size={14} className="ml-2 shrink-0" aria-hidden="true" />
           </Button>
@@ -111,7 +111,7 @@ export function BoardSelector({ boards, selectedBoard, onSelect, onCreated, onDe
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded-md p-2 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)]"
+              className="inline-flex shrink-0 max-sm:min-h-11 max-sm:min-w-11 items-center justify-center rounded-md p-2 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)]"
               aria-label="Opções do funil"
             >
               <MoreVertical size={16} aria-hidden="true" />

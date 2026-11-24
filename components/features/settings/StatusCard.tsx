@@ -43,12 +43,12 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
       <Container
         variant="glass"
         padding="lg"
-        className={`flex items-start gap-6 transition-all duration-500 ${settings.isConnected ? 'border-[var(--ds-status-success)]/30' : 'border-[var(--ds-status-error)]/30'}`}
+        className={`flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0 transition-all duration-500 ${settings.isConnected ? 'border-[var(--ds-status-success)]/30' : 'border-[var(--ds-status-error)]/30'}`}
       >
-      <div className={`p-4 rounded-2xl border ${settings.isConnected ? 'bg-[var(--ds-status-success-bg)] text-[var(--ds-status-success-text)] border-[var(--ds-status-success)]/20' : 'bg-[var(--ds-status-error-bg)] text-[var(--ds-status-error-text)] border-[var(--ds-status-error)]/20'}`}>
+      <div className={`p-3 sm:p-4 shrink-0 rounded-2xl border ${settings.isConnected ? 'bg-[var(--ds-status-success-bg)] text-[var(--ds-status-success-text)] border-[var(--ds-status-success)]/20' : 'bg-[var(--ds-status-error-bg)] text-[var(--ds-status-error-text)] border-[var(--ds-status-error)]/20'}`}>
         {settings.isConnected ? <Wifi size={32} /> : <AlertTriangle size={32} />}
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0 w-full">
         <h3 className="text-xl font-bold text-[var(--ds-text-primary)]">
           {settings.isConnected ? 'Sistema Online' : 'Desconectado'}
         </h3>
@@ -56,13 +56,13 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
         <div className={`text-sm mt-3 space-y-1.5 ${settings.isConnected ? 'text-[var(--ds-text-secondary)]' : 'text-[var(--ds-status-error-text)]'}`}>
           {settings.isConnected ? (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
                 <span className="text-[var(--ds-text-muted)]">Conta Comercial:</span>
-                <span className="font-mono text-[var(--ds-status-success-text)] bg-[var(--ds-status-success-bg)] px-1.5 py-0.5 rounded">{settings.businessAccountId}</span>
+                <span className="font-mono break-all text-[var(--ds-status-success-text)] bg-[var(--ds-status-success-bg)] px-1.5 py-0.5 rounded">{settings.businessAccountId}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
                 <span className="text-[var(--ds-text-muted)]">Telefone Verificado:</span>
-                <span className="font-mono text-[var(--ds-status-success-text)] bg-[var(--ds-status-success-bg)] px-1.5 py-0.5 rounded">
+                <span className="font-mono break-all text-[var(--ds-status-success-text)] bg-[var(--ds-status-success-bg)] px-1.5 py-0.5 rounded">
                   {settings.displayPhoneNumber || settings.phoneNumberId}
                 </span>
               </div>
@@ -84,7 +84,7 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
               <div className="flex flex-col gap-2">
                 <button
                   onClick={onRefreshLimits}
-                  className="h-10 px-3 bg-[var(--ds-status-error-bg)] rounded-lg text-xs font-medium text-[var(--ds-status-error-text)] border border-[var(--ds-status-error)]/20 flex items-center gap-1.5 hover:bg-[var(--ds-status-error)]/20 transition-colors focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
+                  className="min-h-11 sm:min-h-0 h-auto sm:h-10 py-2 sm:py-0 text-left px-3 bg-[var(--ds-status-error-bg)] rounded-lg text-xs font-medium text-[var(--ds-status-error-text)] border border-[var(--ds-status-error)]/20 flex items-center gap-1.5 hover:bg-[var(--ds-status-error)]/20 transition-colors focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
                   aria-label="Tentar buscar limites da conta novamente"
                 >
                   <AlertCircle size={12} aria-hidden="true" />
@@ -121,13 +121,13 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
       </div>
 
       {settings.isConnected && (
-        <div className="flex flex-col gap-3 min-w-35">
+        <div className="flex flex-col gap-3 w-full sm:w-auto sm:min-w-35">
           {/* Fase 4: a gestão de números (conectar/trocar/remover) vive em
               /settings/numeros — este card é só status. Editar/Desconectar
               daqui eram o caminho legado de 1 número e causavam inconsistência. */}
           <Link
             href="/settings/numeros"
-            className="group relative overflow-hidden rounded-xl h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 bg-[var(--ds-bg-hover)] text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] hover:border-[var(--ds-border-strong)] focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+            className="group relative overflow-hidden rounded-xl min-h-11 sm:min-h-0 h-11 sm:h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 bg-[var(--ds-bg-hover)] text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] hover:border-[var(--ds-border-strong)] focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
             aria-label="Gerenciar números de WhatsApp"
           >
             <Smartphone size={14} className="group-hover:scale-110 transition-transform duration-300" aria-hidden="true" />

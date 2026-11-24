@@ -40,7 +40,7 @@ export function ThemeToggle({ compact = false, className = '' }: ThemeToggleProp
         onClick={mounted ? toggleTheme : undefined}
         disabled={!mounted}
         suppressHydrationWarning
-        className={`flex h-9 w-9 items-center justify-center rounded-lg border border-transparent
+        className={`flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-transparent
           text-[var(--ds-text-secondary)] transition-colors
           hover:border-[var(--ds-border-default)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text-primary)]
           disabled:opacity-50 disabled:cursor-wait

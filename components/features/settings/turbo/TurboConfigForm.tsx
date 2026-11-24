@@ -135,7 +135,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.sendConcurrency}
             onChange={(e) => updateField('sendConcurrency', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={50}
           />
@@ -148,7 +148,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.batchSize}
             onChange={(e) => updateField('batchSize', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={200}
           />
@@ -161,7 +161,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.startMps}
             onChange={(e) => updateField('startMps', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={1000}
           />
@@ -173,7 +173,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.maxMps}
             onChange={(e) => updateField('maxMps', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={1000}
           />
@@ -185,7 +185,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.minMps}
             onChange={(e) => updateField('minMps', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={1000}
           />
@@ -197,7 +197,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.cooldownSec}
             onChange={(e) => updateField('cooldownSec', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={600}
           />
@@ -209,7 +209,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.minIncreaseGapSec}
             onChange={(e) => updateField('minIncreaseGapSec', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={1}
             max={600}
           />
@@ -221,7 +221,7 @@ export function TurboConfigForm({
             type="number"
             value={draft.sendFloorDelayMs}
             onChange={(e) => updateField('sendFloorDelayMs', Number(e.target.value))}
-            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono"
+            className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono max-sm:min-h-11"
             min={0}
             max={5000}
           />

@@ -164,7 +164,7 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-end gap-2">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
         <Button size="sm" variant="outline" onClick={() => setIsAutomationOpen(true)}>
           <Zap size={14} className="mr-1.5" aria-hidden="true" />
           Automação
@@ -182,7 +182,7 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-4">
+        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:snap-none">
           {stages.map((stage) => (
             <StageColumn key={stage.id} boardId={boardId} stage={stage} />
           ))}

@@ -134,7 +134,7 @@ export function WorkflowExecutionPanel({
                 max={10}
                 value={draft.retryCount}
                 onChange={(e) => setDraft((s) => ({ ...s, retryCount: Number(e.target.value) }))}
-                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
               />
               <p className="text-[11px] text-[var(--ds-text-muted)] mt-1">Quantas tentativas extras por etapa.</p>
             </div>
@@ -146,7 +146,7 @@ export function WorkflowExecutionPanel({
                 max={60000}
                 value={draft.retryDelayMs}
                 onChange={(e) => setDraft((s) => ({ ...s, retryDelayMs: Number(e.target.value) }))}
-                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
               />
               <p className="text-[11px] text-[var(--ds-text-muted)] mt-1">Delay base antes de reintentar (backoff exponencial).</p>
             </div>
@@ -158,7 +158,7 @@ export function WorkflowExecutionPanel({
                 max={60000}
                 value={draft.timeoutMs}
                 onChange={(e) => setDraft((s) => ({ ...s, timeoutMs: Number(e.target.value) }))}
-                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none"
+                className="w-full px-3 py-2 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-lg text-base sm:text-sm text-[var(--ds-text-primary)] font-mono focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none max-sm:min-h-11"
               />
               <p className="text-[11px] text-[var(--ds-text-muted)] mt-1">Tempo máximo por etapa antes de falhar.</p>
             </div>

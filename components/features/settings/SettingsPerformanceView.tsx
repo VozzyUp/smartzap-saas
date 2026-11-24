@@ -263,7 +263,7 @@ export function SettingsPerformanceView(props: {
           <select
             value={props.selectedConfigHash || ''}
             onChange={(e) => props.setSelectedConfigHash(e.target.value || null)}
-            className="px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-xs text-white font-mono"
+            className="px-3 py-2 bg-zinc-900/50 border border-white/10 rounded-lg text-base sm:text-xs text-white font-mono max-sm:min-h-11"
           >
             <option value="">(todas)</option>
             {(props.configs || []).map((c) => (

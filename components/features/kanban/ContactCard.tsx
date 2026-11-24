@@ -72,7 +72,7 @@ export function ContactCard({ card, overlay }: ContactCardProps) {
                   e.stopPropagation()
                   setIsAutomationOpen(true)
                 }}
-                className="rounded-md p-1 text-[var(--ds-text-muted)] opacity-0 hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)] group-hover:opacity-100"
+                className="inline-flex max-sm:min-h-11 max-sm:min-w-11 items-center justify-center rounded-md p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-[var(--ds-text-primary)] sm:opacity-0 sm:group-hover:opacity-100"
                 aria-label="Ver histórico de automação"
               >
                 {card.automation_paused ? (

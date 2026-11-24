@@ -90,7 +90,7 @@ export function CampaignDailyLimitCard() {
             disabled={loading}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="h-10 w-40 px-3 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-sm text-[var(--ds-text-primary)] focus:outline-none focus:border-[var(--ds-border-focus,var(--ds-border-default))]"
+            className="h-10 w-40 px-3 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-base sm:text-sm text-[var(--ds-text-primary)] focus:outline-none focus:border-[var(--ds-border-focus,var(--ds-border-default))] max-sm:min-h-11"
           />
         </div>
         <button

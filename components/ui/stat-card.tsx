@@ -132,14 +132,14 @@ function StatCard({
         variant="glass"
         padding="lg"
         hover={interactive}
-        className={cn(interactive && "cursor-pointer", className)}
+        className={cn("max-sm:p-3", interactive && "cursor-pointer", className)}
         {...props}
       >
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4 min-w-0">
           {/* Icon */}
           <div
             className={cn(
-              "relative p-3 rounded-xl border border-[var(--ds-border-default)]",
+              "relative p-2 sm:p-3 rounded-xl border border-[var(--ds-border-default)]",
               styles.iconBg
             )}
           >
@@ -148,9 +148,9 @@ function StatCard({
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className="text-stat-label truncate">{title}</p>
+            <p className="text-stat-label truncate max-sm:whitespace-normal max-sm:text-[11px] max-sm:leading-tight">{title}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-stat">{value}</span>
+              <span className="text-stat max-sm:!text-xl">{value}</span>
               {trend && <TrendIndicator {...trend} />}
             </div>
           </div>

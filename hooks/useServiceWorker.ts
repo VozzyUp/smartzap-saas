@@ -220,9 +220,17 @@ export function useServiceWorker(): UseServiceWorkerReturn {
     }
 
     try {
-      // VAPID public key - em produção, isso viria do backend
-      // Por enquanto, usamos uma placeholder (será configurada depois)
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      // Chave pública VAPID: a embutida no build, ou a do servidor em tempo de execução
+      // (a imagem é montada sem as chaves, então normalmente vem do servidor).
+      let vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidPublicKey) {
+        try {
+          const res = await fetch('/api/push/vapid-public-key')
+          if (res.ok) vapidPublicKey = ((await res.json()) as { publicKey?: string }).publicKey
+        } catch {
+          // segue para o aviso abaixo
+        }
+      }
 
       if (!vapidPublicKey) {
         console.warn('[Push] VAPID public key não configurada')

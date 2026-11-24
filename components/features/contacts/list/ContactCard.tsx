@@ -51,7 +51,7 @@ export const ContactCard = React.memo(
               e.stopPropagation()
               onToggleSelect(contact.id)
             }}
-            className={`mt-0.5 w-5 h-5 shrink-0 rounded border flex items-center justify-center transition-colors ${
+            className={`relative mt-0.5 w-5 h-5 shrink-0 rounded border flex items-center justify-center transition-colors max-sm:after:absolute max-sm:after:-inset-3 max-sm:after:content-[''] ${
               isSelected
                 ? 'bg-primary-500 border-primary-500'
                 : 'border-[var(--ds-border-default)] hover:border-[var(--ds-border-strong)]'

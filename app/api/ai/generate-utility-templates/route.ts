@@ -6,7 +6,7 @@ import { judgeTemplates } from '@/lib/ai/services/ai-judge'
 import { buildUtilityGenerationPrompt } from '@/lib/ai/prompts/utility-generator'
 import { getTenantContext } from '@/lib/tenant-context'
 import { settingsDb } from '@/lib/supabase-db'
-import { getAiPromptsConfig, isAiRouteEnabled } from '@/lib/ai/ai-center-config'
+import { getAiDirectConfig, getAiPromptsConfig, isAiRouteEnabled } from '@/lib/ai/ai-center-config'
 
 // ============================================================================
 // PROMPT ÚNICO - Gera templates UTILITY
@@ -380,6 +380,11 @@ export async function POST(request: NextRequest) {
       apiKey = storedKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY || null
     } catch {
       apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || null
+    }
+    // Conta com Anthropic como provedor ativo: o juiz usa a chave dela (a chave Google pode não existir)
+    if (!apiKey) {
+      const direct = await getAiDirectConfig(ctx.tenantId).catch(() => null)
+      if (direct?.provider === 'anthropic' && direct.anthropicApiKey) apiKey = direct.anthropicApiKey
     }
 
     // Detectar URLs no prompt

@@ -16,11 +16,14 @@ vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: (o: any) => createAnthrop
 vi.mock('@ai-sdk/google', () => ({ createGoogleGenerativeAI: (o: any) => createGoogleMock(o) }))
 vi.mock('@ai-sdk/openai', () => ({ createOpenAI: (o: any) => createOpenAIMock(o) }))
 vi.mock('@/lib/ai/devtools', () => ({ withDevTools: async (m: any) => m }))
+const findRelevantContentMock = vi.fn(async (_p: any) => [{ content: 'Horário: 9h às 18h' }])
+const hasIndexedContentMock = vi.fn(async (_id: string) => false)
 vi.mock('@/lib/ai/rag-store', () => ({
-  findRelevantContent: vi.fn(),
-  hasIndexedContent: vi.fn(async () => false),
-  buildEmbeddingConfigFromAgent: vi.fn(),
-  buildRerankConfigFromAgent: vi.fn(),
+  findRelevantContent: (p: any) => findRelevantContentMock(p),
+  hasIndexedContent: (id: string) => hasIndexedContentMock(id),
+  // mesma forma do real: embeddings vêm do agente, independentes do provedor do chat
+  buildEmbeddingConfigFromAgent: (a: any) => ({ provider: a.embedding_provider || 'google', model: 'gemini-embedding-001', dimensions: 768 }),
+  buildRerankConfigFromAgent: async () => null,
 }))
 vi.mock('@/lib/ai/mem0-client', () => ({
   isMem0EnabledAsync: async () => false,
@@ -51,6 +54,7 @@ function respondViaTool(params: any) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  hasIndexedContentMock.mockResolvedValue(false)
   directConfig = { provider: 'anthropic', model: 'claude-opus-5-5', anthropicApiKey: 'sk-ant-test' }
 })
 
@@ -144,6 +148,23 @@ describe('processChatAgent — provedor anthropic', () => {
     directConfig = { provider: 'anthropic', model: 'claude-opus-5-5' }
     const r = await run()
     expect(r.error).toContain('Nenhuma chave')
+  })
+})
+
+describe('processChatAgent — base de conhecimento (RAG) com Anthropic', () => {
+  it('a tool searchKnowledgeBase continua disponível e busca com o embedding do AGENTE (não com a Anthropic)', async () => {
+    hasIndexedContentMock.mockResolvedValue(true)
+    generateTextMock.mockImplementation(async (opts: any) => {
+      expect(Object.keys(opts.tools)).toContain('searchKnowledgeBase')
+      const found = await opts.tools.searchKnowledgeBase.execute({ query: 'horário?' })
+      expect(found.found).toBe(true)
+      await opts.tools.respond.execute({ message: 'Das 9h às 18h', sentiment: 'neutral', confidence: 0.9, shouldHandoff: false })
+      return { text: '', steps: [], finishReason: 'tool-calls' }
+    })
+    const r = await run()
+    expect(r.success).toBe(true)
+    expect(findRelevantContentMock.mock.calls[0][0].embeddingConfig.provider).toBe('google')
+    expect(r.response?.sources?.length).toBe(1)
   })
 })
 

@@ -332,13 +332,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Handle AI SDK specific errors
     if (error instanceof Error) {
-      if (error.message.includes('API key')) {
+      if (error.message.includes('API key') || (error as { statusCode?: number }).statusCode === 401) {
         return NextResponse.json(
           { error: 'Erro de autenticação com o modelo de IA' },
           { status: 401 }
         )
       }
-      if (error.message.includes('rate limit') || error.message.includes('429')) {
+      if (error.message.includes('rate limit') || error.message.includes('429') || (error as { statusCode?: number }).statusCode === 429) {
         return NextResponse.json(
           { error: 'Limite de requisições excedido. Tente novamente em alguns segundos.' },
           { status: 429 }

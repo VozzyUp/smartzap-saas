@@ -574,7 +574,7 @@ export default function ConversaPage() {
   const canSendMessages = canReply && status === 'human_active'
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--geist-background)]">
+    <div className="flex flex-col h-screen pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-[var(--geist-background)]">
       <Header
         conversation={conversation}
         onBack={handleBack}

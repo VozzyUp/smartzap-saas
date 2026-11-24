@@ -405,7 +405,7 @@ export default function AtendimentoPage() {
 
   return (
     <div
-      className="flex flex-col h-screen"
+      className="flex flex-col h-screen pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
       style={{ backgroundColor: 'var(--geist-background)' }}
     >
       {/* Header */}

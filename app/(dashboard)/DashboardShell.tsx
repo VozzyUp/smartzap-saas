@@ -589,9 +589,17 @@ export function DashboardShell({
 
                         <ThemeToggle compact />
                         <DevModeToggle />
-                        <button className="relative group inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md p-1" aria-label="Notificações (1 nova)">
+                        <button
+                            type="button"
+                            onClick={() => router.push('/inbox')}
+                            className="relative group inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md p-1"
+                            aria-label={unreadCount > 0 ? `${unreadCount} conversa(s) com mensagens não lidas. Abrir a caixa de entrada` : 'Abrir a caixa de entrada'}
+                            title={unreadCount > 0 ? `${unreadCount} conversa(s) não lida(s)` : 'Nenhuma conversa não lida'}
+                        >
                             <Bell size={20} className="text-[var(--ds-text-muted)] group-hover:text-[var(--ds-text-primary)] transition-colors cursor-pointer" aria-hidden="true" />
-                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-[var(--ds-bg-base)]" aria-label="1 notificação não lida"></span>
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-[var(--ds-bg-base)]" aria-hidden="true"></span>
+                            )}
                         </button>
                     </div>
                 </header>

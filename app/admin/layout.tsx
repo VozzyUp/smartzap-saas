@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!ctx?.isPlatformAdmin) redirect('/')
 
   return (
-    <div className="min-h-screen bg-[var(--ds-bg-base)] text-[var(--ds-text-primary)]">
+    <div className="min-h-screen pt-[env(safe-area-inset-top)] bg-[var(--ds-bg-base)] text-[var(--ds-text-primary)]">
       <AdminNav />
       <main className="max-w-6xl mx-auto p-6">{children}</main>
     </div>

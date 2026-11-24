@@ -125,8 +125,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     <div>
       {!hideHeader && (
         <>
-          <h1 className="text-3xl font-bold text-[var(--ds-text-primary)] tracking-tight mb-2">Configurações</h1>
-          <p className="text-[var(--ds-text-secondary)] mb-10">Gerencie sua conexão com a WhatsApp Business API</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--ds-text-primary)] tracking-tight mb-2">Configurações</h1>
+          <p className="text-[var(--ds-text-secondary)] mb-6 sm:mb-10">Gerencie sua conexão com a WhatsApp Business API</p>
         </>
       )}
 
@@ -151,7 +151,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {!settings.isConnected && (
           <div
             ref={credentialsFormRef}
-            className="rounded-2xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+            className="rounded-2xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
           >
             <div className="flex-1">
               <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">
@@ -163,7 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <Link
               href="/settings/numeros"
-              className="inline-flex items-center gap-2 rounded-xl h-10 px-4 text-sm font-medium bg-primary-600 text-white hover:bg-primary-500 transition-colors"
+              className="inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl min-h-11 sm:min-h-0 h-11 sm:h-10 px-4 text-sm font-medium bg-primary-600 text-white hover:bg-primary-500 transition-colors"
             >
               <Smartphone size={14} aria-hidden="true" />
               Ir para Números de WhatsApp

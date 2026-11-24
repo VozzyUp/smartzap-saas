@@ -47,6 +47,7 @@ export interface Template {
   fetchedAt?: string | null;
   headerMediaId?: string | null;
   headerMediaHash?: string | null;
+  headerMediaUpdatedAt?: string | null;
   headerMediaPreviewUrl?: string | null;
   headerMediaPreviewExpiresAt?: string | null;
   components?: TemplateComponent[]; // Full components from Meta API

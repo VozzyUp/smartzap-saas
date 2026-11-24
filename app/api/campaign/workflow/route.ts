@@ -20,6 +20,7 @@ import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { uploadMediaToMeta } from '@/lib/whatsapp/media'
+import { isCachedHeaderMediaIdUsable } from '@/lib/whatsapp/header-media-cache'
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
@@ -743,8 +744,10 @@ const workflowHandler = serve<CampaignWorkflowInput>(
 
                 const cachedId = (active as any)?.headerMediaId as string | null | undefined
                 const cachedHash = (active as any)?.headerMediaHash as string | null | undefined
-                if (cachedId && cachedHash && cachedHash === exampleHash) {
-                  headerMediaIdForBatch = cachedId
+                const cachedUpdatedAt = (active as any)?.headerMediaUpdatedAt as string | null | undefined
+                // Media id da Meta expira em 30 dias: só reaproveita se for recente e do mesmo exemplo.
+                if (isCachedHeaderMediaIdUsable({ id: cachedId, cachedHash, exampleHash, updatedAt: cachedUpdatedAt })) {
+                  headerMediaIdForBatch = cachedId as string
                   return headerMediaIdForBatch
                 }
 
@@ -778,6 +781,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                       header_media_updated_at: new Date().toISOString(),
                       updated_at: new Date().toISOString(),
                     })
+                    .eq('tenant_id', tenantId)
                     .eq('name', templateName)
                 } catch (e) {
                   console.warn('[Workflow] Falha ao persistir header_media_id (best-effort):', e)
@@ -925,6 +929,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                           header_media_preview_updated_at: new Date().toISOString(),
                           updated_at: new Date().toISOString(),
                         })
+                        .eq('tenant_id', tenantId)
                         .eq('name', templateName)
                     } catch {
                       // best-effort
@@ -959,6 +964,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                           header_media_preview_updated_at: new Date().toISOString(),
                           updated_at: new Date().toISOString(),
                         })
+                        .eq('tenant_id', tenantId)
                         .eq('name', templateName)
                     } catch {
                       // best-effort

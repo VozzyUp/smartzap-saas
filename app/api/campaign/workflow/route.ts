@@ -5,6 +5,7 @@ import { serve } from '@upstash/workflow/nextjs'
 import { campaignDb, templateDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { CampaignStatus, ContactStatus } from '@/types'
+import { evaluateHeaderMediaReadiness } from '@/lib/whatsapp/header-media-preflight'
 import { getUserFriendlyMessageForMetaError, normalizeMetaErrorTextForStorage } from '@/lib/whatsapp-errors'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { buildMetaTemplatePayload, renderTemplatePreviewText } from '@/lib/whatsapp/template-payload'
@@ -552,7 +553,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
       )
     }
 
-    let shouldStopWorkflow: 'cancelled' | 'paused' | null = null
+    let shouldStopWorkflow: 'cancelled' | 'paused' | 'failed' | null = null
 
     // Step 1: Check cancellation and mark campaign as SENDING
     // IMPORTANTE: Todo código não-determinístico (DB, fetch, etc) DEVE estar dentro de context.run()
@@ -986,6 +987,8 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             return out
           }
 
+          let headerMediaBlockMessage: string | null = null
+
           // ==============================================
           // PREVENTIVO: Rehost antes de enviar (evita falha
           // assíncrona no webhook mesmo quando o send é aceito)
@@ -1123,6 +1126,19 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                 })
               }
             }
+
+            // Falha visível: modelo exige mídia e não há como obtê-la -> não envia para ninguém.
+            if (headerIsMediaPre) {
+              const currentExample = getTemplateHeaderMediaExampleLink(templateForBatch).example
+              const readiness = evaluateHeaderMediaReadiness({
+                headerFormat: headerInfoPre.format,
+                providedMediaId: templateVarsHeaderMediaId,
+                resolvedMediaId: headerMediaIdForBatch,
+                exampleLink: currentExample,
+                exampleIsMetaWeblink: currentExample ? urlLooksLikeMetaWeblink(String(currentExample)) : false,
+              })
+              if (!readiness.ok) headerMediaBlockMessage = readiness.message
+            }
           } catch (e) {
             // Best-effort: nunca bloquear envio por causa disso.
             await emitWorkflowTrace({
@@ -1136,6 +1152,30 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                 error: e instanceof Error ? e.message : String(e),
               },
             })
+          }
+
+          if (headerMediaBlockMessage) {
+            // Marca a campanha como falha com mensagem clara, ANTES de claimar/enviar qualquer contato.
+            const failNow = new Date().toISOString()
+            const failUpdate: Record<string, unknown> = { status: CampaignStatus.FAILED, completed_at: failNow, updated_at: failNow }
+            const withReason = await supabase
+              .from('campaigns')
+              .update({ ...failUpdate, last_error: headerMediaBlockMessage })
+              .eq('id', campaignId)
+              .eq('tenant_id', tenantId)
+            if (withReason.error) {
+              await supabase.from('campaigns').update(failUpdate).eq('id', campaignId).eq('tenant_id', tenantId)
+            }
+            await emitWorkflowTrace({
+              traceId,
+              campaignId,
+              step,
+              batchIndex,
+              phase: 'header_media_unavailable',
+              ok: false,
+              extra: { message: headerMediaBlockMessage },
+            })
+            return { stop: 'failed' as const }
           }
 
           // Check pause status once per batch (trade-off: no DB hit per contact)
@@ -2414,6 +2454,10 @@ const workflowHandler = serve<CampaignWorkflowInput>(
     }
 
     // Step 3: Mark campaign as completed
+    if (shouldStopWorkflow === 'failed') {
+      console.log(`⛔ Workflow stopped for campaign ${campaignId} (FAILED before sending: header media unavailable).`)
+      return
+    }
     if (shouldStopWorkflow === 'cancelled') {
       console.log(`🛑 Workflow stopped early for campaign ${campaignId} (CANCELLED). Skipping completion step.`)
       return

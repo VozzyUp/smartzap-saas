@@ -19,6 +19,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
+import { buildFunnelPromptSection, type FunnelContext } from '@/lib/ai/funnel-classifier'
 import type { AIAgent, InboxConversation, InboxMessage } from '@/types'
 
 // NOTE: AI dependencies are imported DYNAMICALLY inside processChatAgent
@@ -120,6 +121,8 @@ export interface SupportAgentConfig {
   conversation: InboxConversation
   messages: InboxMessage[]
   contactData?: ContactContext
+  /** Quadro de funil do tenant (lib/ai/funnel-classifier). Ausente = não classificar. */
+  funnel?: FunnelContext | null
 }
 
 export interface SupportAgentResult {
@@ -162,6 +165,14 @@ const baseResponseSchema = z.object({
     .boolean()
     .optional()
     .describe('Se o cliente pediu orçamento/preço nesta mensagem'),
+  optOut: z
+    .boolean()
+    .optional()
+    .describe(
+      'true SOMENTE se o cliente pediu claramente para não receber mais mensagens ou disse claramente que não tem interesse. Na dúvida, false.'
+    ),
+  // Tipagem do campo; quando há quadro de funil, buildResponseSchema troca por enum das fases.
+  funnelStage: z.string().nullable().optional(),
 })
 
 // Exportado só para teste unitário do schema (lib/ai/agents/chat-agent-quote-detection.test.ts)
@@ -188,13 +199,22 @@ const handoffFields = {
 const supportResponseSchema = baseResponseSchema.extend(handoffFields)
 
 /**
- * Gera o schema de resposta baseado na configuração do agente
+ * Gera o schema de resposta baseado na configuração do agente.
+ * `funnelStageNames` (nomes das fases do quadro de funil): vira enum + null
+ * ("não mudar"). Sem `.catch`: evita `default` no JSON Schema (alguns provedores rejeitam).
  */
-function getResponseSchema(handoffEnabled: boolean) {
-  if (handoffEnabled) {
-    return baseResponseSchema.extend(handoffFields)
+export function buildResponseSchema(handoffEnabled: boolean, funnelStageNames?: string[]) {
+  let schema: z.ZodObject<any> = handoffEnabled ? baseResponseSchema.extend(handoffFields) : baseResponseSchema
+  if (funnelStageNames && funnelStageNames.length > 0) {
+    schema = schema.extend({
+      funnelStage: z
+        .enum(funnelStageNames as [string, ...string[]])
+        .nullable()
+        .optional()
+        .describe('Fase do funil em que o lead está DEPOIS desta mensagem; null = não mudar de fase'),
+    })
   }
-  return baseResponseSchema
+  return schema as typeof baseResponseSchema
 }
 
 export type SupportResponse = z.infer<typeof supportResponseSchema>
@@ -437,11 +457,21 @@ export async function processChatAgent(
       systemPrompt += `\n\n## Transferência para Humano\n${agent.handoff_instructions}`
     }
 
+    // Classificação no funil (a IA decide a fase; instrução montada pelo código)
+    if (config.funnel) {
+      systemPrompt += `
+
+${buildFunnelPromptSection(config.funnel)}`
+    }
+
     // Adiciona contexto de memória (Mem0) se disponível
     if (memoryContext.systemPromptAddition) {
       systemPrompt += `\n\n${memoryContext.systemPromptAddition}`
     }
-    const responseSchema = getResponseSchema(handoffEnabled)
+    const responseSchema = buildResponseSchema(
+      handoffEnabled,
+      config.funnel?.stages.map((st) => st.name)
+    )
 
     console.log(`[chat-agent] Handoff enabled: ${handoffEnabled}`)
 

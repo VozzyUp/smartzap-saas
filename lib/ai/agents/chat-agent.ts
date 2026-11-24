@@ -571,6 +571,7 @@ ${buildFunnelPromptSection(config.funnel)}`
 
           // Search
           const relevantContent = await findRelevantContent({
+            tenantId,
             agentId: agent.id,
             query,
             embeddingConfig,

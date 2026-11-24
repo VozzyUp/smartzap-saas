@@ -219,6 +219,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             const embeddingConfig = await withTenantEmbeddingKey(buildEmbeddingConfigFromAgent(agent as AIAgent), tenantId)
 
             const relevantContent = await findRelevantContent({
+              tenantId,
               agentId: id,
               query,
               embeddingConfig,

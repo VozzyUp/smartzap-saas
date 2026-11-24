@@ -310,6 +310,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             const rerankConfig = await buildRerankConfigFromAgent(agent as AIAgent)
 
             const relevantContent = await findRelevantContent({
+              tenantId,
               agentId,
               query,
               embeddingConfig,

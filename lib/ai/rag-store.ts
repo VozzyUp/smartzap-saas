@@ -26,6 +26,8 @@ import type { AIAgent } from '@/types'
 // =============================================================================
 
 export interface IndexDocumentParams {
+  /** Conta dona do agente: ai_embeddings.tenant_id é obrigatório. */
+  tenantId: string
   agentId: string
   fileId: string
   content: string
@@ -41,6 +43,8 @@ export interface IndexDocumentResult {
 }
 
 export interface SearchParams {
+  /** Conta dona do agente: a busca no banco é sempre filtrada por conta. */
+  tenantId: string
   agentId: string
   query: string
   embeddingConfig: EmbeddingConfig
@@ -69,7 +73,7 @@ export interface SearchResult {
 export async function indexDocument(
   params: IndexDocumentParams
 ): Promise<IndexDocumentResult> {
-  const { agentId, fileId, content, embeddingConfig, metadata, chunkingOptions } = params
+  const { tenantId, agentId, fileId, content, embeddingConfig, metadata, chunkingOptions } = params
 
   const supabase = getSupabaseAdmin()
   if (!supabase) {
@@ -91,6 +95,7 @@ export async function indexDocument(
 
     // 3. Prepare rows for insert
     const rows = chunks.map((chunkContent, i) => ({
+      tenant_id: tenantId,
       agent_id: agentId,
       file_id: fileId,
       content: chunkContent,
@@ -209,6 +214,7 @@ export async function findRelevantContent(
     const { data, error } = await supabase.rpc('search_embeddings', {
       query_embedding: toPgVector(queryEmbedding),
       agent_id_filter: agentId,
+      p_tenant_id: params.tenantId,
       expected_dimensions: embeddingConfig.dimensions,
       match_threshold: threshold,
       match_count: searchTopK,

@@ -234,6 +234,7 @@ export async function POST(request: NextRequest) {
 
       // Index document (chunk → embed → store)
       const result = await indexDocument({
+        tenantId: ctx.tenantId,
         agentId: agent_id,
         fileId: file.id,
         content: processedContent,

@@ -24,6 +24,9 @@ import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { getActiveSuppressionsByPhone, upsertPhoneSuppression } from '@/lib/phone-suppressions'
 import { resolveFunnelContext, applyFunnelClassification } from '@/lib/ai/funnel-classifier'
 import { sendHandoffNotification } from '@/lib/push-notifications'
+import { settingsDb } from '@/lib/supabase-db'
+import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
+import { isOptOutSuppressionSource } from '@/lib/suppression-sources'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -130,6 +133,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, skipped: 'tenant_blocked' })
     }
 
+    // 2.5. Interruptor global de IA do tenant (settings.ai_agents_global_enabled).
+    // Ausente = ligado. Falha ao ler = ligado (não derrubar o atendimento por erro de leitura).
+    if (!(await isAiEnabledForTenant(tenantId))) {
+      console.log(`⏭️ [AI-RESPOND] Skipping - agentes de IA desligados no tenant ${tenantId}`)
+      return NextResponse.json({ success: true, skipped: 'ai_globally_disabled' })
+    }
+
     // 3. Verifica se está em modo bot
     if (conversation.mode !== 'bot') {
       console.log(`⏭️ [AI-RESPOND] Skipping - mode is "${conversation.mode}", not "bot"`)
@@ -153,7 +163,10 @@ export async function POST(req: NextRequest) {
       conversation.phone,
       normalizePhoneNumber(conversation.phone),
     ])
-    if (suppressions.size > 0) {
+    // Só silencia por opt-out (pedido do contato / bloqueio manual). Supressão automática por falha
+    // de entrega vale para campanhas, não para quem escreveu primeiro.
+    const optOutSuppressions = Array.from(suppressions.values()).filter(row => isOptOutSuppressionSource(row.source))
+    if (optOutSuppressions.length > 0) {
       console.log(`🛑 [AI-RESPOND] Skipping - phone ${conversation.phone} está em phone_suppressions (opt-out) no tenant ${tenantId}; sem resposta`)
       return NextResponse.json({ success: true, skipped: 'phone_suppressed' })
     }
@@ -163,11 +176,15 @@ export async function POST(req: NextRequest) {
 
     if (!agent) {
       console.log(`❌ [AI-RESPOND] No agent configured`)
+      await notifyOpsAlert({ tenantId, conversationId, type: 'ai_no_agent', error: 'agente inexistente' })
+      await moveConversationToHumanForOps(tenantId, conversationId, 'Nenhum agente de IA configurado para esta conversa')
       return NextResponse.json({ error: 'No agent configured' }, { status: 400 })
     }
 
     if (!agent.is_active) {
       console.log(`⏭️ [AI-RESPOND] Skipping - agent "${agent.name}" is not active`)
+      await notifyOpsAlert({ tenantId, conversationId, type: 'ai_no_agent', error: 'agente inativo' })
+      await moveConversationToHumanForOps(tenantId, conversationId, 'O agente de IA desta conversa está inativo')
       return NextResponse.json({ skipped: true, reason: 'agent-not-active' })
     }
 
@@ -265,6 +282,7 @@ export async function POST(req: NextRequest) {
     console.log(`📤 [AI-RESPOND] Message split into ${messageParts.length} parts`)
 
     const messageIds: string[] = []
+    let lastSendError: unknown = null
 
     for (let i = 0; i < messageParts.length; i++) {
       const part = messageParts[i]
@@ -319,10 +337,19 @@ export async function POST(req: NextRequest) {
         }
       } else {
         console.error(`❌ [AI-RESPOND] Failed to send part ${i + 1}:`, sendResult.error)
+        lastSendError = sendResult.error
       }
     }
 
     console.log(`✅ [AI-RESPOND] All ${messageIds.length} messages sent`)
+
+    if (messageIds.length === 0) {
+      // Lead ficou sem resposta: avisa e entrega para um humano.
+      await notifyOpsAlert({ tenantId, conversationId, type: 'ai_send_failed', error: lastSendError })
+      await moveConversationToHumanForOps(tenantId, conversationId, 'Falha ao enviar a resposta da IA pelo WhatsApp')
+    } else if (messageIds.length < messageParts.length) {
+      await notifyOpsAlert({ tenantId, conversationId, type: 'ai_send_failed', error: lastSendError })
+    }
 
     if (messageIds.length > 0) {
       await triggerKanbanAutomationForAIReply(tenantId, conversation.contact_id, result.response.detectedQuoteRequest)
@@ -426,6 +453,19 @@ async function getConversationTenantId(conversationId: string): Promise<string |
 
   if (error || !data) return null
   return (data as { tenant_id: string }).tenant_id
+}
+
+/**
+ * Interruptor global de IA do tenant. Padrão: ligado.
+ */
+async function isAiEnabledForTenant(tenantId: string): Promise<boolean> {
+  try {
+    const value = await settingsDb.get(tenantId, 'ai_agents_global_enabled')
+    return value !== 'false'
+  } catch (e) {
+    console.warn('[AI-RESPOND] Falha ao ler ai_agents_global_enabled (assumindo ligado):', { tenantId, e })
+    return true
+  }
 }
 
 /**

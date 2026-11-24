@@ -15,6 +15,10 @@ const m = vi.hoisted(() => ({
   applyFunnelClassification: vi.fn(),
   triggerKanbanAutomationForAIReply: vi.fn(),
   sendHandoffNotification: vi.fn(),
+  settingsGet: vi.fn(),
+  notifyOpsAlert: vi.fn(),
+  moveHuman: vi.fn(),
+  agentRow: { value: null as any },
   order: [] as string[],
 }))
 
@@ -51,6 +55,11 @@ vi.mock('./kanban-automation-hook', () => ({
     return m.triggerKanbanAutomationForAIReply(...a)
   },
 }))
+vi.mock('@/lib/supabase-db', () => ({ settingsDb: { get: (...a: unknown[]) => m.settingsGet(...a) } }))
+vi.mock('@/lib/ops-alert', () => ({
+  notifyOpsAlert: (...a: unknown[]) => m.notifyOpsAlert(...a),
+  moveConversationToHumanForOps: (...a: unknown[]) => m.moveHuman(...a),
+}))
 vi.mock('@/lib/push-notifications', () => ({ sendHandoffNotification: (...a: unknown[]) => m.sendHandoffNotification(...a) }))
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: () => ({
@@ -60,7 +69,7 @@ vi.mock('@/lib/supabase', () => ({
         eq: () => chain,
         single: async () => {
           if (table === 'inbox_conversations') return { data: { tenant_id: 'tenant-1' }, error: null }
-          if (table === 'ai_agents') return { data: { id: 'ag1', name: 'Bot', model: 'x', is_active: true }, error: null }
+          if (table === 'ai_agents') return { data: m.agentRow.value, error: null }
           if (table === 'contacts') return { data: { name: 'Maria', email: null, created_at: null }, error: null }
           return { data: null, error: null }
         },
@@ -105,6 +114,10 @@ beforeEach(() => {
   m.upsertPhoneSuppression.mockResolvedValue(undefined)
   m.triggerKanbanAutomationForAIReply.mockResolvedValue(undefined)
   m.sendHandoffNotification.mockResolvedValue({ sent: 1, failed: 0 })
+  m.settingsGet.mockResolvedValue(null)
+  m.notifyOpsAlert.mockResolvedValue(undefined)
+  m.moveHuman.mockResolvedValue(undefined)
+  m.agentRow.value = { id: 'ag1', name: 'Bot', model: 'x', is_active: true }
 })
 
 describe('POST /api/ai/respond — telefone suprimido (F02)', () => {
@@ -221,5 +234,94 @@ describe('POST /api/ai/respond — aviso de handoff (F03)', () => {
   it('sem handoff: não avisa', async () => {
     await POST(req())
     expect(m.sendHandoffNotification).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/ai/respond — silêncio só para opt-out (F07)', () => {
+  const sup = (source: string | null) => new Map([['+5511999999999', { is_active: true, source }]])
+
+  it.each(['inbound_keyword', 'ai_detected', 'meta_opt_out_error'])('supressão %s silencia o robô', async (source) => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup(source))
+    const body = await (await POST(req())).json()
+    expect(body.skipped).toBe('phone_suppressed')
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+  })
+
+  it('supressão automática por falha de entrega NÃO silencia o robô', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup('auto_failure_policy'))
+    const body = await (await POST(req())).json()
+    expect(body.success).toBe(true)
+    expect(body.skipped).toBeUndefined()
+    expect(m.sendWhatsAppMessage).toHaveBeenCalled()
+  })
+
+  it('supressão manual (sem source) continua silenciando', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup(null))
+    expect((await (await POST(req())).json()).skipped).toBe('phone_suppressed')
+  })
+
+  it('opt-out junto de falha automática: silencia', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(
+      new Map([['5511999999999', { is_active: true, source: 'auto_failure_policy' }], ['+5511999999999', { is_active: true, source: 'inbound_keyword' }]])
+    )
+    expect((await (await POST(req())).json()).skipped).toBe('phone_suppressed')
+  })
+})
+
+describe('POST /api/ai/respond — interruptor global de IA (F09)', () => {
+  it('desligado: não chama a IA nem envia', async () => {
+    m.settingsGet.mockResolvedValue('false')
+    const body = await (await POST(req())).json()
+    expect(body.skipped).toBe('ai_globally_disabled')
+    expect(m.settingsGet).toHaveBeenCalledWith('tenant-1', 'ai_agents_global_enabled')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+  })
+
+  it('sem a setting: ligado (comportamento atual)', async () => {
+    m.settingsGet.mockResolvedValue(null)
+    expect((await (await POST(req())).json()).success).toBe(true)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalled()
+  })
+
+  it('"true": ligado', async () => {
+    m.settingsGet.mockResolvedValue('true')
+    expect((await (await POST(req())).json()).success).toBe(true)
+  })
+
+  it('falha ao ler a setting: segue ligado', async () => {
+    m.settingsGet.mockRejectedValue(new Error('db'))
+    expect((await (await POST(req())).json()).success).toBe(true)
+  })
+})
+
+describe('POST /api/ai/respond — alertas quando a IA não responde (F08)', () => {
+  it('sem agente: 400, alerta e conversa vai para humano', async () => {
+    m.agentRow.value = null
+    const res = await POST(req())
+    expect(res.status).toBe(400)
+    expect(m.notifyOpsAlert).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant-1', conversationId: 'conv1', type: 'ai_no_agent' }))
+    expect(m.moveHuman).toHaveBeenCalledWith('tenant-1', 'conv1', expect.any(String))
+  })
+
+  it('agente inativo: alerta e conversa vai para humano', async () => {
+    m.agentRow.value = { id: 'ag1', name: 'Bot', model: 'x', is_active: false }
+    const body = await (await POST(req())).json()
+    expect(body.reason).toBe('agent-not-active')
+    expect(m.notifyOpsAlert).toHaveBeenCalledWith(expect.objectContaining({ type: 'ai_no_agent' }))
+    expect(m.moveHuman).toHaveBeenCalled()
+  })
+
+  it('falha ao enviar TODAS as partes: alerta ai_send_failed e vai para humano', async () => {
+    m.sendWhatsAppMessage.mockResolvedValue({ success: false, error: 'meta 131047' })
+    await POST(req())
+    expect(m.notifyOpsAlert).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant-1', conversationId: 'conv1', type: 'ai_send_failed' }))
+    expect(m.moveHuman).toHaveBeenCalledWith('tenant-1', 'conv1', expect.any(String))
+  })
+
+  it('envio ok: nenhum alerta', async () => {
+    await POST(req())
+    expect(m.notifyOpsAlert).not.toHaveBeenCalled()
+    expect(m.moveHuman).not.toHaveBeenCalled()
   })
 })

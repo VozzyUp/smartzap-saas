@@ -94,7 +94,38 @@ export async function saveBoardAutomationConfig(
   await api.patch(`/api/kanban/boards/${boardId}/automation`, config)
 }
 
-export type FollowupRule = { id?: string; dayOffset: number; templateText: string; position: number }
+export type FollowupTemplate = {
+  templateName: string
+  language: string
+  /** Valores das variáveis do corpo, na ordem. "{{nome}}" = primeiro nome do contato; o resto é texto fixo. */
+  bodyParams?: string[]
+  /** Envia o modelo mesmo dentro da janela de 24 h. */
+  alwaysSend?: boolean
+}
+
+export type FollowupRule = {
+  id?: string
+  dayOffset: number
+  templateText: string
+  position: number
+  template?: FollowupTemplate | null
+}
+
+export type ApprovedTemplate = { name: string; language: string; bodyText: string; variableCount: number }
+
+/** Modelos aprovados já sincronizados (sem chamar a Meta). */
+export async function listApprovedTemplates(): Promise<ApprovedTemplate[]> {
+  const data = await api.get<Array<{ name: string; language: string; status: string; content?: string; components?: Array<{ type: string; text?: string }> }>>(
+    '/api/templates?source=local'
+  )
+  return (Array.isArray(data) ? data : [])
+    .filter((t) => String(t.status).toUpperCase() === 'APPROVED')
+    .map((t) => {
+      const bodyText = t.components?.find((c) => String(c.type).toUpperCase() === 'BODY')?.text ?? t.content ?? ''
+      const nums = new Set(Array.from(bodyText.matchAll(/{{s*(d+)s*}}/g)).map((m) => m[1]))
+      return { name: t.name, language: t.language || 'pt_BR', bodyText, variableCount: nums.size }
+    })
+}
 
 export async function listFollowupRules(stageId: string): Promise<FollowupRule[]> {
   const data = await api.get<{ rules: FollowupRule[] }>(`/api/kanban/stages/${stageId}/followup-rules`)

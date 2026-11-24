@@ -14,7 +14,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { listFollowupRules, saveFollowupRules, type FollowupRule } from './api'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { listFollowupRules, saveFollowupRules, listApprovedTemplates, type FollowupRule } from './api'
+
+const NO_TEMPLATE = '__none__'
 
 interface FollowupRulesEditorProps {
   stageId: string
@@ -37,6 +48,22 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
   useEffect(() => {
     if (data) setRules(data)
   }, [data])
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ['kanban-followup-approved-templates'],
+    queryFn: listApprovedTemplates,
+    enabled: open,
+  })
+  const findTemplate = (name: string, language: string) =>
+    templates.find((t) => t.name === name && t.language === language)
+
+  const selectTemplate = (index: number, value: string) => {
+    if (value === NO_TEMPLATE) return updateRule(index, { template: null })
+    const [name, language] = value.split('|')
+    const t = findTemplate(name, language)
+    const params = Array.from({ length: t?.variableCount ?? 0 }, (_, i) => (i === 0 ? '{{nome}}' : ''))
+    updateRule(index, { template: { templateName: name, language, bodyParams: params, alwaysSend: false } })
+  }
 
   const saveMutation = useMutation({
     mutationFn: () => saveFollowupRules(stageId, rules.map((r, i) => ({ ...r, position: i }))),
@@ -62,7 +89,12 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
     setRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   }
 
-  const hasInvalidRule = rules.some((r) => !r.templateText.trim() || r.dayOffset < 1)
+  const hasInvalidRule = rules.some(
+    (r) =>
+      !r.templateText.trim() ||
+      r.dayOffset < 1 ||
+      (r.template?.bodyParams ?? []).some((p) => !p.trim())
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,6 +143,67 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
                   onChange={(e) => updateRule(index, { templateText: e.target.value })}
                   rows={2}
                 />
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Modelo para enviar fora da janela de 24h (opcional)</Label>
+                  <Select
+                    value={rule.template ? `${rule.template.templateName}|${rule.template.language}` : NO_TEMPLATE}
+                    onValueChange={(value) => selectTemplate(index, value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sem modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_TEMPLATE}>Sem modelo (só texto dentro de 24h)</SelectItem>
+                      {templates.map((t) => (
+                        <SelectItem key={`${t.name}|${t.language}`} value={`${t.name}|${t.language}`}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!rule.template && (
+                    <p className="text-xs text-[var(--ds-text-muted)]">
+                      Sem modelo, o contato que não respondeu nas últimas 24h não recebe este follow-up.
+                    </p>
+                  )}
+                </div>
+
+                {rule.template && (
+                  <div className="space-y-2">
+                    {(rule.template.bodyParams ?? []).map((param, paramIndex) => (
+                      <div key={paramIndex} className="space-y-1">
+                        <Label className="text-xs">Valor da variável {'{{'}{paramIndex + 1}{'}}'}</Label>
+                        <Input
+                          value={param}
+                          placeholder="{{nome}} ou um texto fixo (ex.: link)"
+                          onChange={(e) =>
+                            updateRule(index, {
+                              template: {
+                                ...rule.template!,
+                                bodyParams: (rule.template!.bodyParams ?? []).map((p, i) =>
+                                  i === paramIndex ? e.target.value : p
+                                ),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between rounded-lg border border-[var(--ds-border-subtle)] p-2">
+                      <Label htmlFor={`always-${index}`} className="text-xs">
+                        Enviar sempre o modelo (mesmo dentro de 24h)
+                      </Label>
+                      <Switch
+                        id={`always-${index}`}
+                        checked={rule.template.alwaysSend ?? false}
+                        onCheckedChange={(checked) =>
+                          updateRule(index, { template: { ...rule.template!, alwaysSend: checked } })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 

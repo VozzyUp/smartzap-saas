@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { MetaAppIdInline } from './MetaAppIdInline'
 
 type Spec = any
 
@@ -199,9 +200,6 @@ export function StepContent({
   hasMetaAppId = true,
   onSaveMetaAppId,
 }: StepContentProps) {
-  const [metaAppIdDraft, setMetaAppIdDraft] = React.useState('')
-  const [savingMetaAppId, setSavingMetaAppId] = React.useState(false)
-  const metaAppIdValid = /^\d{5,20}$/.test(metaAppIdDraft.trim())
 
   return (
     <>
@@ -265,6 +263,7 @@ export function StepContent({
           </div>
 
           {headerType === 'NONE' ? (
+            <div>
             <div className="mt-2 flex items-center justify-between rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-2">
               <div className="text-xs text-[var(--ds-text-secondary)]">Sem cabecalho configurado.</div>
               <Button
@@ -281,6 +280,15 @@ export function StepContent({
               >
                 Adicionar cabecalho
               </Button>
+            </div>
+              {!hasMetaAppId && onSaveMetaAppId ? (
+                <div className="mt-2 space-y-2" data-testid="meta-app-id-hint">
+                  <p className="text-xs text-[var(--ds-text-muted)]">
+                    Para usar imagem ou vídeo no cabeçalho, informe o ID do Aplicativo.
+                  </p>
+                  <MetaAppIdInline onSave={onSaveMetaAppId} buttonLabel="Salvar" />
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -318,34 +326,7 @@ export function StepContent({
                       🔒 Imagem, vídeo e documento precisam do <span className="font-medium">ID do Aplicativo</span> da Meta.
                       Ele fica no topo do painel do seu aplicativo em developers.facebook.com.
                     </p>
-                    {onSaveMetaAppId ? (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Input
-                          value={metaAppIdDraft}
-                          onChange={(e) => setMetaAppIdDraft(e.target.value)}
-                          inputMode="numeric"
-                          placeholder="ID do Aplicativo (só números)"
-                          aria-label="ID do Aplicativo da Meta"
-                          className="sm:max-w-xs"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!metaAppIdValid || savingMetaAppId}
-                          onClick={async () => {
-                            setSavingMetaAppId(true)
-                            try {
-                              await onSaveMetaAppId(metaAppIdDraft.trim())
-                              setMetaAppIdDraft('')
-                            } finally {
-                              setSavingMetaAppId(false)
-                            }
-                          }}
-                        >
-                          {savingMetaAppId ? 'Salvando…' : 'Salvar e liberar mídia'}
-                        </Button>
-                      </div>
-                    ) : null}
+                    {onSaveMetaAppId ? <MetaAppIdInline onSave={onSaveMetaAppId} /> : null}
                   </div>
                 ) : null}
               </div>

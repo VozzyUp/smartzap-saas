@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
     console.log(`🤖 [AI-RESPOND] Using agent: ${agent.name} (${agent.model})`)
 
     // 6. Busca mensagens recentes
-    const { messages } = await inboxDb.listMessages(tenantId, conversationId, { limit: 20 })
+    const { messages } = await inboxDb.listMessages(tenantId, conversationId, { limit: 60 })
     console.log(`🤖 [AI-RESPOND] Found ${messages.length} messages`)
 
     if (messages.length === 0) {

@@ -263,6 +263,9 @@ function convertMarkdownToWhatsApp(text: string): string {
 // Helpers
 // =============================================================================
 
+/** Quantas mensagens recentes da conversa o modelo recebe. */
+export const AI_HISTORY_WINDOW = 40
+
 function convertToAIMessages(
   messages: InboxMessage[]
 ): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -380,7 +383,9 @@ export async function processChatAgent(
   const lastUserMessage = messages.filter((m) => m.direction === 'inbound').slice(-1)[0]
   const inputText = lastUserMessage?.content || ''
   const messageIds = messages.map((m) => m.id)
-  const aiMessages = convertToAIMessages(messages.slice(-10))
+  // Janela de histórico enviada ao modelo. Com 10 mensagens (5 trocas) ele esquecia o que o
+  // lead tinha dito no começo e repetia perguntas já respondidas.
+  const aiMessages = convertToAIMessages(messages.slice(-AI_HISTORY_WINDOW))
 
   // =======================================================================
   // MEM0: Fetch relevant memories (graceful degradation)

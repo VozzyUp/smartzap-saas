@@ -139,7 +139,7 @@ function StatCard({
           {/* Icon */}
           <div
             className={cn(
-              "relative p-2 sm:p-3 rounded-xl border border-[var(--ds-border-default)]",
+              "max-sm:hidden relative p-2 sm:p-3 rounded-xl border border-[var(--ds-border-default)]",
               styles.iconBg
             )}
           >

@@ -253,7 +253,7 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
           <PageDescription>Gerencie sua audiência e listas</PageDescription>
         </div>
 
-        <PageActions className="flex-wrap justify-start sm:justify-end">
+        <PageActions className="flex-nowrap sm:flex-wrap justify-start sm:justify-end">
           {/* Ações de seleção + Import agrupados */}
           <div className="flex items-center gap-2">
             {isSomeSelected && (
@@ -301,7 +301,8 @@ export const ContactListView: React.FC<ContactListViewProps> = ({
               aria-label="Gerenciar campos personalizados"
             >
               <FileText size={18} aria-hidden="true" />
-              Campos personalizados
+              <span className="sm:hidden">Campos</span>
+              <span className="hidden sm:inline">Campos personalizados</span>
             </Button>
           </CustomFieldsSheet>
 

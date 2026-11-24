@@ -11,7 +11,8 @@ jobs:
       contents: read
       packages: write
     env:
-      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+      # Aceita como segredo (preferível) ou como variável do repositório
+      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL || vars.PORTAINER_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

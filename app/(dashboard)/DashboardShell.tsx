@@ -499,7 +499,7 @@ export function DashboardShell({
                     {/* Main Content - no header on desktop, compact mobile header */}
                     {/* CompactSidebar is lg:static (in flow), ExpandedSidebar is fixed (needs padding) */}
                     <div className={cn(
-                        "flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-[padding] duration-200",
+                        "flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-[padding] duration-200 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
                         isSidebarExpanded && "lg:pl-56"
                     )}>
                         {/* Compact mobile header - only menu button */}
@@ -555,7 +555,7 @@ export function DashboardShell({
 
             {/* Main Content - padding only when expanded (ExpandedSidebar is fixed) */}
             <div className={cn(
-                "flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-[padding] duration-200",
+                "flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-[padding] duration-200 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
                 isSidebarExpanded && "lg:pl-56"
             )}>
                 {/* Header */}

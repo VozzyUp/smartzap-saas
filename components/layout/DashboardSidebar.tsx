@@ -227,7 +227,7 @@ const ExpandedSidebar = memo(function ExpandedSidebar({
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 w-56 bg-[var(--ds-bg-elevated)] border-r border-[var(--ds-border-subtle)] transform transition-transform duration-200 ease-in-out",
+        "fixed inset-y-0 left-0 z-50 w-56 bg-[var(--ds-bg-elevated)] border-r border-[var(--ds-border-subtle)] transform transition-transform duration-200 ease-in-out pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
         // Mobile (< lg): show only when menu is open
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
         // Desktop (lg+): controlled by isSidebarExpanded, overrides mobile class

@@ -316,12 +316,12 @@ export function AIGatewayPanel() {
               }`}
             >
               {/* Card header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <span className="text-base">{icon}</span>
                   <span className="text-sm font-medium text-[var(--ds-text-primary)]">{label}</span>
                   {ps.isConfigured && (
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                    <span className="whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
                       Configurado
                     </span>
                   )}
@@ -333,7 +333,7 @@ export function AIGatewayPanel() {
                     type="button"
                     disabled={saving}
                     onClick={() => handleSelectProvider(id)}
-                    className="rounded-lg border border-[var(--ds-border-default)] px-3 py-1 text-xs text-[var(--ds-text-secondary)] transition hover:bg-[var(--ds-bg-hover)] disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap max-sm:min-h-11 max-sm:w-full rounded-lg border border-[var(--ds-border-default)] px-3 py-1 text-xs text-[var(--ds-text-secondary)] transition hover:bg-[var(--ds-bg-hover)] disabled:opacity-50"
                   >
                     Usar este
                   </button>
@@ -368,7 +368,7 @@ export function AIGatewayPanel() {
                         onChange={(e) => updateProvider(id, { keyDraft: e.target.value })}
                         onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveKey(id); }}
                         placeholder={placeholder}
-                        className="w-full rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-1.5 pr-9 text-xs text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+                        className="w-full rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] px-3 py-1.5 pr-9 text-base sm:text-xs text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-1 focus:ring-emerald-500/40 max-sm:min-h-11"
                       />
                       <button
                         type="button"
@@ -431,7 +431,7 @@ export function AIGatewayPanel() {
                           placeholder="Buscar modelo..."
                           value={ps.modelSearch}
                           onChange={(e) => updateProvider(id, { modelSearch: e.target.value })}
-                          className="w-full rounded-md border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] py-1.5 pl-8 pr-3 text-xs text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none"
+                          className="w-full rounded-md border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] py-1.5 pl-8 pr-3 text-base sm:text-xs text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)] focus:outline-none max-sm:min-h-11"
                         />
                       </div>
 

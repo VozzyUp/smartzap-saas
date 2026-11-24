@@ -118,7 +118,7 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
           <div className="space-y-3 py-2">
             {rules.map((rule, index) => (
               <div key={index} className="space-y-2 rounded-xl border border-[var(--ds-border-subtle)] p-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-[var(--ds-text-muted)]">Depois de</span>
                   <Input
                     type="number"
@@ -131,7 +131,7 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
                   <button
                     type="button"
                     onClick={() => removeRule(index)}
-                    className="ml-auto rounded-md p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-red-500"
+                    className="ml-auto inline-flex max-sm:min-h-11 max-sm:min-w-11 items-center justify-center rounded-md p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg-muted)] hover:text-red-500"
                     aria-label="Remover regra"
                   >
                     <Trash2 size={14} aria-hidden="true" />
@@ -190,7 +190,7 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
                         />
                       </div>
                     ))}
-                    <div className="flex items-center justify-between rounded-lg border border-[var(--ds-border-subtle)] p-2">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--ds-border-subtle)] p-2">
                       <Label htmlFor={`always-${index}`} className="text-xs">
                         Enviar sempre o modelo (mesmo dentro de 24h)
                       </Label>
@@ -218,7 +218,7 @@ export function FollowupRulesEditor({ stageId, stageName, open, onOpenChange }: 
               Adicionar follow-up
             </Button>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-2 max-sm:[&>button]:w-full">
               <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || hasInvalidRule}>
                 {saveMutation.isPending && <Loader2 className="mr-1.5 animate-spin" size={14} aria-hidden="true" />}
                 Salvar

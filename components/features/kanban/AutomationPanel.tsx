@@ -201,7 +201,7 @@ function EventsTab({ boardId, stages, open }: { boardId: string; stages: KanbanS
         </Select>
       </div>
 
-      <div className="flex justify-end pt-2">
+      <div className="flex justify-end pt-2 max-sm:[&>button]:w-full">
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           {saveMutation.isPending && <Loader2 className="mr-1.5 animate-spin" size={14} aria-hidden="true" />}
           Salvar
@@ -275,13 +275,13 @@ function KeywordsTab({ open }: { open: boolean }) {
           {keywords.map((k) => (
             <span
               key={k.id}
-              className="flex items-center gap-1 rounded-full bg-[var(--ds-bg-muted)] px-2.5 py-1 text-xs text-[var(--ds-text-primary)]"
+              className="flex items-center gap-1 rounded-full bg-[var(--ds-bg-muted)] px-2.5 py-1 max-sm:min-h-11 max-sm:pl-3 text-xs text-[var(--ds-text-primary)]"
             >
               {k.keyword}
               <button
                 type="button"
                 onClick={() => removeMutation.mutate(k.id)}
-                className="text-[var(--ds-text-muted)] hover:text-[var(--ds-text-primary)]"
+                className="inline-flex max-sm:min-h-11 max-sm:min-w-11 items-center justify-center text-[var(--ds-text-muted)] hover:text-[var(--ds-text-primary)]"
                 aria-label={`Remover ${k.keyword}`}
               >
                 <X size={12} aria-hidden="true" />

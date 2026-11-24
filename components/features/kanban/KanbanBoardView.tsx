@@ -4,7 +4,8 @@ import { useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useSensor,
   useSensors,
@@ -42,7 +43,10 @@ export function KanbanBoardView({ boardId }: { boardId: string }) {
   const stages = data?.stages ?? []
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    // Mouse: arrasta ao mover 5px. Toque: só depois de segurar o cartão por um instante, para o
+    // deslizar do dedo continuar rolando o quadro entre as fases em vez de arrastar o cartão.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   )
 
   const moveMutation = useMutation({

@@ -75,7 +75,7 @@ export const ContactFilters: React.FC<ContactFiltersProps> = ({
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as ContactStatus | 'ALL' | 'SUPPRESSED')}
-          className="min-w-0 flex-1 sm:flex-none max-sm:min-h-11 px-4 py-2.5 text-base sm:text-sm font-medium bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] hover:text-[var(--ds-text-primary)] rounded-xl border border-[var(--ds-border-default)] transition-colors outline-none cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+          className="min-w-0 flex-1 max-sm:basis-full sm:flex-none max-sm:min-h-11 px-4 py-2.5 text-base sm:text-sm font-medium bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] hover:text-[var(--ds-text-primary)] rounded-xl border border-[var(--ds-border-default)] transition-colors outline-none cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
           aria-label="Filtrar contatos por status"
         >
           {statusOptions.map(opt => (
@@ -87,7 +87,7 @@ export const ContactFilters: React.FC<ContactFiltersProps> = ({
         <select
           value={tagFilter}
           onChange={(e) => onTagFilterChange(e.target.value)}
-          className="min-w-0 flex-1 sm:flex-none max-sm:min-h-11 px-4 py-2.5 text-base sm:text-sm font-medium bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] hover:text-[var(--ds-text-primary)] rounded-xl border border-[var(--ds-border-default)] transition-colors outline-none cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+          className="min-w-0 flex-1 max-sm:basis-full sm:flex-none max-sm:min-h-11 px-4 py-2.5 text-base sm:text-sm font-medium bg-[var(--ds-bg-elevated)] text-[var(--ds-text-primary)] hover:text-[var(--ds-text-primary)] rounded-xl border border-[var(--ds-border-default)] transition-colors outline-none cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
           aria-label="Filtrar contatos por tag"
         >
           <option value="ALL">Todas Tags</option>

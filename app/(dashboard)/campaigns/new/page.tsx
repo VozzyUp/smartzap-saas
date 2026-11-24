@@ -1424,7 +1424,7 @@ export default function CampaignsNewRealPage() {
             showNameInFocusedMode={false}
           />
 
-          <div className="max-md:sticky max-md:bottom-2 max-md:z-20 rounded-2xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-3 sm:p-4 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+          <div className="rounded-2xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-3 sm:p-4 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
             <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:justify-between md:gap-4">
               <button
                 type="button"

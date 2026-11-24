@@ -96,6 +96,9 @@ export const useCampaignNewController = () => {
     body: [],
   })
   const [templateButtonVars, setTemplateButtonVars] = useState<Record<string, string>>({})
+  // Mídia própria do cabeçalho ("Enviar com este arquivo"): media id já enviado para o número.
+  const [headerMediaId, setHeaderMediaId] = useState<string | null>(null)
+  const [headerMediaName, setHeaderMediaName] = useState<string | null>(null)
   const [templateSpecError, setTemplateSpecError] = useState<string | null>(null)
   const [isLaunching, setIsLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
@@ -417,6 +420,11 @@ export const useCampaignNewController = () => {
   }
 
   const buildTemplateVariables = () => {
+    const base = buildTemplateVariablesBase()
+    return headerMediaId ? { ...base, headerMediaId } : base
+  }
+
+  const buildTemplateVariablesBase = () => {
     if (!selectedTemplate) {
       return {
         header: templateVars.header.map((item) => item.value.trim()),
@@ -1336,6 +1344,9 @@ export const useCampaignNewController = () => {
     if (!selectedTemplate) return
     setTemplateSpecError(null)
     setTemplateButtonVars({})
+    // Mídia enviada vale só para o modelo em que foi anexada.
+    setHeaderMediaId(null)
+    setHeaderMediaName(null)
 
     try {
       const spec = buildTemplateSpecV1(selectedTemplate)
@@ -1414,6 +1425,14 @@ export const useCampaignNewController = () => {
     setCampaignName,
     categoryFilter,
     setCategoryFilter,
+
+    // Mídia própria do cabeçalho
+    headerMediaId,
+    headerMediaName,
+    setHeaderMedia: (id: string | null, name: string | null) => {
+      setHeaderMediaId(id)
+      setHeaderMediaName(name)
+    },
 
     // Template selection
     templateSelected,

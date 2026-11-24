@@ -23,6 +23,7 @@ import { ContactQuickEditModal } from '@/components/features/contacts/ContactQui
 import { Calendar } from '@/components/ui/calendar'
 import DateTimePicker from '@/components/ui/date-time-picker'
 import { ptBRLight as ptBR } from '@/lib/locale-pt-br-light'
+import { HeaderMediaUploadField, getTemplateHeaderMediaFormat } from '@/components/features/campaigns/HeaderMediaUploadField'
 import { useCampaignNewController, steps, formatDateLabel, parsePickerDate } from '@/hooks/useCampaignNew'
 
 export default function CampaignsNewRealPage() {
@@ -281,6 +282,15 @@ export default function CampaignsNewRealPage() {
                     </>
                   )}
                 </div>
+              )}
+
+              {ctrl.templateSelected && getTemplateHeaderMediaFormat(ctrl.selectedTemplate) && (
+                <HeaderMediaUploadField
+                  format={getTemplateHeaderMediaFormat(ctrl.selectedTemplate)!}
+                  value={ctrl.headerMediaId}
+                  fileName={ctrl.headerMediaName}
+                  onChange={ctrl.setHeaderMedia}
+                />
               )}
 
               {ctrl.templateSelected && ctrl.hasTemplateVariables && (

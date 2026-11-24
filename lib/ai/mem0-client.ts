@@ -66,6 +66,16 @@ const MEM0_TIMEOUT_MS = 3000 // 3 segundos de timeout
 const MEM0_API_BASE = 'https://api.mem0.ai/v1'
 const APP_ID = 'smartzap'
 
+/**
+ * Instruções de extração enviadas em cada chamada de adicionar memória
+ * (campo `custom_instructions` do POST /memories — docs.mem0.ai, Add Memories).
+ */
+export const MEM0_CUSTOM_INSTRUCTIONS =
+  'Escreva todas as memórias em português do Brasil, em terceira pessoa, referindo-se à pessoa como "Cliente". ' +
+  'Guarde só fatos úteis para o atendimento e a venda: tamanho da equipe, tipo de negócio, dores citadas, ' +
+  'plano de interesse, objeções, estágio (pediu link, criou conta, está em teste). ' +
+  'Não guarde saudações nem perguntas que já foram respondidas.'
+
 // Cache em memória por tenant (evita bater no banco em toda requisição e evita
 // vazar credenciais de um tenant para outro em memória compartilhada).
 const credentialsCacheByTenant = new Map<string, { creds: Mem0Credentials; at: number }>()
@@ -274,7 +284,9 @@ export async function saveInteractionMemory(
         agent_id: config.agent_id,
         app_id: config.app_id || APP_ID,
         mem0ApiKey: creds.apiKey,
-      }),
+        // Campo não tipado no SDK, mas repassado no corpo da requisição (`...config`)
+        custom_instructions: MEM0_CUSTOM_INSTRUCTIONS,
+      } as Parameters<typeof addMemories>[1]),
       MEM0_TIMEOUT_MS
     )
 

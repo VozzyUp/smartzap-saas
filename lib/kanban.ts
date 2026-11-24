@@ -572,13 +572,16 @@ export async function syncStageTag(
 
     let tags: string[] = Array.isArray((contact as any).tags) ? [...(contact as any).tags] : []
 
-    if (oldStageName) {
-      const oldTag = `funil/${boardName}: ${oldStageName}`
-      tags = tags.filter((t) => t !== oldTag)
+    // Um contato tem no máximo UMA tag `funil/<quadro>: ` por quadro: remove toda
+    // tag com esse prefixo (inclui resíduos de nomes antigos de fase) antes de
+    // adicionar a da fase atual.
+    if (oldStageName || newStageName) {
+      const prefix = `funil/${boardName}: `
+      tags = tags.filter((t) => !t.startsWith(prefix))
     }
     if (newStageName) {
       const newTag = `funil/${boardName}: ${newStageName}`
-      if (!tags.includes(newTag)) tags.push(newTag)
+      tags.push(newTag)
     }
 
     const { error: updateError } = await db()

@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
 import { getTenantContext } from '@/lib/tenant-context'
 import { contactDb } from '@/lib/supabase-db'
+import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
+import { createLanguageModel } from '@/lib/ai/llm-model'
 
 interface RouteParams {
   params: Promise<{ phone: string }>
@@ -74,9 +76,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const context = contextParts.join('\n\n')
 
-    // Gera resumo via AI Gateway (autenticação OIDC automática)
+    // Usa o provedor e a chave configurados pela conta na Central de IA
+    const directConfig = await getAiDirectConfig(ctx.tenantId)
+    let model
+    try {
+      if (!directConfig.googleApiKey && !directConfig.openaiApiKey && !directConfig.anthropicApiKey) {
+        throw new Error('sem chave')
+      }
+      model = createLanguageModel(directConfig).model
+    } catch {
+      return NextResponse.json({
+        ok: false,
+        error: 'Configure um provedor na Central de IA para gerar o resumo',
+      }, { status: 400 })
+    }
+
     const { text } = await generateText({
-      model: 'google/gemini-3-flash-preview',
+      model,
+      maxOutputTokens: 400,
       prompt: `Você é um assistente que ajuda atendentes a entender rapidamente o contexto de um cliente.
 
 Com base nas informações abaixo, gere um RESUMO NARRATIVO curto (2-3 frases) em português brasileiro, em tom profissional e amigável.
@@ -97,7 +114,8 @@ RESUMO:`,
       summary: text.trim(),
     })
   } catch (error) {
-    console.error('[mem0 summary] POST error:', error)
+    // Registra só o motivo (mensagem), nunca o objeto completo, para não vazar chave
+    console.error('[mem0 summary] POST error:', error instanceof Error ? error.message : 'erro desconhecido')
     return NextResponse.json({
       ok: false,
       error: 'Falha ao gerar resumo',

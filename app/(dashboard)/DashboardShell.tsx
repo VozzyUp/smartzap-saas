@@ -29,6 +29,8 @@ import { templateService } from '@/services/templateService'
 import { settingsService } from '@/services/settingsService'
 import { dashboardService } from '@/services/dashboardService'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
+import { usePWA } from '@/components/pwa/PWAProvider'
+import { PushOptInCard } from '@/components/pwa/PushOptInCard'
 import { PrefetchLink } from '@/components/ui/PrefetchLink'
 import { AccountAlertBanner } from '@/components/ui/AccountAlertBanner'
 import { WebhookAlertBanner } from '@/components/shared/WebhookAlertBanner'
@@ -89,6 +91,8 @@ export function DashboardShell({
 
     // T069: Unread count for inbox badge in sidebar
     const { count: unreadCount } = useUnreadCount()
+    const pwa = usePWA()
+    const canEnablePush = pwa.pushPermission !== 'unsupported' && pwa.pushPermission !== 'denied' && !pwa.isPushEnabled
 
     // Dev mode for hiding dev-only nav items
     const { isDevMode } = useDevMode()
@@ -591,7 +595,11 @@ export function DashboardShell({
                         <DevModeToggle />
                         <button
                             type="button"
-                            onClick={() => router.push('/inbox')}
+                            onClick={() => {
+                                // Primeiro toque com avisos desligados: ativa (o iPhone só deixa pedir permissão num toque).
+                                if (canEnablePush) void pwa.enablePush()
+                                router.push('/inbox')
+                            }}
                             className="relative group inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md p-1"
                             aria-label={unreadCount > 0 ? `${unreadCount} conversa(s) com mensagens não lidas. Abrir a caixa de entrada` : 'Abrir a caixa de entrada'}
                             title={unreadCount > 0 ? `${unreadCount} conversa(s) não lida(s)` : 'Nenhuma conversa não lida'}
@@ -603,6 +611,8 @@ export function DashboardShell({
                         </button>
                     </div>
                 </header>
+
+                <PushOptInCard />
 
                 {/* WhatsApp Onboarding Modal */}
                 {showWhatsAppOnboarding && (

@@ -105,7 +105,11 @@ export function PWAProvider({ children }: PWAProviderProps) {
       toast.success('Notificações ativadas!')
       return true
     }
-    toast.error('Não foi possível ativar notificações')
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      toast.error('As notificações estão bloqueadas neste aparelho. Libere em Ajustes > Notificações > V-Smart e tente de novo.')
+    } else {
+      toast.error('Não foi possível ativar notificações')
+    }
     return false
   }
 

@@ -158,6 +158,9 @@ export function useServiceWorker(): UseServiceWorkerReturn {
         const subscription = await registration.pushManager.getSubscription()
         if (subscription) {
           setPush((prev) => ({ ...prev, subscription }))
+          // Regrava no servidor: uma inscrição feita antes de entrar na conta (ou em outra conta)
+          // existe no aparelho mas não na conta atual, e aí nenhum aviso chega.
+          void saveSubscriptionToBackend(subscription)
         }
       }
     } catch (error) {

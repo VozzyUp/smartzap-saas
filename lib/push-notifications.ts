@@ -10,6 +10,7 @@
 
 import webpush from 'web-push'
 import { createClient } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 // =============================================================================
 // Configuration
@@ -157,6 +158,69 @@ export async function sendNewMessageNotification(
     data: {
       url: `/atendimento?conversation=${conversationId}`,
       conversationId,
+    },
+    actions: [
+      { action: 'open', title: 'Abrir' },
+      { action: 'dismiss', title: 'Dispensar' },
+    ],
+  })
+}
+
+/**
+ * Envia notificação para as subscriptions de UM tenant.
+ *
+ * Usa o client admin (sem sessão) — para workers como /api/ai/respond — e filtra
+ * por tenant_id. Nunca lança (best-effort).
+ */
+export async function broadcastPushNotificationToTenant(
+  tenantId: string,
+  payload: PushPayload
+): Promise<{ sent: number; failed: number }> {
+  try {
+    if (!setupWebPush()) return { sent: 0, failed: 0 }
+
+    const admin = getSupabaseAdmin()
+    if (!admin) return { sent: 0, failed: 0 }
+
+    const { data: subscriptions, error } = await admin
+      .from('push_subscriptions')
+      .select('endpoint, keys')
+      .eq('tenant_id', tenantId)
+
+    if (error) {
+      console.error('[Push] Erro ao ler subscriptions do tenant:', { tenantId, error })
+      return { sent: 0, failed: 0 }
+    }
+    if (!subscriptions || subscriptions.length === 0) return { sent: 0, failed: 0 }
+
+    const results = await Promise.allSettled(
+      subscriptions.map((sub) => sendPushNotification(sub as PushSubscriptionData, payload))
+    )
+    const sent = results.filter((r) => r.status === 'fulfilled' && r.value.success).length
+    return { sent, failed: results.length - sent }
+  } catch (error) {
+    console.error('[Push] Falha ao enviar para o tenant (best-effort):', { tenantId, error })
+    return { sent: 0, failed: 0 }
+  }
+}
+
+/**
+ * Avisa o dono/atendentes do tenant que uma conversa foi transferida para humano.
+ */
+export async function sendHandoffNotification(
+  tenantId: string,
+  input: { conversationId: string; contactLabel: string; reason?: string | null }
+): Promise<{ sent: number; failed: number }> {
+  const reason = input.reason ? ` — ${input.reason}` : ''
+  return broadcastPushNotificationToTenant(tenantId, {
+    title: 'Conversa transferida para atendente',
+    body: `${input.contactLabel} precisa de atendimento humano${reason}`.slice(0, 120),
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: `handoff-${input.conversationId}`,
+    data: {
+      url: `/atendimento?conversation=${input.conversationId}`,
+      conversationId: input.conversationId,
     },
     actions: [
       { action: 'open', title: 'Abrir' },

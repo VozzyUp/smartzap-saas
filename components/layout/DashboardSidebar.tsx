@@ -1,5 +1,6 @@
 'use client'
 
+import { BrandMark } from '@/components/ui/brand-mark'
 import { memo, useCallback } from 'react'
 import {
   Zap,
@@ -123,7 +124,7 @@ const CompactSidebar = memo(function CompactSidebar({
           role="img"
           aria-label="Logo V-Smart"
         >
-          <Zap className="text-white" size={18} fill="currentColor" aria-hidden="true" />
+          <BrandMark className="text-white" size={20} />
         </div>
         <nav className="flex flex-1 flex-col items-center gap-1.5 pt-1" aria-label="Menu principal">
           {navItems.map((item) => {
@@ -242,7 +243,7 @@ const ExpandedSidebar = memo(function ExpandedSidebar({
             role="img"
             aria-label="Logo V-Smart"
           >
-            <Zap className="text-white" size={20} fill="currentColor" aria-hidden="true" />
+            <BrandMark className="text-white" size={22} />
           </div>
           <div>
             <span className="text-xl font-bold text-[var(--ds-text-primary)] tracking-tight block">V-Smart</span>

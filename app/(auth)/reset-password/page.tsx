@@ -6,6 +6,7 @@
  * Define nova senha a partir de uma sessão de recovery — Supabase Auth.
  */
 
+import { BrandMark } from '@/components/ui/brand-mark'
 import { useState } from 'react'
 import { Lock, Send, CheckCircle2 } from 'lucide-react'
 
@@ -63,7 +64,7 @@ function ResetPasswordForm() {
       {/* Logo */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-emerald-500 to-emerald-600 mb-4">
-          <span className="text-3xl font-bold text-white">S</span>
+          <BrandMark className="text-white" size={34} />
         </div>
         <h1 className="text-2xl font-bold text-[var(--ds-text-primary)]">V-Smart</h1>
         <p className="text-[var(--ds-text-secondary)] mt-1">Definir nova senha</p>

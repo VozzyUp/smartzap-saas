@@ -10,7 +10,7 @@
 // v2: navegação (páginas HTML) deixou de usar stale-while-revalidate — bump
 // força o browser a descartar o cache antigo, que podia ter HTML obsoleto
 // por-tenant servido antes da rede (causava dados "oscilando" a cada F5).
-const CACHE_VERSION = 'smartzap-v2'
+const CACHE_VERSION = 'smartzap-v3'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
 

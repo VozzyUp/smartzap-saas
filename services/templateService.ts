@@ -264,6 +264,10 @@ export const templateService = {
         msg = `Falha ao enviar mídia: ${statusText} (${response.status})`;
       }
 
+      if (response.status === 413 && !errorMsg) {
+        msg = 'Arquivo muito grande para o servidor. Comprima o arquivo e tente novamente.';
+      }
+
       console.error('[uploadHeaderMedia] Erro:', { status: response.status, data });
       throw new Error(msg);
     }

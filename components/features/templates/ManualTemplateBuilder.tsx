@@ -14,6 +14,11 @@ import { StepContent } from './builder/StepContent'
 import { StepButtons } from './builder/StepButtons'
 import { StepNavigation } from './builder/StepNavigation'
 import { PreviewDrawer } from './builder/PreviewDrawer'
+import {
+  TEMPLATE_HEADER_LIMITS,
+  validateTemplateHeaderFile,
+  type TemplateHeaderMediaFormat,
+} from '@/lib/whatsapp/template-header-upload'
 import { FloatingPreviewButton } from './builder/FloatingPreviewButton'
 
 // Utility functions and types
@@ -184,23 +189,9 @@ export function ManualTemplateBuilder({
   // ============================================================================
   // Media Upload Functions
   // ============================================================================
-  // Limite máximo do Vercel Serverless é ~4.5MB para request body
-  const VERCEL_SERVERLESS_LIMIT = 4_500_000
-
-  const headerMediaMaxBytes = (format: HeaderFormat): number => {
-    if (format === 'GIF') return 3_500_000
-    if (format === 'IMAGE') return Math.min(5_000_000, VERCEL_SERVERLESS_LIMIT)
-    if (format === 'VIDEO') return VERCEL_SERVERLESS_LIMIT // Meta permite 16MB, mas Vercel limita a 4.5MB
-    if (format === 'DOCUMENT') return VERCEL_SERVERLESS_LIMIT // Meta permite 20MB, mas Vercel limita a 4.5MB
-    return 0
-  }
-
+  // Limites e tipos aceitos vêm de lib/whatsapp/template-header-upload.ts (mesma validação do servidor)
   const headerMediaAccept = (format: HeaderFormat | 'NONE'): string => {
-    if (format === 'IMAGE') return 'image/png,image/jpeg'
-    if (format === 'VIDEO') return 'video/mp4'
-    if (format === 'GIF') return 'video/mp4'
-    if (format === 'DOCUMENT') return 'application/pdf'
-    return ''
+    return TEMPLATE_HEADER_LIMITS[format as TemplateHeaderMediaFormat]?.accept ?? ''
   }
 
   const uploadHeaderMedia = async (file: File) => {
@@ -212,16 +203,9 @@ export function ManualTemplateBuilder({
       return
     }
 
-    const max = headerMediaMaxBytes(format)
-    if (max > 0 && file.size > max) {
-      const mb = (max / 1_000_000).toFixed(1)
-      const fileMb = (file.size / 1_000_000).toFixed(1)
-      const isPlatformLimit = max === VERCEL_SERVERLESS_LIMIT
-      setUploadHeaderMediaError(
-        isPlatformLimit
-          ? `Arquivo muito grande (${fileMb}MB). Limite da plataforma: ${mb}MB. Comprima o ${format === 'VIDEO' ? 'vídeo' : 'arquivo'} antes de enviar.`
-          : `Arquivo muito grande para ${format}. Limite: ${mb}MB.`
-      )
+    const check = validateTemplateHeaderFile({ format, fileName: file.name, size: file.size, mimeType: file.type })
+    if (!check.ok) {
+      setUploadHeaderMediaError(check.error)
       return
     }
 

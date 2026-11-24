@@ -110,7 +110,9 @@ export const CreateCampaignSchema = z.object({
     header: z.array(z.string()),
     headerMediaId: z.string().optional(),
     body: z.array(z.string()),
-    buttons: z.record(z.string(), z.string()).optional()
+    buttons: z.record(z.string(), z.string()).optional(),
+    // "Ao enviar, colocar o contato na fase" (quadro + fase do funil)
+    funnelStage: z.object({ boardId: z.string().min(1), stageId: z.string().min(1) }).optional(),
   }).optional(), // Meta API structure: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }
   contacts: z.array(
     z.object({

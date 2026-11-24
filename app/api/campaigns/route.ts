@@ -100,7 +100,7 @@ interface CreateCampaignBody {
   // Meta API structure:
   // - header: text variables for templates with TEXT header
   // - headerMediaId: media ID for templates with MEDIA header (image/document/video)
-  templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }
+  templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string>, funnelStage?: { boardId: string, stageId: string } }
 }
 
 /**

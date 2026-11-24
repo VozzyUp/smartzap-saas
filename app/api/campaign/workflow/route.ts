@@ -5,6 +5,7 @@ import { serve } from '@upstash/workflow/nextjs'
 import { campaignDb, templateDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { CampaignStatus, ContactStatus } from '@/types'
+import { ensureFunnelCardsForSent, parseFunnelStage } from '@/lib/campaign-funnel-card'
 import { evaluateHeaderMediaReadiness } from '@/lib/whatsapp/header-media-preflight'
 import { getUserFriendlyMessageForMetaError, normalizeMetaErrorTextForStorage } from '@/lib/whatsapp-errors'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
@@ -284,7 +285,7 @@ interface CampaignWorkflowInput {
   traceId?: string
   templateName: string
   contacts: Contact[]
-  templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }  // Meta API structure
+  templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string>, funnelStage?: { boardId: string; stageId: string } }  // Meta API structure
   templateSnapshot?: {
     name: string
     language?: string
@@ -2239,6 +2240,32 @@ const workflowHandler = serve<CampaignWorkflowInput>(
                 extra: { rows: upsertRows.length },
               })
             }
+          }
+
+          // =====================================================================
+          // Funil: contatos com envio ACEITO pela Meta ganham cartão na fase escolhida na campanha.
+          // Derivado do banco (cobre todos os caminhos de persistência); só cria, nunca move;
+          // falha é logada e nunca interrompe o envio.
+          // =====================================================================
+          try {
+            const funnelTarget = parseFunnelStage(templateVariables)
+            if (funnelTarget) {
+              const ids = batch.map((c) => String(c.contactId)).filter(Boolean)
+              const { data: acceptedRows } = await supabase
+                .from('campaign_contacts')
+                .select('contact_id')
+                .eq('campaign_id', campaignId)
+                .eq('tenant_id', tenantId)
+                .in('status', ['sent', 'delivered', 'read'])
+                .in('contact_id', ids)
+              const acceptedIds = (acceptedRows || []).map((r: any) => String(r.contact_id))
+              if (acceptedIds.length > 0) {
+                const res = await ensureFunnelCardsForSent(tenantId, funnelTarget, acceptedIds)
+                console.log(`[Workflow] Funil: ${res.created} criados, ${res.existing} já existiam, ${res.failed} falhas`)
+              }
+            }
+          } catch (e) {
+            console.warn('[Workflow] Falha ao colocar contatos no funil (best-effort, envio segue):', e)
           }
 
           // Verifica se o workflow foi cancelado/pausado

@@ -23,6 +23,7 @@ import { ContactQuickEditModal } from '@/components/features/contacts/ContactQui
 import { Calendar } from '@/components/ui/calendar'
 import DateTimePicker from '@/components/ui/date-time-picker'
 import { ptBRLight as ptBR } from '@/lib/locale-pt-br-light'
+import { FunnelStageSelect } from '@/components/features/campaigns/FunnelStageSelect'
 import { HeaderMediaUploadField, getTemplateHeaderMediaFormat } from '@/components/features/campaigns/HeaderMediaUploadField'
 import { useCampaignNewController, steps, formatDateLabel, parsePickerDate } from '@/hooks/useCampaignNew'
 
@@ -291,6 +292,10 @@ export default function CampaignsNewRealPage() {
                   fileName={ctrl.headerMediaName}
                   onChange={ctrl.setHeaderMedia}
                 />
+              )}
+
+              {ctrl.templateSelected && (
+                <FunnelStageSelect value={ctrl.funnelStage} onChange={ctrl.setFunnelStage} />
               )}
 
               {ctrl.templateSelected && ctrl.hasTemplateVariables && (

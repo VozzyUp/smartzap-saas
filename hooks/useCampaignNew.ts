@@ -99,6 +99,8 @@ export const useCampaignNewController = () => {
   // Mídia própria do cabeçalho ("Enviar com este arquivo"): media id já enviado para o número.
   const [headerMediaId, setHeaderMediaId] = useState<string | null>(null)
   const [headerMediaName, setHeaderMediaName] = useState<string | null>(null)
+  // "Ao enviar, colocar o contato na fase" (opcional)
+  const [funnelStage, setFunnelStage] = useState<{ boardId: string; stageId: string } | null>(null)
   const [templateSpecError, setTemplateSpecError] = useState<string | null>(null)
   const [isLaunching, setIsLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
@@ -421,7 +423,11 @@ export const useCampaignNewController = () => {
 
   const buildTemplateVariables = () => {
     const base = buildTemplateVariablesBase()
-    return headerMediaId ? { ...base, headerMediaId } : base
+    return {
+      ...base,
+      ...(headerMediaId ? { headerMediaId } : {}),
+      ...(funnelStage ? { funnelStage } : {}),
+    }
   }
 
   const buildTemplateVariablesBase = () => {
@@ -1425,6 +1431,10 @@ export const useCampaignNewController = () => {
     setCampaignName,
     categoryFilter,
     setCategoryFilter,
+
+    // Funil
+    funnelStage,
+    setFunnelStage,
 
     // Mídia própria do cabeçalho
     headerMediaId,

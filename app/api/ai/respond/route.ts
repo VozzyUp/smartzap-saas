@@ -20,6 +20,10 @@ import { redis } from '@/lib/redis'
 import type { AIAgent } from '@/types'
 import { isTenantBlocked } from '@/lib/trial'
 import { triggerKanbanAutomationForAIReply } from './kanban-automation-hook'
+import { normalizePhoneNumber } from '@/lib/phone-formatter'
+import { getActiveSuppressionsByPhone, upsertPhoneSuppression } from '@/lib/phone-suppressions'
+import { resolveFunnelContext, applyFunnelClassification } from '@/lib/ai/funnel-classifier'
+import { sendHandoffNotification } from '@/lib/push-notifications'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -141,6 +145,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 4.5. Telefone suprimido (opt-out): o bot NUNCA escreve para quem pediu para parar.
+    // A mensagem já foi gravada no inbox pelo webhook; só não respondemos.
+    // Erro na consulta propaga (500) para o QStash tentar de novo — melhor atrasar do que escrever
+    // para quem pediu para parar.
+    const suppressions = await getActiveSuppressionsByPhone(tenantId, [
+      conversation.phone,
+      normalizePhoneNumber(conversation.phone),
+    ])
+    if (suppressions.size > 0) {
+      console.log(`🛑 [AI-RESPOND] Skipping - phone ${conversation.phone} está em phone_suppressions (opt-out) no tenant ${tenantId}; sem resposta`)
+      return NextResponse.json({ success: true, skipped: 'phone_suppressed' })
+    }
+
     // 5. Busca agente
     const agent = await getAgentForConversation(conversation.ai_agent_id, tenantId)
 
@@ -174,6 +191,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 7.5. Quadro de funil (null = tenant sem quadro definido: não classifica)
+    const funnel = await resolveFunnelContext(tenantId, conversation.contact_id)
+
     // 8. Processa com IA
     console.log(`🚀 [AI-RESPOND] Calling processChatAgent...`)
 
@@ -183,6 +203,7 @@ export async function POST(req: NextRequest) {
       conversation,
       messages,
       contactData,
+      funnel,
     })
 
     console.log(`✅ [AI-RESPOND] AI result: success=${result.success}, latency=${result.latencyMs}ms`)
@@ -193,12 +214,36 @@ export async function POST(req: NextRequest) {
 
       // Auto-handoff em caso de erro
       await handleAutoHandoff(tenantId, conversationId, conversation.phone, result.error || 'AI processing failed')
+      await notifyHandoff(tenantId, conversationId, contactData?.name || conversation.phone, `Erro técnico: ${result.error || 'AI processing failed'}`)
 
       return NextResponse.json({
         success: false,
         error: result.error || 'Empty response',
         handedOff: true,
       })
+    }
+
+    // 8.5. IA detectou pedido de parar/sem interesse: grava supressão ANTES de enviar
+    // (a despedida segue normalmente nesta rodada; as próximas rodadas são bloqueadas em 4.5).
+    if (result.response.optOut) {
+      try {
+        await upsertPhoneSuppression({
+          tenantId,
+          phone: normalizePhoneNumber(conversation.phone),
+          reason: 'IA detectou pedido para não receber mais mensagens',
+          source: 'ai_detected',
+          metadata: { conversationId, messageId: messageId || null },
+          isActive: true,
+          expiresAt: null,
+        })
+        console.log(`📵 [AI-RESPOND] optOut detectado pela IA - supressão gravada para ${conversation.phone}`)
+      } catch (e) {
+        console.error('[AI-RESPOND] Falha ao gravar supressão de optOut da IA (seguindo com a despedida):', {
+          tenantId,
+          conversationId,
+          e,
+        })
+      }
     }
 
     // 9. Envia resposta via WhatsApp (com split por parágrafos)
@@ -283,6 +328,22 @@ export async function POST(req: NextRequest) {
       await triggerKanbanAutomationForAIReply(tenantId, conversation.contact_id, result.response.detectedQuoteRequest)
     }
 
+    // 9.5. Classificação do funil pela IA. Roda DEPOIS da automação por evento
+    // (message_sent/quote_detected) para que a decisão da IA prevaleça na rodada.
+    if (funnel && conversation.contact_id && result.response.funnelStage) {
+      try {
+        const applied = await applyFunnelClassification(
+          tenantId,
+          conversation.contact_id,
+          funnel,
+          result.response.funnelStage
+        )
+        console.log(`🧭 [AI-RESPOND] Funil: "${result.response.funnelStage}" -> ${applied}`)
+      } catch (e) {
+        console.error('[AI-RESPOND] Falha ao classificar lead no funil (resposta já enviada):', { tenantId, conversationId, e })
+      }
+    }
+
     // 10. Handoff se necessário
     if (result.response.shouldHandoff) {
       console.log(`🔄 [AI-RESPOND] Processing handoff request...`)
@@ -303,6 +364,13 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
         },
       })
+
+      await notifyHandoff(
+        tenantId,
+        conversationId,
+        contactData?.name || conversation.phone,
+        result.response.handoffReason
+      )
 
       console.log(`✅ [AI-RESPOND] Handoff completed`)
     }
@@ -460,6 +528,24 @@ async function handleAutoHandoff(
     message_type: 'internal_note',
     delivery_status: 'delivered',
   })
+}
+
+/**
+ * Avisa por push os usuários do tenant que a conversa foi para humano.
+ * Best-effort: falha só loga.
+ */
+async function notifyHandoff(
+  tenantId: string,
+  conversationId: string,
+  contactLabel: string,
+  reason?: string | null
+): Promise<void> {
+  try {
+    const r = await sendHandoffNotification(tenantId, { conversationId, contactLabel, reason })
+    console.log(`🔔 [AI-RESPOND] Push de handoff: enviados=${r.sent}, falhas=${r.failed}`)
+  } catch (e) {
+    console.error('[AI-RESPOND] Falha ao enviar push de handoff (best-effort):', { tenantId, conversationId, e })
+  }
 }
 
 /**

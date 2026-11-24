@@ -12,6 +12,7 @@ import { AI_PROVIDERS, type AIProvider } from '@/lib/ai/providers'
 const LLM_API_KEY_MAP: Record<AIProvider, { settingKey: string; envVar: string }> = {
   google: { settingKey: 'google_api_key', envVar: 'GOOGLE_GENERATIVE_AI_API_KEY' },
   openai: { settingKey: 'openai_api_key', envVar: 'OPENAI_API_KEY' },
+  anthropic: { settingKey: 'anthropic_api_key', envVar: 'ANTHROPIC_API_KEY' },
 }
 
 /**

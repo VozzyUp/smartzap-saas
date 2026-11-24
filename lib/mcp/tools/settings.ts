@@ -78,12 +78,13 @@ export function registerSettingsTools(server: McpServer) {
     {
       title: 'Configurar IA',
       description:
-        'Configura provider (google/openai), modelo, chaves de API e rotas de IA. Valida a chave antes de salvar.',
+        'Configura provider (google/openai/anthropic), modelo, chaves de API e rotas de IA. Valida a chave antes de salvar.',
       inputSchema: {
-        provider: z.enum(['google', 'openai']).optional().describe('Provider de IA'),
-        model: z.string().optional().describe('Model ID (ex: gemini-2.5-flash, gpt-4o)'),
+        provider: z.enum(['google', 'openai', 'anthropic']).optional().describe('Provider de IA'),
+        model: z.string().optional().describe('Model ID (ex: gemini-2.5-flash, gpt-4o, claude-opus-5-5)'),
         google_api_key: z.string().optional().describe('Chave API do Google Gemini'),
         openai_api_key: z.string().optional().describe('Chave API da OpenAI'),
+        anthropic_api_key: z.string().optional().describe('Chave API da Anthropic (Claude)'),
         routes: z
           .object({
             inbox_suggest: z.boolean().optional(),
@@ -95,14 +96,14 @@ export function registerSettingsTools(server: McpServer) {
           .describe('Rotas que usam IA (habilitar/desabilitar individualmente)'),
       },
     },
-    async ({ provider, model, google_api_key, openai_api_key, routes }) => {
+    async ({ provider, model, google_api_key, openai_api_key, anthropic_api_key, routes }) => {
       const res = await fetch(`${baseUrl()}/api/settings/ai`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': adminKey(),
         },
-        body: JSON.stringify({ provider, model, google_api_key, openai_api_key, routes }),
+        body: JSON.stringify({ provider, model, google_api_key, openai_api_key, anthropic_api_key, routes }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) return err(body.error ?? `HTTP ${res.status}`)
@@ -115,9 +116,9 @@ export function registerSettingsTools(server: McpServer) {
     'sz.settings.remove_ai_key',
     {
       title: 'Remover chave de API de IA',
-      description: 'Remove a chave de API de um provider (google ou openai) do banco.',
+      description: 'Remove a chave de API de um provider (google, openai ou anthropic) do banco.',
       inputSchema: {
-        provider: z.enum(['google', 'openai']).describe('Provider cuja chave será removida'),
+        provider: z.enum(['google', 'openai', 'anthropic']).describe('Provider cuja chave será removida'),
       },
     },
     async ({ provider }) => {

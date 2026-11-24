@@ -276,6 +276,7 @@ export const settingsService = {
     model?: string;
     google_api_key?: string;
     openai_api_key?: string;
+    anthropic_api_key?: string;
     routes?: AiRoutesConfig;
     prompts?: AiPromptsConfig;
     ocr_gemini_model?: string;
@@ -284,7 +285,7 @@ export const settingsService = {
   /**
    * Remove API key for a specific provider
    */
-  removeAIKey: async (provider: 'google' | 'openai') => {
+  removeAIKey: async (provider: 'google' | 'openai' | 'anthropic') => {
     const response = await fetch(`/api/settings/ai?provider=${provider}`, {
       method: 'DELETE',
     });

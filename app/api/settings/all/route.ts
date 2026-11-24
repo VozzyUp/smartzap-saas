@@ -188,7 +188,7 @@ async function fetchAISettings(): Promise<AISettingsData> {
     ?.from('settings')
     .select('key, value')
     .in('key', [
-      'ai_direct', 'google_api_key', 'openai_api_key',
+      'ai_direct', 'google_api_key', 'openai_api_key', 'anthropic_api_key',
       'ai_routes', 'ai_prompts',
     ]) || { data: null }
 
@@ -200,6 +200,8 @@ async function fetchAISettings(): Promise<AISettingsData> {
 
   const googleKey = (settingsMap.get('google_api_key') as string) || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || ''
   const openaiKey = (settingsMap.get('openai_api_key') as string) || process.env.OPENAI_API_KEY || ''
+  // Anthropic: só a chave da conta (o chat não lê variável de ambiente, então não exibimos como configurada)
+  const anthropicKey = (settingsMap.get('anthropic_api_key') as string) || ''
 
   const getPreview = (key: string) => key ? `${key.substring(0, 4)}...${key.substring(key.length - 4)}` : null
 
@@ -217,12 +219,19 @@ async function fetchAISettings(): Promise<AISettingsData> {
         source: settingsMap.get('openai_api_key') ? 'database' : (openaiKey ? 'env' : 'none'),
         tokenPreview: getPreview(openaiKey),
       },
+      anthropic: {
+        isConfigured: !!anthropicKey,
+        source: anthropicKey ? 'database' : 'none',
+        tokenPreview: getPreview(anthropicKey),
+      },
     },
-    isConfigured: savedProvider === 'google' ? !!googleKey : !!openaiKey,
+    isConfigured: savedProvider === 'google' ? !!googleKey : savedProvider === 'anthropic' ? !!anthropicKey : !!openaiKey,
     source: savedProvider === 'google'
       ? (settingsMap.get('google_api_key') ? 'database' : (googleKey ? 'env' : 'none'))
-      : (settingsMap.get('openai_api_key') ? 'database' : (openaiKey ? 'env' : 'none')),
-    tokenPreview: savedProvider === 'google' ? getPreview(googleKey) : getPreview(openaiKey),
+      : savedProvider === 'anthropic'
+        ? (anthropicKey ? 'database' : 'none')
+        : (settingsMap.get('openai_api_key') ? 'database' : (openaiKey ? 'env' : 'none')),
+    tokenPreview: savedProvider === 'google' ? getPreview(googleKey) : savedProvider === 'anthropic' ? getPreview(anthropicKey) : getPreview(openaiKey),
     routes: prepareAiRoutesUpdate(parseJsonSetting(settingsMap.get('ai_routes') as string | null, DEFAULT_AI_ROUTES)),
     prompts: prepareAiPromptsUpdate(parseJsonSetting(settingsMap.get('ai_prompts') as string | null, DEFAULT_AI_PROMPTS)),
   }

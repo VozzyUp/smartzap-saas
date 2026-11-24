@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { getTenantContext } from '@/lib/tenant-context'
+import { ANTHROPIC_MODELS } from '@/lib/ai/anthropic-support'
 
 export interface AIModelInfo {
   id: string
   name: string
-  provider: 'google' | 'openai'
+  provider: 'google' | 'openai' | 'anthropic'
   /** true = alias auto-atualizado (ex: gemini-flash-latest) */
   isAlias: boolean
 }
@@ -107,10 +108,11 @@ async function fetchOpenAIModels(apiKey: string): Promise<AIModelInfo[]> {
 }
 
 /**
- * GET /api/ai/models?provider=google|openai
+ * GET /api/ai/models?provider=google|openai|anthropic
  *
  * Retorna lista de modelos disponíveis para o provider solicitado,
  * buscando diretamente da API do provider com a chave configurada no banco.
+ * Anthropic: lista curada (lib/ai/anthropic-support), sem chamada de rede.
  */
 export async function GET(request: NextRequest) {
   const ctx = await getTenantContext()
@@ -118,18 +120,29 @@ export async function GET(request: NextRequest) {
 
   const provider = new URL(request.url).searchParams.get('provider')
 
-  if (provider !== 'google' && provider !== 'openai') {
+  if (provider !== 'google' && provider !== 'openai' && provider !== 'anthropic') {
     return NextResponse.json(
-      { error: 'Parâmetro "provider" inválido. Use "google" ou "openai".' },
+      { error: 'Parâmetro "provider" inválido. Use "google", "openai" ou "anthropic".' },
       { status: 400 }
     )
   }
 
-  const keyName = provider === 'google' ? 'google_api_key' : 'openai_api_key'
+  const keyName =
+    provider === 'google' ? 'google_api_key' : provider === 'openai' ? 'openai_api_key' : 'anthropic_api_key'
   const apiKey = await getSettingValue(ctx.tenantId, keyName)
 
   if (!apiKey) {
     return NextResponse.json({ models: [] })
+  }
+
+  if (provider === 'anthropic') {
+    const models: AIModelInfo[] = ANTHROPIC_MODELS.map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: 'anthropic' as const,
+      isAlias: false,
+    }))
+    return NextResponse.json({ models })
   }
 
   try {

@@ -24,6 +24,8 @@ export interface SendWhatsAppMessageOptions {
   // Template message
   templateName?: string
   templateParams?: Record<string, string[]>
+  /** Idioma do modelo (padrão pt_BR). */
+  templateLanguage?: string
   // Credentials override (optional - will fetch from settings if not provided)
   credentials?: WhatsAppCredentials
 }
@@ -61,7 +63,7 @@ export async function sendWhatsAppMessage(
   let payload: Record<string, unknown>
 
   if (options.type === 'template' && options.templateName) {
-    payload = buildTemplatePayload(normalizedTo, options.templateName, options.templateParams)
+    payload = buildTemplatePayload(normalizedTo, options.templateName, options.templateParams, options.templateLanguage)
   } else {
     // Default to text
     const textPayload = buildTextMessage({
@@ -248,7 +250,8 @@ export async function sendWhatsAppMedia(
 function buildTemplatePayload(
   to: string,
   templateName: string,
-  params?: Record<string, string[]>
+  params?: Record<string, string[]>,
+  language: string = 'pt_BR'
 ): Record<string, unknown> {
   const components: Array<{ type: string; parameters: Array<{ type: string; text: string }> }> = []
 
@@ -274,7 +277,7 @@ function buildTemplatePayload(
     type: 'template',
     template: {
       name: templateName,
-      language: { code: 'pt_BR' },
+      language: { code: language },
       ...(components.length > 0 ? { components } : {}),
     },
   }

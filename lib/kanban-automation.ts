@@ -1,6 +1,23 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { addCardToBoard, moveCard, KanbanError, type KanbanCard, type KanbanStage } from '@/lib/kanban'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { normalizePhoneNumber } from '@/lib/phone-formatter'
+import { getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
+import { isTenantBlocked } from '@/lib/trial'
+import { inboxDb } from '@/lib/inbox/inbox-db'
+import { notifyOpsAlert } from '@/lib/ops-alert'
+import {
+  getFollowupTemplateMap,
+  saveStageFollowupTemplates,
+  type FollowupTemplateConfig,
+} from '@/lib/kanban-followup-config'
+import { decideFollowupSend, prepareFollowupTemplate } from '@/lib/kanban-followup-send'
+import {
+  FOLLOWUP_MAX_ATTEMPTS,
+  incrementFollowupFailure,
+  clearFollowupFailure,
+  markFollowupReasonOnce,
+} from '@/lib/kanban-followup-state'
 
 export type AutomationEventType = 'message_sent' | 'client_replied' | 'quote_detected'
 export type AutomationSource = 'ai' | 'keyword' | 'system' | 'manual'
@@ -225,7 +242,14 @@ export async function saveBoardAutomationConfig(
 // Regras de follow-up por estágio
 // ============================================================================
 
-export type FollowupRule = { id?: string; dayOffset: number; templateText: string; position: number }
+export type FollowupRule = {
+  id?: string
+  dayOffset: number
+  templateText: string
+  position: number
+  /** Modelo aprovado a enviar (obrigatório para sair da janela de 24 h). Guardado em settings. */
+  template?: FollowupTemplateConfig | null
+}
 
 export async function listFollowupRules(tenantId: string, stageId: string): Promise<FollowupRule[]> {
   const { data } = await db()
@@ -235,17 +259,20 @@ export async function listFollowupRules(tenantId: string, stageId: string): Prom
     .eq('stage_id', stageId)
     .eq('active', true)
     .order('position', { ascending: true })
-  return ((data as any[]) ?? []).map((r) => ({
+  const templates = (await getFollowupTemplateMap(tenantId))[stageId] ?? []
+  return ((data as any[]) ?? []).map((r, i) => ({
     id: r.id,
     dayOffset: r.day_offset,
     templateText: r.template_text,
     position: r.position,
+    template: templates[i] ?? null,
   }))
 }
 
 /** Substitui TODAS as regras do estágio pela lista enviada (editor "salva tudo de uma vez"). */
 export async function saveFollowupRules(tenantId: string, stageId: string, rules: FollowupRule[]): Promise<void> {
   await db().from('kanban_stage_followup_rules').delete().eq('tenant_id', tenantId).eq('stage_id', stageId)
+  await saveStageFollowupTemplates(tenantId, stageId, rules.map((r) => r.template ?? null))
   if (rules.length === 0) return
 
   await db()
@@ -366,6 +393,7 @@ type FollowupCandidate = {
 }
 
 export async function runFollowupSweep(now: Date = new Date()): Promise<void> {
+  const blockedCache = new Map<string, boolean>()
   const { data: candidates, error } = await db()
     .from('kanban_cards')
     .select('*')
@@ -374,7 +402,18 @@ export async function runFollowupSweep(now: Date = new Date()): Promise<void> {
   if (!candidates || candidates.length === 0) return
 
   for (const card of candidates as FollowupCandidate[]) {
-    await processFollowupCandidate(card, now)
+    try {
+      let blocked = blockedCache.get(card.tenant_id)
+      if (blocked === undefined) {
+        blocked = await isTenantBlocked(card.tenant_id)
+        blockedCache.set(card.tenant_id, blocked)
+      }
+      if (blocked) continue
+      await processFollowupCandidate(card, now)
+    } catch (e) {
+      // Um cartão com problema não pode travar o sweep dos demais.
+      console.error('[Kanban] Falha ao processar follow-up do cartão:', { cardId: card.id, tenantId: card.tenant_id, e })
+    }
   }
 }
 
@@ -395,7 +434,13 @@ async function processFollowupCandidate(card: FollowupCandidate, now: Date): Pro
     .maybeSingle()
   if (settings && !isWithinFollowupWindow(now, settings as any)) return
 
-  const lastActivity = new Date(card.last_inbound_at ?? card.moved_at)
+  // Base do prazo: o que for mais recente entre a entrada do cartão na fase (moved_at) e a última
+  // mensagem recebida do contato. Assim a regra conta a partir da ENTRADA na fase (um inbound antigo
+  // não dispara tudo de uma vez) e cada regra só dispara uma vez por entrada (next_followup_index zera
+  // quando o cartão muda de fase).
+  const lastActivity = new Date(
+    Math.max(new Date(card.moved_at).getTime(), card.last_inbound_at ? new Date(card.last_inbound_at).getTime() : 0)
+  )
   if (!shouldTriggerFollowup(now, lastActivity, rule.day_offset)) return
 
   // Dedup entre boards: evita que o mesmo contato receba mais de um follow-up
@@ -434,17 +479,76 @@ async function processFollowupCandidate(card: FollowupCandidate, now: Date): Pro
     .maybeSingle()
   if (!contact) return
 
-  const message = substituteTemplate(rule.template_text, { nome: (contact as any).name })
-  const result = await sendWhatsAppMessage(card.tenant_id, { to: (contact as any).phone, type: 'text', text: message })
-  if (!result.success) return
+  const phone: string = (contact as any).phone
+  const contactName: string | null = (contact as any).name ?? null
 
-  await logAutomationEvent(card.tenant_id, card.id, 'followup_sent', 'system', {
-    rule_id: rule.id,
-    message_id: result.messageId,
+  // Telefone suprimido (qualquer source): follow-up nunca vai. Falha na consulta: não envia.
+  try {
+    const suppressions = await getActiveSuppressionsByPhone(card.tenant_id, [phone, normalizePhoneNumber(phone)])
+    if (suppressions.size > 0) return
+  } catch (e) {
+    console.error('[Kanban] Falha ao consultar supressões; follow-up não enviado:', { cardId: card.id, e })
+    return
+  }
+
+  const stateKey = `${card.id}:${card.moved_at}:${card.next_followup_index}`
+  const templateCfg = (await getFollowupTemplateMap(card.tenant_id))[card.stage_id]?.[card.next_followup_index] ?? null
+  const decision = decideFollowupSend({
+    now,
+    lastInboundAt: card.last_inbound_at ? new Date(card.last_inbound_at) : null,
+    template: templateCfg,
   })
+
+  const skip = async (reason: string) => {
+    if (await markFollowupReasonOnce(`${stateKey}:${reason}`)) {
+      console.warn('[Kanban] Follow-up não enviado:', { cardId: card.id, tenantId: card.tenant_id, stageId: card.stage_id, reason })
+    }
+  }
+  if (decision.mode === 'skip') return skip(decision.reason)
+
+  let sendOptions: Parameters<typeof sendWhatsAppMessage>[1]
+  let storedText: string
+  let messageType: 'text' | 'template' = 'text'
+  if (decision.mode === 'template') {
+    const prepared = await prepareFollowupTemplate(card.tenant_id, templateCfg!, { name: contactName, phone })
+    if (!prepared.ok) return skip(prepared.reason)
+    sendOptions = {
+      to: phone,
+      type: 'template',
+      templateName: prepared.templateName,
+      templateLanguage: prepared.language,
+      templateParams: prepared.bodyParams.length > 0 ? { body: prepared.bodyParams } : undefined,
+    }
+    storedText = prepared.renderedText
+    messageType = 'template'
+  } else {
+    storedText = substituteTemplate(rule.template_text, { nome: contactName })
+    sendOptions = { to: phone, type: 'text', text: storedText }
+  }
+
+  const result = await sendWhatsAppMessage(card.tenant_id, sendOptions)
+  if (!result.success) {
+    const attempts = await incrementFollowupFailure(stateKey)
+    console.error('[Kanban] Falha ao enviar follow-up:', {
+      cardId: card.id,
+      tenantId: card.tenant_id,
+      ruleIndex: card.next_followup_index,
+      attempt: attempts,
+      error: String(result.error ?? 'desconhecido').slice(0, 200),
+    })
+    if (attempts >= FOLLOWUP_MAX_ATTEMPTS) {
+      // Desiste desta regra neste cartão (persistido no banco) e avisa o dono.
+      await db().from('kanban_cards').update({ next_followup_index: card.next_followup_index + 1 }).eq('id', card.id)
+      await clearFollowupFailure(stateKey)
+      await notifyOpsAlert({ tenantId: card.tenant_id, type: 'followup_gave_up', error: result.error })
+    }
+    return
+  }
+  await clearFollowupFailure(stateKey)
 
   const nextIndex = card.next_followup_index + 1
   const isLastRule = nextIndex >= (rules as any[]).length
+  // Primeiro avança o índice (evita repetir o envio se algo depois falhar), depois registra.
   if (isLastRule && settings && (settings as any).stale_stage_id) {
     await moveCard(card.tenant_id, card.id, { stageId: (settings as any).stale_stage_id, position: 0 })
     await logAutomationEvent(card.tenant_id, card.id, 'stage_moved', 'system', {
@@ -453,5 +557,28 @@ async function processFollowupCandidate(card: FollowupCandidate, now: Date): Pro
     })
   } else {
     await db().from('kanban_cards').update({ next_followup_index: nextIndex }).eq('id', card.id)
+  }
+
+  await logAutomationEvent(card.tenant_id, card.id, 'followup_sent', 'system', {
+    rule_id: rule.id,
+    message_id: result.messageId,
+    mode: decision.mode,
+  })
+
+  // Grava na conversa do inbox para o agente de IA ter o contexto quando o lead responder.
+  try {
+    const conversation = await inboxDb.getOrCreateConversation(card.tenant_id, normalizePhoneNumber(phone), card.contact_id)
+    await inboxDb.createMessage({
+      tenant_id: card.tenant_id,
+      conversation_id: conversation.id,
+      direction: 'outbound',
+      content: storedText,
+      message_type: messageType,
+      whatsapp_message_id: result.messageId ?? null,
+      delivery_status: 'sent',
+      payload: { source: 'kanban_followup', ruleId: rule.id ?? null, templateName: templateCfg?.templateName ?? null },
+    })
+  } catch (e) {
+    console.error('[Kanban] Follow-up enviado, mas não gravado no inbox:', { cardId: card.id, tenantId: card.tenant_id, e })
   }
 }

@@ -54,6 +54,8 @@ export interface Template {
   headerMediaId?: string | null;
   /** Hash of header media for change detection */
   headerMediaHash?: string | null;
+  /** ISO timestamp de quando o headerMediaId foi gerado (media ids expiram em 30 dias) */
+  headerMediaUpdatedAt?: string | null;
   /** Preview URL for header media */
   headerMediaPreviewUrl?: string | null;
   /** ISO timestamp when preview URL expires */

@@ -110,4 +110,17 @@ describe('templateService', () => {
 
     await expect(templateService.uploadHeaderMedia(file, 'image')).rejects.toThrow('header_handle')
   })
+
+  it('uploadHeaderMedia mostra mensagem clara quando o servidor recusa o corpo (413)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 413,
+      statusText: 'Payload Too Large',
+      json: async () => { throw new Error('not json') },
+    } as any)
+
+    const file = new File(['x'], 'x.mp4', { type: 'video/mp4' })
+
+    await expect(templateService.uploadHeaderMedia(file, 'VIDEO')).rejects.toThrow('muito grande')
+  })
 })

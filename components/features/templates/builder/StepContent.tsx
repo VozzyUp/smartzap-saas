@@ -29,6 +29,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { VIDEO_CONVERTER_URL } from '@/lib/video-codec-validator'
+import { TEMPLATE_HEADER_LIMITS, type TemplateHeaderMediaFormat } from '@/lib/whatsapp/template-header-upload'
 import {
   Select,
   SelectContent,
@@ -681,18 +682,7 @@ export function StepContent({
 
               {/* Aviso de limite de tamanho */}
               <p className="text-xs text-[var(--ds-text-muted)]">
-                {headerType === 'VIDEO' && (
-                  <>Máximo: <span className="font-medium text-amber-400/80">4.5MB</span> (limite da plataforma). Formato: MP4 (H.264 + AAC).</>
-                )}
-                {headerType === 'IMAGE' && (
-                  <>Máximo: <span className="font-medium">5MB</span>. Formatos: PNG, JPEG.</>
-                )}
-                {headerType === 'DOCUMENT' && (
-                  <>Máximo: <span className="font-medium text-amber-400/80">4.5MB</span> (limite da plataforma). Formato: PDF.</>
-                )}
-                {headerType === 'GIF' && (
-                  <>Máximo: <span className="font-medium">3.5MB</span>. Formato: MP4 (como GIF animado).</>
-                )}
+                {TEMPLATE_HEADER_LIMITS[headerType as TemplateHeaderMediaFormat]?.hint}
               </p>
 
               {uploadHeaderMediaError ? (

@@ -677,7 +677,9 @@ export function DashboardShell({
 function PageContentShell({ children }: { children: React.ReactNode }) {
     const layout = usePageLayout()
 
-    const mainOverflowClass = layout.overflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto'
+    // 'hidden' vale do computador para cima (a página tem rolagem interna própria). No celular o
+    // conteúdo flui em altura natural (ex.: Contatos), então a página precisa rolar.
+    const mainOverflowClass = layout.overflow === 'hidden' ? 'overflow-y-auto overflow-x-hidden lg:overflow-hidden' : 'overflow-auto'
     const mainPaddingClass = layout.padded ? 'p-6 lg:p-10' : ''
     const wrapperWidthClass = getPageWidthClass(layout.width)
     const wrapperHeightClass = layout.height === 'full' ? 'h-full' : ''

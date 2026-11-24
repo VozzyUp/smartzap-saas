@@ -506,7 +506,7 @@ export function DashboardShell({
                         <header className="lg:hidden h-12 flex items-center justify-between px-4 border-b border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)] shrink-0">
                             <div className="flex items-center">
                                 <button
-                                    className="p-2 text-[var(--ds-text-secondary)] -ml-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md"
+                                    className="inline-flex min-h-11 min-w-11 items-center justify-center p-2 text-[var(--ds-text-secondary)] -ml-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md"
                                     onClick={() => {
                                         updateSidebarExpanded(true)
                                         setIsMobileMenuOpen(true)
@@ -517,7 +517,7 @@ export function DashboardShell({
                                 </button>
                                 <span className="ml-2 text-sm font-medium text-[var(--ds-text-secondary)]">Inbox</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 sm:gap-2">
                                 <ThemeToggle compact />
                                 <DevModeToggle />
                             </div>
@@ -562,7 +562,7 @@ export function DashboardShell({
                 <header className="h-20 flex items-center justify-between px-6 lg:px-10 shrink-0">
                     <div className="flex items-center">
                         <button
-                            className="lg:hidden p-2 text-[var(--ds-text-secondary)] mr-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md"
+                            className="lg:hidden inline-flex min-h-11 min-w-11 items-center justify-center p-2 text-[var(--ds-text-secondary)] mr-2 sm:mr-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md"
                             onClick={() => {
                                 updateSidebarExpanded(true)
                                 setIsMobileMenuOpen(true)
@@ -579,7 +579,7 @@ export function DashboardShell({
                         </nav>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 sm:gap-3">
                         <ChecklistMiniBadge isOnboardingCompletedInDb={isOnboardingCompletedInDb} />
 
                         {/* Tutoriais de Configuração */}
@@ -589,7 +589,7 @@ export function DashboardShell({
 
                         <ThemeToggle compact />
                         <DevModeToggle />
-                        <button className="relative group focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md p-1" aria-label="Notificações (1 nova)">
+                        <button className="relative group inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2 rounded-md p-1" aria-label="Notificações (1 nova)">
                             <Bell size={20} className="text-[var(--ds-text-muted)] group-hover:text-[var(--ds-text-primary)] transition-colors cursor-pointer" aria-hidden="true" />
                             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-[var(--ds-bg-base)]" aria-label="1 notificação não lida"></span>
                         </button>

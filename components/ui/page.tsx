@@ -31,7 +31,7 @@ export function PageHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
  * Usa fonte display (Satoshi) do Design System
  */
 export function PageTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h1 className={cn('text-heading-1', className)} {...props} />
+  return <h1 className={cn('text-heading-1 !text-2xl sm:!text-[length:var(--ds-text-4xl)]', className)} {...props} />
 }
 
 /**

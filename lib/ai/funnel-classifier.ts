@@ -119,9 +119,13 @@ export function buildFunnelPromptSection(ctx: FunnelContext): string {
     `## Classificação no funil "${ctx.boardName}"`,
     `Fases disponíveis:\n${list}`,
     `Fase atual do lead: ${ctx.currentStageName ?? 'ainda não classificado'}.`,
-    'No campo funnelStage da resposta, indique em qual fase o lead está DEPOIS desta mensagem. ' +
-      'Só mude de fase quando a conversa justificar; se nada mudou, use null. ' +
-      'Você pode voltar o lead para uma fase anterior se a conversa indicar isso.',
+    'No campo funnelStage da resposta, informe SEMPRE, em toda resposta, a fase em que o lead está DEPOIS ' +
+      'desta mensagem, escolhendo pelo conteúdo da conversa inteira. Não deixe o campo vazio: se a fase ' +
+      'não mudou, repita a fase atual. Assim que o lead responder qualquer coisa, ele já saiu das fases de ' +
+      'entrada (novo contato, mensagem enviada) e deve ir para a fase de quem respondeu; quando demonstrar ' +
+      'interesse, perguntar preço ou como funciona, vai para a fase de interesse; e assim por diante, ' +
+      'seguindo os critérios das suas instruções. Você pode voltar o lead para uma fase anterior se a ' +
+      'conversa indicar isso. Use null apenas se nenhuma fase da lista descrever o lead.',
   ].join('\n\n')
 }
 

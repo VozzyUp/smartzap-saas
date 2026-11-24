@@ -11,6 +11,7 @@
  * - Typography-first, minimal chrome
  */
 
+import { AudioTranscription } from './AudioTranscription'
 import React, { memo, useMemo } from 'react'
 import { Check, CheckCheck, Clock, AlertCircle, Sparkles, ArrowRightLeft, Loader2, FileText, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -382,6 +383,7 @@ function MediaContent({ message }: { message: InboxMessage }) {
           <source src={src} />
         </audio>
         {duration && <span className="text-[10px] text-[var(--ds-text-muted)]">{duration}</span>}
+        <AudioTranscription payload={message.payload} />
       </div>
     )
   }

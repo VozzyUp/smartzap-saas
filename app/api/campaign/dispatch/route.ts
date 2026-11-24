@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Client } from '@upstash/workflow'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { supabase } from '@/lib/supabase'
-import { templateDb } from '@/lib/supabase-db'
+import { templateDb, settingsDb, campaignDb } from '@/lib/supabase-db'
+import { Client as QStashClient } from '@upstash/qstash'
+import { DAILY_LIMIT_SETTING_KEY, countSentToday, parseDailyLimit, planDailyDispatch } from '@/lib/campaign-daily-limit'
 import { getAdaptiveThrottleConfigWithSource } from '@/lib/whatsapp-adaptive-throttle'
 
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
@@ -652,6 +654,10 @@ export async function POST(request: NextRequest) {
     validContacts.push(...keep)
   }
 
+  // Contatos já processados nesta campanha (preenchido no persist abaixo). Também usado pelo
+  // limite diário: quem já foi enviado nunca entra na conta do que ainda falta enviar.
+  const lockedContactIds = new Set<string>()
+
   // Persistir snapshot + status por contato (pending vs skipped)
   try {
     // HARDENING CRÍTICO:
@@ -667,7 +673,6 @@ export async function POST(request: NextRequest) {
       )
     )
 
-    const lockedContactIds = new Set<string>()
     try {
       if (candidateContactIds.length > 0) {
         // BUG FIX: candidateContactIds vem do payload de dispatch e pode ter centenas de UUIDs.
@@ -978,11 +983,71 @@ export async function POST(request: NextRequest) {
     const throttleSource = throttleConfigResult?.source ?? 'fallback'
     console.log(`[Dispatch] Throttle config source: ${throttleSource}`, throttleConfig ? JSON.stringify(throttleConfig) : 'null')
 
+    // =====================================================================
+    // LIMITE DIÁRIO (setting campaign_daily_limit; ausente/0 = sem limite)
+    // Envia só até o saldo do dia e reprograma o restante para amanhã 9h (QStash).
+    // Os adiados permanecem 'pending' em campaign_contacts; reexecuções nunca reenviam
+    // quem já foi enviado porque `eligible` exclui os locked e o workflow só "claima" pending.
+    // =====================================================================
+    const dailyPlan = await planDailyDispatch({
+      tenantId,
+      eligible: validContacts.filter((c) => !lockedContactIds.has(String(c.contactId))),
+      now: new Date(),
+      getLimit: async (t) => parseDailyLimit(await settingsDb.get(t, DAILY_LIMIT_SETTING_KEY).catch(() => null)),
+      count: (t, dayStart) => countSentToday(supabase, t, dayStart),
+    })
+    const contactsToSend = dailyPlan.deferred > 0 ? dailyPlan.send : validContacts
+    const dailyLimitInfo =
+      dailyPlan.deferred > 0 && dailyPlan.nextRunAt
+        ? { deferred: dailyPlan.deferred, nextRunAt: dailyPlan.nextRunAt.toISOString() }
+        : null
+
+    if (dailyLimitInfo && dailyPlan.nextRunAt) {
+      console.log(
+        `[Dispatch] Limite diário ${dailyPlan.limit}: já enviados hoje=${dailyPlan.sentToday}, enviando ${contactsToSend.length}, adiando ${dailyPlan.deferred} para ${dailyLimitInfo.nextRunAt}`
+      )
+      // Reprograma ANTES de enviar: se falhar, a campanha falha sem ter disparado nada.
+      await campaignDb.updateStatus(tenantId, campaignId, { scheduledAt: dailyLimitInfo.nextRunAt })
+      if (!isLocalhost && process.env.QSTASH_TOKEN) {
+        const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN })
+        const runAtMs = dailyPlan.nextRunAt.getTime()
+        const res = await qstash.publishJSON({
+          url: `${baseUrl}/api/campaign/dispatch`,
+          body: { campaignId, templateName, trigger: 'schedule', scheduledAt: dailyLimitInfo.nextRunAt },
+          delay: Math.max(0, Math.floor((runAtMs - Date.now()) / 1000)),
+          retries: 3,
+          deduplicationId: `daily-${campaignId}-${dailyLimitInfo.nextRunAt.replace(/:/g, '_')}`,
+        })
+        await campaignDb.updateStatus(tenantId, campaignId, {
+          qstashScheduleMessageId: res.messageId,
+          qstashScheduleEnqueuedAt: new Date().toISOString(),
+        })
+      } else {
+        console.warn('[Dispatch] Limite diário: sem QStash (localhost ou QSTASH_TOKEN ausente); continuação de amanhã NÃO foi agendada.')
+      }
+
+      if (contactsToSend.length === 0) {
+        // Saldo de hoje esgotado: nada a enviar agora; a campanha espera o próximo dia.
+        await campaignDb.updateStatus(tenantId, campaignId, { status: CampaignStatus.SCHEDULED, completedAt: null })
+        return NextResponse.json(
+          {
+            status: 'deferred',
+            count: 0,
+            deferred: dailyPlan.deferred,
+            nextRunAt: dailyLimitInfo.nextRunAt,
+            message: `Limite diário (${dailyPlan.limit}) atingido; ${dailyPlan.deferred} mensagens reprogramadas para amanhã.`,
+          },
+          { status: 202 }
+        )
+      }
+    }
+
     const workflowPayload = {
       campaignId,
       traceId,
       templateName,
-      contacts: validContacts,
+      contacts: contactsToSend,
+      dailyLimit: dailyLimitInfo,
       templateVariables: resolvedTemplateVariables,
       templateSnapshot: {
         name: template.name,
@@ -1044,10 +1109,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       status: 'queued',
-      count: validContacts.length,
+      count: contactsToSend.length,
       skipped: skippedContacts.length,
+      deferred: dailyLimitInfo?.deferred ?? 0,
+      nextRunAt: dailyLimitInfo?.nextRunAt ?? null,
       traceId,
-      message: `${validContacts.length} mensagens enfileiradas • ${skippedContacts.length} ignoradas por validação`
+      message: `${contactsToSend.length} mensagens enfileiradas • ${skippedContacts.length} ignoradas por validação` +
+        (dailyLimitInfo ? ` • ${dailyLimitInfo.deferred} adiadas para amanhã (limite diário)` : '')
     }, { status: 202 })
 
   } catch (error) {

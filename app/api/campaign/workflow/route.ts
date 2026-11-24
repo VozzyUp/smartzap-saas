@@ -295,6 +295,8 @@ interface CampaignWorkflowInput {
   phoneNumberId: string
   accessToken: string
   isResend?: boolean
+  // Limite diário: contatos adiados para o próximo dia (dispatch já agendou a continuação no QStash)
+  dailyLimit?: { deferred: number; nextRunAt: string } | null
   // Config de throttle passada do dispatch (evita dependência de DB no QStash)
   throttleConfig?: {
     enabled: boolean
@@ -2426,6 +2428,26 @@ const workflowHandler = serve<CampaignWorkflowInput>(
       }
 
       const campaign = await campaignDb.getById(tenantId, campaignId)
+
+      // Limite diário: ainda há contatos adiados para amanhã. A campanha volta a "Agendada"
+      // (scheduled_date = próxima execução) e continua no dia seguinte; NÃO é concluída.
+      const dailyLimit = (context.requestPayload as any)?.dailyLimit as { deferred: number; nextRunAt: string } | null | undefined
+      if (dailyLimit && dailyLimit.deferred > 0 && current?.status !== CampaignStatus.PAUSED) {
+        await campaignDb.updateStatus(tenantId, campaignId, {
+          status: CampaignStatus.SCHEDULED,
+          scheduledAt: dailyLimit.nextRunAt,
+          completedAt: null,
+        })
+        await emitWorkflowTrace({
+          traceId,
+          campaignId,
+          step: 'complete-campaign',
+          phase: 'daily_limit_deferred',
+          ok: true,
+          extra: { deferred: dailyLimit.deferred, nextRunAt: dailyLimit.nextRunAt },
+        })
+        return
+      }
 
       let finalStatus = CampaignStatus.COMPLETED
       if (campaign && (campaign.failed + (campaign as any).skipped) === campaign.recipients && campaign.recipients > 0) {

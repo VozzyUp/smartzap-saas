@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Smartphone } from 'lucide-react';
 import { UpstashConfigPanel } from './UpstashConfigPanel';
 import { ApiDocsPanel } from './ApiDocsPanel';
+import { CampaignDailyLimitCard } from './CampaignDailyLimitCard';
 import { useDevMode } from '@/components/providers/DevModeProvider';
 import type { SettingsViewProps } from './types';
 
@@ -216,6 +217,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             isSavingCalendarBooking={isSavingCalendarBooking}
           />
         )}
+
+        {/* 4.5 Limite diário de envios de campanha */}
+        {settings.isConnected && <CampaignDailyLimitCard />}
 
         {/* 5. API Documentation Link */}
         {settings.isConnected && <ApiDocsPanel />}

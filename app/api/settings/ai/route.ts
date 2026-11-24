@@ -4,6 +4,7 @@ import { getTenantContext } from '@/lib/tenant-context'
 import { settingsDb } from '@/lib/supabase-db'
 import { clearSettingsCache } from '@/lib/ai'
 import { DEFAULT_AI_DIRECT, DEFAULT_AI_PROMPTS, DEFAULT_AI_ROUTES } from '@/lib/ai/ai-center-defaults'
+import { validateAnthropicKey } from '@/lib/ai/anthropic-support'
 import { DEFAULT_OCR_MODEL } from '@/lib/ai/ocr/providers/gemini'
 import {
   clearAiCenterCache,
@@ -81,6 +82,7 @@ export async function GET() {
       'ai_direct',
       'google_api_key',
       'openai_api_key',
+      'anthropic_api_key',
       'ai_routes',
       'ai_prompts',
       'ocr_gemini_model',
@@ -113,6 +115,7 @@ export async function GET() {
 
     const googleApiKey = (settingsMap.get('google_api_key') as string) || ''
     const openaiApiKey = (settingsMap.get('openai_api_key') as string) || ''
+    const anthropicApiKey = (settingsMap.get('anthropic_api_key') as string) || ''
     const ocrGeminiModel = (settingsMap.get('ocr_gemini_model') as string) || DEFAULT_OCR_MODEL
 
     return NextResponse.json({
@@ -130,6 +133,11 @@ export async function GET() {
           isConfigured: !!openaiApiKey,
           source: openaiApiKey ? 'database' : 'none',
           tokenPreview: openaiApiKey ? getPreview(openaiApiKey) : null,
+        },
+        anthropic: {
+          isConfigured: !!anthropicApiKey,
+          source: anthropicApiKey ? 'database' : 'none',
+          tokenPreview: anthropicApiKey ? getPreview(anthropicApiKey) : null,
         },
       },
       ocr: {
@@ -159,12 +167,13 @@ export async function POST(request: NextRequest) {
       model,
       google_api_key,
       openai_api_key,
+      anthropic_api_key,
       routes,
       prompts,
       ocr_gemini_model,
     } = body
 
-    if (!provider && !model && !google_api_key && !openai_api_key && !routes && !prompts && !ocr_gemini_model) {
+    if (!provider && !model && !google_api_key && !openai_api_key && !anthropic_api_key && !routes && !prompts && !ocr_gemini_model) {
       return NextResponse.json({ error: 'At least one field is required' }, { status: 400 })
     }
 
@@ -197,6 +206,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: result.error }, { status: 400 })
       }
       updates.push({ key: 'openai_api_key', value: openai_api_key, updated_at: now })
+    }
+
+    // Valida e salva chave Anthropic (GET /v1/models: sem gerar tokens)
+    if (anthropic_api_key) {
+      const result = await validateAnthropicKey(anthropic_api_key)
+      if (!result.valid) {
+        return NextResponse.json({ error: result.error }, { status: 400 })
+      }
+      updates.push({ key: 'anthropic_api_key', value: anthropic_api_key, updated_at: now })
     }
 
     // Rotas de IA
@@ -271,14 +289,15 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
 
-    if (provider !== 'google' && provider !== 'openai') {
+    if (provider !== 'google' && provider !== 'openai' && provider !== 'anthropic') {
       return NextResponse.json(
-        { error: 'Provider inválido. Use "google" ou "openai".' },
+        { error: 'Provider inválido. Use "google", "openai" ou "anthropic".' },
         { status: 400 }
       )
     }
 
-    const keyName = provider === 'google' ? 'google_api_key' : 'openai_api_key'
+    const keyName =
+      provider === 'google' ? 'google_api_key' : provider === 'openai' ? 'openai_api_key' : 'anthropic_api_key'
 
     const { error } = await supabase.admin
       ?.from('settings')

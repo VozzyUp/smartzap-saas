@@ -31,6 +31,7 @@ const PUBLIC_API_ROUTES = [
     '/api/installer',         // Setup inicial (protegido separadamente após install)
     '/api/campaign/workflow', // Chamado internamente pelo QStash
     '/api/public',            // Rotas explicitamente públicas (lead forms, etc)
+    '/api/integrations/lead-event', // Evento de entrada de outro produto (token por conta validado na rota)
 ]
 
 type SupabaseCookie = { name: string; value: string; options: CookieOptions }

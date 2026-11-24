@@ -9,11 +9,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { getTenantContext } from '@/lib/tenant-context'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createLanguageModel } from '@/lib/ai/llm-model'
+import { buildLlmCallSettings } from '@/lib/ai/anthropic-support'
 import {
   findRelevantContent,
   buildEmbeddingConfigFromAgent,
@@ -155,15 +154,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Criar modelo direto via provider
     const config = await getAiDirectConfig(tenantId)
-    const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
-    let baseModel
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        baseModel = createGoogleGenerativeAI({ apiKey: config.googleApiKey })(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        baseModel = createOpenAI({ apiKey: config.openaiApiKey })(targetModelId)
-    }
+    const { model: baseModel, modelId: targetModelId } = createLanguageModel(config, agent.model)
 
     // Create model with DevTools support
     const model = await withDevTools(baseModel, { name: `agente:${agent.name}` })
@@ -276,30 +267,42 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // toolChoice: 'required' obriga o modelo a sempre chamar uma tool
     // respond sem execute para o loop quando chamado
     // stopWhen: 5 steps para acomodar buscas RAG antes do respond
-    const result = await generateText({
-      model,
-      system: systemPrompt,
-      messages: [{ role: 'user' as const, content: message }],
+    // Anthropic: sem temperature, toolChoice 'auto' e piso de tokens (ver lib/ai/anthropic-support)
+    const callSettings = buildLlmCallSettings(config.provider, {
       temperature: agent.temperature ?? 0.7,
       maxOutputTokens: agent.max_tokens ?? 1024,
+      forceTool: true,
+    })
+    const result = await generateText({
+      model,
+      system: systemPrompt + callSettings.systemSuffix,
+      messages: [{ role: 'user' as const, content: message }],
+      ...(callSettings.temperature !== undefined ? { temperature: callSettings.temperature } : {}),
+      maxOutputTokens: callSettings.maxOutputTokens,
       tools,
-      toolChoice: 'required',
+      toolChoice: callSettings.toolChoice,
       stopWhen: stepCountIs(5),
     })
 
     const latencyMs = Date.now() - startTime
 
     const respondCall = result.staticToolCalls.find(c => c.toolName === 'respond')
-    if (!respondCall) {
-      throw new Error('No structured response generated from AI')
+    let structuredResponse: TestResponse
+    if (!respondCall && config.provider === 'anthropic' && result.text?.trim()) {
+      // Anthropic (toolChoice 'auto'): texto direto é uma resposta válida
+      structuredResponse = { message: result.text.trim(), sentiment: 'neutral', confidence: 0.3, shouldHandoff: false } as TestResponse
+    } else {
+      if (!respondCall) {
+        throw new Error('No structured response generated from AI')
+      }
+      // Validar resposta do modelo (staticToolCalls não passa por Zod como o execute)
+      const parsedResponse = responseSchema.safeParse(respondCall.input)
+      if (!parsedResponse.success) {
+        console.error('[ai-agents/test] Resposta do agente inválida:', parsedResponse.error)
+        throw new Error('No structured response generated from AI')
+      }
+      structuredResponse = parsedResponse.data as TestResponse
     }
-    // Validar resposta do modelo (staticToolCalls não passa por Zod como o execute)
-    const parsedResponse = responseSchema.safeParse(respondCall.input)
-    if (!parsedResponse.success) {
-      console.error('[ai-agents/test] Resposta do agente inválida:', parsedResponse.error)
-      throw new Error('No structured response generated from AI')
-    }
-    let structuredResponse: TestResponse = parsedResponse.data as TestResponse
     // Adicionar fontes do RAG se disponíveis (sempre sobrescreve model sources)
     if (ragSources.length > 0) {
       structuredResponse = { ...structuredResponse, sources: ragSources }

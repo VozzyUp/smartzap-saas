@@ -9,11 +9,10 @@ import {
   tool,
   type UIMessage,
 } from 'ai'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createLanguageModel } from '@/lib/ai/llm-model'
+import { buildLlmCallSettings } from '@/lib/ai/anthropic-support'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { sendMessage as sendWhatsAppMessageToDB } from '@/lib/inbox/inbox-service'
 import { getConversationById } from '@/lib/inbox/inbox-db'
@@ -222,15 +221,9 @@ export async function POST(req: Request) {
 
     // Criar modelo direto via provider
     const config = await getAiDirectConfig(tenantId)
-    const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
-    let model
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        model = createGoogleGenerativeAI({ apiKey: config.googleApiKey })(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        model = createOpenAI({ apiKey: config.openaiApiKey })(targetModelId)
-    }
+    const { model, modelId: targetModelId } = createLanguageModel(config, agent.model)
+    // Anthropic: sem temperature, toolChoice 'auto' e piso de tokens (ver lib/ai/anthropic-support)
+    const callSettings = buildLlmCallSettings(config.provider, { temperature: 0.7, maxOutputTokens: 2048, forceTool: true })
 
     console.log(`[inbox/chat] Using model: ${targetModelId} (provider: ${config.provider})`)
 
@@ -240,7 +233,7 @@ export async function POST(req: Request) {
     // Use streamText with tools for structured output
     const result = streamText({
       model,
-      system: buildSystemPrompt(agent, conversation),
+      system: buildSystemPrompt(agent, conversation) + callSettings.systemSuffix,
       messages: modelMessages,
       tools: {
         respond: tool({
@@ -303,9 +296,9 @@ export async function POST(req: Request) {
         }),
       },
       // Force the model to use the respond tool
-      toolChoice: 'required',
-      temperature: 0.7,
-      maxOutputTokens: 2048,
+      toolChoice: callSettings.toolChoice,
+      ...(callSettings.temperature !== undefined ? { temperature: callSettings.temperature } : {}),
+      maxOutputTokens: callSettings.maxOutputTokens,
     })
 
     // Return the stream response

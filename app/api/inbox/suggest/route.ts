@@ -5,11 +5,10 @@
  */
 
 import { streamText, tool } from 'ai'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createLanguageModel } from '@/lib/ai/llm-model'
+import { buildLlmCallSettings } from '@/lib/ai/anthropic-support'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { inboxDb } from '@/lib/inbox/inbox-db'
 import { getTenantContext } from '@/lib/tenant-context'
@@ -181,15 +180,9 @@ export async function POST(req: Request) {
 
     // Criar modelo direto via provider
     const config = await getAiDirectConfig(tenantId)
-    const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
-    let model
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        model = createGoogleGenerativeAI({ apiKey: config.googleApiKey })(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        model = createOpenAI({ apiKey: config.openaiApiKey })(targetModelId)
-    }
+    const { model, modelId: targetModelId } = createLanguageModel(config, agent.model)
+    // Anthropic: sem temperature, toolChoice 'auto' e piso de tokens (ver lib/ai/anthropic-support)
+    const callSettings = buildLlmCallSettings(config.provider, { temperature: 0.7, maxOutputTokens: 1024, forceTool: true, toolName: 'suggest' })
 
     console.log(`[inbox/suggest] Using model: ${targetModelId} (provider: ${config.provider})`)
 
@@ -199,7 +192,7 @@ export async function POST(req: Request) {
     // Use streamText with tool for structured output
     const result = streamText({
       model,
-      system: buildSuggestPrompt(agent, conversation),
+      system: buildSuggestPrompt(agent, conversation) + callSettings.systemSuffix.replace('"respond"', '"suggest"'),
       messages: aiMessages,
       tools: {
         suggest: tool({
@@ -211,14 +204,20 @@ export async function POST(req: Request) {
           },
         }),
       },
-      toolChoice: 'required',
-      temperature: 0.7,
-      maxOutputTokens: 1024,
+      toolChoice: callSettings.toolChoice,
+      ...(callSettings.temperature !== undefined ? { temperature: callSettings.temperature } : {}),
+      maxOutputTokens: callSettings.maxOutputTokens,
     })
 
     // Consume stream to trigger tool execution
-    for await (const _part of result.fullStream) {
-      // Just consume
+    let streamedText = ''
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') streamedText += part.text
+    }
+
+    if (!suggestion && config.provider === 'anthropic' && streamedText.trim()) {
+      // Anthropic (toolChoice 'auto'): texto direto é uma sugestão válida
+      suggestion = { suggestion: streamedText.trim(), sentiment: 'neutral', confidence: 0.3 } as SuggestResponse
     }
 
     if (!suggestion) {

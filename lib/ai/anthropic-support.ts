@@ -33,8 +33,14 @@ export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5'
 export const ANTHROPIC_MIN_MAX_OUTPUT_TOKENS = 2000
 
 /** Acrescentada ao prompt de sistema porque não podemos forçar a tool via toolChoice. */
-export const ANTHROPIC_RESPOND_TOOL_INSTRUCTION =
-  '\n\n## FORMATO DA RESPOSTA (OBRIGATÓRIO)\nSua resposta final ao usuário DEVE ser dada chamando a tool "respond". Nunca responda com texto solto: use sempre a tool "respond" para enviar a mensagem.'
+export function buildToolInstruction(toolName: string): string {
+  return `
+
+## FORMATO DA RESPOSTA (OBRIGATÓRIO)
+Sua resposta final DEVE ser dada chamando a tool "${toolName}". Nunca responda com texto solto: use sempre a tool "${toolName}" para entregar a resposta.`
+}
+
+export const ANTHROPIC_RESPOND_TOOL_INSTRUCTION = buildToolInstruction('respond')
 
 /**
  * Resolve o id do modelo para a Anthropic. Ids de outros provedores (ex.: um agente
@@ -64,13 +70,13 @@ export interface LlmCallSettings {
  */
 export function buildLlmCallSettings(
   provider: LlmProviderId,
-  opts: { temperature?: number; maxOutputTokens?: number; forceTool: boolean },
+  opts: { temperature?: number; maxOutputTokens?: number; forceTool: boolean; toolName?: string },
 ): LlmCallSettings {
   if (provider === 'anthropic') {
     return {
       toolChoice: 'auto',
       maxOutputTokens: Math.max(opts.maxOutputTokens ?? 0, ANTHROPIC_MIN_MAX_OUTPUT_TOKENS),
-      systemSuffix: opts.forceTool ? ANTHROPIC_RESPOND_TOOL_INSTRUCTION : '',
+      systemSuffix: opts.forceTool ? buildToolInstruction(opts.toolName ?? 'respond') : '',
     }
   }
   return {

@@ -1,10 +1,8 @@
 import { generateText, Output } from 'ai'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createLanguageModel } from '@/lib/ai/llm-model'
 import { JudgmentSchema, type Judgment } from '../schemas/template-schemas'
 import { buildUtilityJudgePrompt } from '../prompts/utility-judge'
 import { getAiDirectConfig, getAiPromptsConfig } from '../ai-center-config'
-import { DEFAULT_MODEL_ID } from '../model'
 
 // ============================================================================
 // AI JUDGE SERVICE
@@ -28,18 +26,7 @@ export async function judgeTemplate(
     promptTemplate?: string
 ): Promise<Judgment> {
     const config = await getAiDirectConfig(options.tenantId)
-    const targetModelId = options.model || config.model || DEFAULT_MODEL_ID
-
-    let model
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        const google = createGoogleGenerativeAI({ apiKey: config.googleApiKey })
-        model = google(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        const openai = createOpenAI({ apiKey: config.openaiApiKey })
-        model = openai(targetModelId)
-    }
+    const { model, modelId: targetModelId } = createLanguageModel(config, options.model)
 
     console.log(`[AI_JUDGE] Using model: ${targetModelId} (provider: ${config.provider})`)
 

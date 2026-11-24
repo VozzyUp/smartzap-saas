@@ -6,6 +6,7 @@ import {
   ANTHROPIC_RESPOND_TOOL_INSTRUCTION,
   resolveAnthropicModelId,
   buildLlmCallSettings,
+  buildToolInstruction,
   validateAnthropicKey,
 } from './anthropic-support'
 import { AI_PROVIDERS } from './providers'
@@ -64,6 +65,12 @@ describe('buildLlmCallSettings', () => {
   it('anthropic: prompt ganha a instrução de usar a tool respond', () => {
     expect(buildLlmCallSettings('anthropic', { forceTool: true }).systemSuffix).toBe(ANTHROPIC_RESPOND_TOOL_INSTRUCTION)
     expect(ANTHROPIC_RESPOND_TOOL_INSTRUCTION).toContain('respond')
+  })
+  it('anthropic: instrução cita o nome da tool informado (ex.: suggest)', () => {
+    const s = buildLlmCallSettings('anthropic', { forceTool: true, toolName: 'suggest' })
+    expect(s.systemSuffix).toBe(buildToolInstruction('suggest'))
+    expect(s.systemSuffix).toContain('"suggest"')
+    expect(s.systemSuffix).not.toContain('"respond"')
   })
   it('anthropic sem forçar tool: toolChoice auto e sem instrução extra', () => {
     const s = buildLlmCallSettings('anthropic', { forceTool: false })

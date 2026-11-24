@@ -27,11 +27,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
-import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import { getAiDirectConfig } from '@/lib/ai/ai-center-config'
 import { getTenantContext } from '@/lib/tenant-context'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createLanguageModel } from '@/lib/ai/llm-model'
+import { buildLlmCallSettings } from '@/lib/ai/anthropic-support'
 import {
   findRelevantContent,
   buildEmbeddingConfigFromAgent,
@@ -257,15 +256,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Criar modelo direto via provider
     const config = await getAiDirectConfig(tenantId)
-    const targetModelId = agent.model || config.model || DEFAULT_MODEL_ID
-    let baseModel
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        baseModel = createGoogleGenerativeAI({ apiKey: config.googleApiKey })(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        baseModel = createOpenAI({ apiKey: config.openaiApiKey })(targetModelId)
-    }
+    const { model: baseModel, modelId: targetModelId } = createLanguageModel(config, agent.model)
     const model = await withDevTools(baseModel, { name: `chat:${agent.name}` })
 
     console.log(`[ai-agents/chat] Using model: ${targetModelId} (provider: ${config.provider}), hasKB: ${hasKnowledgeBase}`)
@@ -356,30 +347,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // toolChoice: 'required' obriga o modelo a sempre chamar uma tool
     // respond sem execute para o loop quando chamado
     // stopWhen: 5 steps para acomodar buscas RAG antes do respond
-    const result = await generateText({
-      model,
-      system: agent.system_prompt,
-      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    const callSettings = buildLlmCallSettings(config.provider, {
       temperature: agent.temperature ?? 0.7,
       maxOutputTokens: agent.max_tokens ?? 2048,
+      forceTool: true,
+    })
+    const result = await generateText({
+      model,
+      system: agent.system_prompt + callSettings.systemSuffix,
+      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      // Anthropic: sem temperature, toolChoice 'auto' e piso de tokens (ver lib/ai/anthropic-support)
+      ...(callSettings.temperature !== undefined ? { temperature: callSettings.temperature } : {}),
+      maxOutputTokens: callSettings.maxOutputTokens,
       tools,
-      toolChoice: 'required',
+      toolChoice: callSettings.toolChoice,
       stopWhen: stepCountIs(5),
     })
 
     const latencyMs = Date.now() - startTime
 
     const respondCall = result.staticToolCalls.find(c => c.toolName === 'respond')
-    if (!respondCall) {
-      throw new Error('Nenhuma resposta gerada pelo agente')
+    if (!respondCall && config.provider === 'anthropic' && result.text?.trim()) {
+      // Anthropic (toolChoice 'auto'): texto direto é uma resposta válida
+      structuredResponse = { message: result.text.trim(), sentiment: 'neutral', confidence: 0.3, shouldHandoff: false } as ChatResponse
+    } else {
+      if (!respondCall) {
+        throw new Error('Nenhuma resposta gerada pelo agente')
+      }
+      // Validar resposta do modelo (staticToolCalls não passa por Zod como o execute)
+      const parsed = responseSchema.safeParse(respondCall.input)
+      if (!parsed.success) {
+        console.error('[ai-agents/chat] Resposta do agente inválida:', parsed.error)
+        throw new Error('Nenhuma resposta gerada pelo agente')
+      }
+      structuredResponse = parsed.data as ChatResponse
     }
-    // Validar resposta do modelo (staticToolCalls não passa por Zod como o execute)
-    const parsed = responseSchema.safeParse(respondCall.input)
-    if (!parsed.success) {
-      console.error('[ai-agents/chat] Resposta do agente inválida:', parsed.error)
-      throw new Error('Nenhuma resposta gerada pelo agente')
-    }
-    structuredResponse = parsed.data as ChatResponse
     // Adicionar fontes do RAG se disponíveis (sempre sobrescreve model sources)
     if (ragSources.length > 0) {
       structuredResponse = { ...structuredResponse, sources: ragSources }

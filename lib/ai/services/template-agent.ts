@@ -1,7 +1,5 @@
 import { generateText } from 'ai'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
-import { DEFAULT_MODEL_ID } from '../model'
+import { createLanguageModel } from '@/lib/ai/llm-model'
 import { getAiDirectConfig } from '../ai-center-config'
 
 // ============================================================================
@@ -182,17 +180,7 @@ export async function generateTemplatesWithAgent(
 ): Promise<AgentGenerationResult> {
     const startTime = Date.now()
     const config = await getAiDirectConfig(options.tenantId)
-    const targetModelId = options.model || config.model || DEFAULT_MODEL_ID
-    let model
-    if (config.provider === 'google') {
-        if (!config.googleApiKey) throw new Error('Chave Google não configurada. Acesse Configurações → IA.')
-        const google = createGoogleGenerativeAI({ apiKey: config.googleApiKey })
-        model = google(targetModelId)
-    } else {
-        if (!config.openaiApiKey) throw new Error('Chave OpenAI não configurada. Acesse Configurações → IA.')
-        const openai = createOpenAI({ apiKey: config.openaiApiKey })
-        model = openai(targetModelId)
-    }
+    const { model, modelId: targetModelId } = createLanguageModel(config, options.model)
 
     console.log(`[TEMPLATE_AGENT] Using model: ${targetModelId} (provider: ${config.provider})`)
 

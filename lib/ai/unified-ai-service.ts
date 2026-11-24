@@ -12,6 +12,8 @@
 import { generateText as vercelGenerateText, streamText as vercelStreamText, type ModelMessage } from 'ai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { resolveAnthropicModelId, buildLlmCallSettings } from './anthropic-support'
 
 import { getAiDirectConfig } from './ai-center-config'
 import type { AiDirectConfig } from './ai-center-defaults'
@@ -66,6 +68,14 @@ export interface GenerateTextResult {
 function createModelInstance(config: AiDirectConfig, modelOverride?: string) {
     const modelId = modelOverride || config.model
 
+    if (config.provider === 'anthropic') {
+        if (!config.anthropicApiKey) {
+            throw new Error('Chave Anthropic não configurada. Acesse Configurações → IA e insira sua Anthropic API Key.')
+        }
+        const anthropic = createAnthropic({ apiKey: config.anthropicApiKey })
+        return anthropic(resolveAnthropicModelId(modelId))
+    }
+
     if (config.provider === 'google') {
         if (!config.googleApiKey) {
             throw new Error('Chave Google não configurada. Acesse Configurações → IA e insira sua Google API Key.')
@@ -105,18 +115,25 @@ function handleProviderError(error: unknown, modelId: string): never {
 }
 
 type CallArgs =
-    | { model: ReturnType<typeof createModelInstance>; system: string | undefined; temperature: number; maxOutputTokens?: number; messages: ModelMessage[] }
-    | { model: ReturnType<typeof createModelInstance>; system: string | undefined; temperature: number; maxOutputTokens?: number; prompt: string }
+    | { model: ReturnType<typeof createModelInstance>; system: string | undefined; temperature?: number; maxOutputTokens?: number; messages: ModelMessage[] }
+    | { model: ReturnType<typeof createModelInstance>; system: string | undefined; temperature?: number; maxOutputTokens?: number; prompt: string }
 
 function buildArgs(
     options: GenerateTextOptions,
     modelInstance: ReturnType<typeof createModelInstance>,
+    provider: AiDirectConfig['provider'],
 ): CallArgs {
+    // Anthropic: nunca envia temperature (400 em Claude 5.5) e aplica piso de max tokens
+    const settings = buildLlmCallSettings(provider, {
+        temperature: options.temperature ?? 0.7,
+        maxOutputTokens: options.maxOutputTokens,
+        forceTool: false,
+    })
     const base = {
         model: modelInstance,
         system: options.system,
-        temperature: options.temperature ?? 0.7,
-        ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+        ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
+        ...(options.maxOutputTokens || provider === 'anthropic' ? { maxOutputTokens: settings.maxOutputTokens } : {}),
     }
     return (options.messages
         ? { ...base, messages: options.messages as unknown as ModelMessage[] }
@@ -141,7 +158,7 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
 
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await vercelGenerateText(buildArgs(options, modelInstance) as any)
+        const result = await vercelGenerateText(buildArgs(options, modelInstance, config.provider) as any)
         return { text: result.text, model: modelId }
     } catch (error) {
         handleProviderError(error, modelId)
@@ -159,7 +176,7 @@ export async function streamText(options: StreamTextOptions): Promise<GenerateTe
     const modelInstance = createModelInstance(config, modelId)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = vercelStreamText(buildArgs(options, modelInstance) as any)
+    const result = vercelStreamText(buildArgs(options, modelInstance, config.provider) as any)
 
     let fullText = ''
     try {

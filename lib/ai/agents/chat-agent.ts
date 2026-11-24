@@ -293,8 +293,18 @@ const MEDIA_LABEL: Record<string, string> = {
  * resposta inteira falhava, jogando a conversa para atendimento humano. Aqui o conteúdo
  * nunca sai vazio e o modelo fica sabendo que tipo de mídia chegou.
  */
-export function describeMessageForAI(m: { content?: string | null; message_type?: string | null; direction?: string | null }): string {
+export function describeMessageForAI(m: {
+  content?: string | null
+  message_type?: string | null
+  direction?: string | null
+  payload?: Record<string, unknown> | null
+}): string {
   const text = typeof m.content === 'string' ? m.content.trim() : ''
+  // Áudio recebido: a transcrição (gravada em payload.transcription) é o que o modelo lê.
+  if (!text && m.message_type === 'audio' && m.direction === 'inbound') {
+    const t = (m.payload as { transcription?: { text?: unknown } } | null | undefined)?.transcription?.text
+    if (typeof t === 'string' && t.trim()) return `[Áudio transcrito] ${t.trim()}`
+  }
   const label = MEDIA_LABEL[String(m.message_type || '')]
   if (text) return label && m.direction === 'inbound' ? `[O contato enviou ${label}] ${text}` : text
   if (m.direction === 'inbound') {

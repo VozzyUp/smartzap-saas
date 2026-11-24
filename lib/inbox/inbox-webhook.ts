@@ -154,6 +154,7 @@ export async function handleInboundMessage(
           raw_type: payload.type,
           timestamp: payload.timestamp,
           phone_number_id: payload.phoneNumberId,
+          ...(payload.mediaId ? { media_id: payload.mediaId } : {}),
         },
         p_contact_id: null, // Contact lookup done inside RPC if needed
         p_phone_number_id: payload.phoneNumberId || null,
@@ -302,6 +303,7 @@ async function handleInboundMessageLegacy(
       raw_type: payload.type,
       timestamp: payload.timestamp,
       phone_number_id: payload.phoneNumberId,
+      ...(payload.mediaId ? { media_id: payload.mediaId } : {}),
     },
   })
 

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useAttendant } from '@/components/attendant/AttendantProvider'
 import { useTheme } from '../../layout'
+import { AudioTranscription } from '@/components/features/inbox/AudioTranscription'
 import { toast } from 'sonner'
 
 // =============================================================================
@@ -44,6 +45,8 @@ interface Message {
   message_type: string
   wa_message_id: string | null
   delivery_status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+  media_status?: 'ready' | 'pending' | 'failed' | null
+  payload?: Record<string, unknown> | null
   is_ai_generated: boolean
   created_at: string
 }
@@ -178,10 +181,22 @@ function MessageBubble({ message }: { message: Message }) {
           </div>
         )}
 
+        {/* Áudio: player (rota de mídia escopada por tenant) + transcrição */}
+        {message.message_type === 'audio' && message.media_status !== 'failed' && message.media_status !== 'pending' && (
+          <div className="mb-1">
+            <audio controls preload="metadata" className="max-w-full">
+              <source src={`/api/inbox/media/${message.id}`} />
+            </audio>
+            <AudioTranscription payload={message.payload} />
+          </div>
+        )}
+
         {/* Content */}
+        {(message.content || message.message_type !== 'audio') && (
         <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
         </p>
+        )}
 
         {/* Footer: Time + Status */}
         <div className={`flex items-center gap-1.5 mt-1.5 ${isOutbound ? 'justify-end' : 'justify-start'}`}>

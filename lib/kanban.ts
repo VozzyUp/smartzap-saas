@@ -497,6 +497,35 @@ export async function removeCard(tenantId: string, cardId: string): Promise<void
   await syncStageTag(tenantId, (card as any).contact_id, (board as any)?.name ?? '', (stage as any)?.name ?? null, null)
 }
 
+/**
+ * Apaga TODOS os cartões de um contato nos quadros da conta (usado quando a
+ * conversa do contato é apagada). Filhos (`kanban_card_automation_log`) saem por
+ * ON DELETE CASCADE. Reaproveita `removeCard` para manter a tag espelhada em
+ * sincronia. Lança se a listagem falhar; falha em um cartão não impede os demais
+ * (o primeiro erro é relançado no fim). Devolve quantos cartões foram apagados.
+ */
+export async function removeCardsForContact(tenantId: string, contactId: string): Promise<number> {
+  const { data, error } = await db()
+    .from('kanban_cards')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('contact_id', contactId)
+  if (error) throw error
+
+  let removed = 0
+  let firstError: unknown = null
+  for (const row of (data ?? []) as Array<{ id: string }>) {
+    try {
+      await removeCard(tenantId, row.id)
+      removed++
+    } catch (e) {
+      if (!firstError) firstError = e
+    }
+  }
+  if (firstError) throw firstError
+  return removed
+}
+
 export async function getContactStages(tenantId: string, contactId: string): Promise<ContactStageInfo[]> {
   const { data: cards } = await db()
     .from('kanban_cards')

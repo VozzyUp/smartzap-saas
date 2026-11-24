@@ -29,6 +29,8 @@ import {
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { getWhatsAppCredentialsForNumber } from '@/lib/whatsapp-credentials'
 import { triggerAutomationEvent } from '@/lib/kanban-automation'
+import { removeCardsForContact } from '@/lib/kanban'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { cancelDebounce } from '@/lib/ai/agents/chat-agent'
 import type {
   InboxConversation,
@@ -97,8 +99,45 @@ export async function markAsRead(tenantId: string, conversationId: string) {
   return markConversationAsRead(tenantId, conversationId)
 }
 
+/**
+ * Apaga a conversa e, em seguida, o(s) cartão(ões) do contato nos quadros do
+ * funil (senão o cartão antigo ficava na fase em que estava e reaparecia ao
+ * recomeçar a conversa). FECHAR a conversa não passa por aqui e não mexe no
+ * cartão. Falha ao apagar o cartão é só logada: a conversa já foi apagada.
+ */
 export async function deleteConversation(tenantId: string, id: string) {
-  return removeConversation(tenantId, id)
+  let conversation: Pick<InboxConversation, 'phone' | 'contact_id'> | null = null
+  try {
+    conversation = await getConversationById(tenantId, id)
+  } catch (e) {
+    console.error('[Inbox] Não foi possível ler a conversa antes de apagar (cartão do funil não será removido):', e instanceof Error ? e.message : e)
+  }
+
+  await removeConversation(tenantId, id)
+
+  if (!conversation) return
+  try {
+    const contactId = conversation.contact_id || (await findContactIdByPhone(tenantId, conversation.phone))
+    if (contactId) {
+      const removed = await removeCardsForContact(tenantId, contactId)
+      if (removed > 0) console.log(`[Inbox] Conversa ${id} apagada: ${removed} cartão(ões) do funil removido(s)`)
+    }
+  } catch (e) {
+    console.error('[Inbox] Conversa apagada, mas falhou ao apagar o cartão do funil:', e instanceof Error ? e.message : e)
+  }
+}
+
+async function findContactIdByPhone(tenantId: string, phone: string | null | undefined): Promise<string | null> {
+  if (!phone) return null
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('phone', phone)
+    .maybeSingle()
+  return (data as { id?: string } | null)?.id ?? null
 }
 
 // =============================================================================

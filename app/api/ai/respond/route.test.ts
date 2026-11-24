@@ -18,6 +18,7 @@ const m = vi.hoisted(() => ({
   settingsGet: vi.fn(),
   notifyOpsAlert: vi.fn(),
   moveHuman: vi.fn(),
+  ensureAudio: vi.fn(),
   agentRow: { value: null as any },
   order: [] as string[],
 }))
@@ -29,6 +30,9 @@ vi.mock('@/lib/inbox/inbox-db', () => ({
     createMessage: (...a: unknown[]) => m.createMessage(...a),
     updateConversation: (...a: unknown[]) => m.updateConversation(...a),
   },
+}))
+vi.mock('@/lib/inbox/inbox-transcription', () => ({
+  ensureAudioTranscriptions: (...a: unknown[]) => m.ensureAudio(...a),
 }))
 vi.mock('@/lib/ai/agents/chat-agent', () => ({ processChatAgent: (...a: unknown[]) => m.processChatAgent(...a) }))
 vi.mock('@/lib/whatsapp-send', () => ({
@@ -117,6 +121,7 @@ beforeEach(() => {
   m.settingsGet.mockResolvedValue(null)
   m.notifyOpsAlert.mockResolvedValue(undefined)
   m.moveHuman.mockResolvedValue(undefined)
+  m.ensureAudio.mockImplementation(async (_t: string, msgs: unknown[]) => msgs)
   m.agentRow.value = { id: 'ag1', name: 'Bot', model: 'x', is_active: true }
 })
 
@@ -323,5 +328,25 @@ describe('POST /api/ai/respond — alertas quando a IA não responde (F08)', () 
     await POST(req())
     expect(m.notifyOpsAlert).not.toHaveBeenCalled()
     expect(m.moveHuman).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/ai/respond — transcrição de áudio (F16)', () => {
+  it('transcreve os áudios antes de montar o contexto e entrega as mensagens atualizadas à IA', async () => {
+    const original = [{ id: 'a1', direction: 'inbound', message_type: 'audio', content: '', whatsapp_message_id: 'w1' }]
+    const updated = [{ ...original[0], payload: { transcription: { text: 'quero o preço' } } }]
+    m.listMessages.mockResolvedValue({ messages: original })
+    m.ensureAudio.mockResolvedValue(updated)
+    await POST(req())
+    expect(m.ensureAudio).toHaveBeenCalledWith('tenant-1', original)
+    expect(m.processChatAgent).toHaveBeenCalledWith(expect.objectContaining({ messages: updated }))
+  })
+
+  it('falha inesperada na transcrição não impede a IA de responder', async () => {
+    m.ensureAudio.mockRejectedValue(new Error('boom'))
+    const res = await POST(req())
+    expect((await res.json()).success).toBe(true)
+    expect(m.processChatAgent).toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).toHaveBeenCalled()
   })
 })

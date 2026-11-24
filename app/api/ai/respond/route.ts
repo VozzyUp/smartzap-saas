@@ -26,6 +26,7 @@ import { resolveFunnelContext, applyFunnelClassification } from '@/lib/ai/funnel
 import { sendHandoffNotification } from '@/lib/push-notifications'
 import { settingsDb } from '@/lib/supabase-db'
 import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
+import { ensureAudioTranscriptions } from '@/lib/inbox/inbox-transcription'
 import { isOptOutSuppressionSource } from '@/lib/suppression-sources'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
@@ -191,7 +192,14 @@ export async function POST(req: NextRequest) {
     console.log(`🤖 [AI-RESPOND] Using agent: ${agent.name} (${agent.model})`)
 
     // 6. Busca mensagens recentes
-    const { messages } = await inboxDb.listMessages(tenantId, conversationId, { limit: 20 })
+    const listed = await inboxDb.listMessages(tenantId, conversationId, { limit: 20 })
+    // 6.5. Áudios recebidos sem transcrição: transcreve agora (idempotente, nunca bloqueia a resposta)
+    let messages = listed.messages
+    try {
+      messages = await ensureAudioTranscriptions(tenantId, listed.messages)
+    } catch (e) {
+      console.error('[AI-RESPOND] Falha ao transcrever áudios (segue sem transcrição):', e instanceof Error ? e.message : e)
+    }
     console.log(`🤖 [AI-RESPOND] Found ${messages.length} messages`)
 
     if (messages.length === 0) {

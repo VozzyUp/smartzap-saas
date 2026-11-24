@@ -568,9 +568,9 @@ export function ManualTemplateBuilder({
   // ============================================================================
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
-      <div className="space-y-6">
+      <div className="space-y-6 min-w-0 max-lg:pb-20">
         {/* Step tabs */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {steps.map((item) => {
             const isStepEnabled =
               item.id === 1 ||
@@ -585,7 +585,7 @@ export function ManualTemplateBuilder({
                   if (!isStepEnabled) return
                   setStep(item.id)
                 }}
-                className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                className={`flex min-w-0 min-h-11 flex-col items-center gap-1 sm:flex-row sm:gap-3 rounded-2xl border px-2 sm:px-4 py-3 text-center sm:text-left text-sm transition ${
                   step === item.id
                     ? 'border-emerald-600 dark:border-emerald-400/40 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-900 dark:text-white'
                     : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-muted)]'
@@ -600,7 +600,7 @@ export function ManualTemplateBuilder({
                 >
                   {item.id}
                 </span>
-                <span className="text-xs uppercase tracking-widest">{item.label}</span>
+                <span className="min-w-0 max-w-full truncate text-[10px] sm:text-xs uppercase tracking-wide sm:tracking-widest">{item.label}</span>
               </button>
             )
           })}

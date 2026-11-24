@@ -23,7 +23,7 @@ export function FloatingPreviewButton({
       onClick={onClick}
       className={cn(
         // Posicionamento fixo
-        'fixed bottom-6 right-6 z-40',
+        'fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 z-40 min-h-11',
         // Visibilidade: apenas mobile (esconde em lg+)
         'lg:hidden',
         // Aparencia

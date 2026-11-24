@@ -72,16 +72,16 @@ export function StepNavigation({
 }: StepNavigationProps) {
   return (
     <Container variant="default" padding="none" className="px-5 py-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:justify-between">
         <button
           type="button"
           onClick={() => setStep((prev) => Math.max(1, prev - 1))}
           disabled={step === 1}
-          className={`text-sm transition ${step === 1 ? 'text-[var(--ds-text-disabled)] cursor-not-allowed' : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'}`}
+          className={`inline-flex min-h-11 items-center px-2 text-sm transition ${step === 1 ? 'text-[var(--ds-text-disabled)] cursor-not-allowed' : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'}`}
         >
           Voltar
         </button>
-        <div className="text-center text-xs text-[var(--ds-text-muted)]">
+        <div className="order-first w-full text-center text-xs text-[var(--ds-text-muted)] empty:hidden md:order-none md:w-auto">
           {step === 1 && !isConfigComplete && 'Complete a configuracao para continuar'}
           {step === 2 && !isContentComplete && (
             !isHeaderFormatValid
@@ -124,14 +124,14 @@ export function StepNavigation({
                       : 'Revise as regras do template'
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2 md:flex-none">
           {/* Botao Salvar Rascunho */}
           {onSaveDraft && (
             <button
               type="button"
               onClick={onSaveDraft}
               disabled={isSaving || isFinishing}
-              className="rounded-full px-4 py-2 text-sm font-medium border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-11 rounded-full px-4 py-2 text-sm font-medium border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] hover:bg-[var(--ds-bg-hover)] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? (
                 <span className="inline-flex items-center gap-2">
@@ -157,7 +157,7 @@ export function StepNavigation({
               onFinish?.()
             }}
             disabled={!canContinue || !!isFinishing}
-            className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+            className={`min-h-11 flex-1 sm:flex-none rounded-full px-5 py-2 text-sm font-semibold transition ${
               !isFinishing && canContinue
                 ? 'bg-primary-600 text-white dark:bg-white dark:text-black hover:bg-primary-500 dark:hover:bg-gray-200'
                 : 'cursor-not-allowed border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-muted)]'

@@ -264,7 +264,7 @@ export function StepContent({
 
           {headerType === 'NONE' ? (
             <div>
-            <div className="mt-2 flex items-center justify-between rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-2">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-2">
               <div className="text-xs text-[var(--ds-text-secondary)]">Sem cabecalho configurado.</div>
               <Button
                 type="button"
@@ -490,7 +490,7 @@ export function StepContent({
                     </div>
                   </div>
                   {/* Latitude & Longitude */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-[var(--ds-text-muted)] mb-1 block">Latitude *</label>
                       <Input
@@ -644,7 +644,7 @@ export function StepContent({
                 }}
               />
 
-              <div className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-3 flex items-center justify-between gap-3">
+              <div className="rounded-xl border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-[var(--ds-text-primary)] truncate">
                     {headerMediaPreview?.name || 'Escolha um arquivo'}
@@ -757,21 +757,21 @@ export function StepContent({
               />
             </div>
 
-            <div className="flex items-center gap-1 px-2 py-1.5 border-t border-[var(--ds-border-default)]">
-              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('bold')} className="h-7 px-2 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
+            <div className="flex flex-wrap items-center gap-1 px-2 py-1.5 border-t border-[var(--ds-border-default)]">
+              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('bold')} className="h-7 px-2 max-sm:min-w-11 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
                 <Bold className="w-4 h-4" />
               </Button>
-              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('italic')} className="h-7 px-2 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
+              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('italic')} className="h-7 px-2 max-sm:min-w-11 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
                 <Italic className="w-4 h-4" />
               </Button>
-              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('strike')} className="h-7 px-2 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
+              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('strike')} className="h-7 px-2 max-sm:min-w-11 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
                 <Strikethrough className="w-4 h-4" />
               </Button>
-              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('code')} className="h-7 px-2 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
+              <Button type="button" variant="ghost" onClick={() => applyBodyFormat('code')} className="h-7 px-2 max-sm:min-w-11 text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)]">
                 <Code className="w-4 h-4" />
               </Button>
 
-              <div className="flex-1" />
+              <div className="hidden sm:block flex-1" />
 
               <Button
                 type="button"

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { broadcastPushNotification, sendNewMessageNotification, PushPayload } from '@/lib/push-notifications'
+import { broadcastPushNotificationToTenant, sendNewMessageNotification, PushPayload } from '@/lib/push-notifications'
 
 /**
  * POST /api/push/send
  *
- * Envia notificação push para todos os subscriptions ativos.
- * Requer autenticação (SMARTZAP_ADMIN_KEY).
+ * Envia notificação push para as subscriptions de UM tenant (body.tenantId obrigatório).
+ * Requer autenticação (SMARTZAP_ADMIN_KEY) — nunca faz broadcast global.
  *
  * Body pode ser:
  * 1. { type: 'message', contactName, preview, conversationId } - Para nova mensagem
@@ -23,6 +23,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
 
+    const tenantId = typeof body.tenantId === 'string' ? body.tenantId : ''
+    if (!tenantId) {
+      return NextResponse.json({ error: 'tenantId obrigatório' }, { status: 400 })
+    }
+
     // Notificação de nova mensagem
     if (body.type === 'message') {
       const { contactName, preview, conversationId } = body
@@ -31,7 +36,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Campos obrigatórios: contactName, preview, conversationId' }, { status: 400 })
       }
 
-      const result = await sendNewMessageNotification(contactName, preview, conversationId)
+      const result = await sendNewMessageNotification(tenantId, contactName, preview, conversationId)
       return NextResponse.json(result)
     }
 
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Body obrigatório' }, { status: 400 })
     }
 
-    const result = await broadcastPushNotification(payload)
+    const result = await broadcastPushNotificationToTenant(tenantId, payload)
     return NextResponse.json(result)
   } catch (error) {
     console.error('[Push Send] Erro:', error)

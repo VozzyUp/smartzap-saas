@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getTenantContext } from '@/lib/tenant-context'
 
 /**
  * POST /api/push/subscribe
@@ -8,17 +9,23 @@ import { createClient } from '@/lib/supabase-server'
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await getTenantContext()
+    if (!ctx) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    if (!ctx.tenantId) return NextResponse.json({ error: 'Usuário sem conta associada' }, { status: 403 })
+
     const subscription = await request.json()
 
     if (!subscription?.endpoint || !subscription?.keys) {
       return NextResponse.json({ error: 'Subscription inválida' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return NextResponse.json({ error: 'Banco indisponível' }, { status: 500 })
 
     // Upsert: atualiza se já existir, insere se não
     const { error } = await supabase.from('push_subscriptions').upsert(
       {
+        tenant_id: ctx.tenantId,
         endpoint: subscription.endpoint,
         keys: subscription.keys,
         user_agent: request.headers.get('user-agent'),

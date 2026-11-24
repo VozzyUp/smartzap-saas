@@ -270,12 +270,39 @@ function convertToAIMessages(
     .filter((m) => m.message_type !== 'internal_note')
     .map((m) => ({
       role: (m.direction === 'inbound' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content,
+      content: describeMessageForAI(m),
     }))
+}
+
+const MEDIA_LABEL: Record<string, string> = {
+  audio: 'um áudio',
+  image: 'uma imagem',
+  video: 'um vídeo',
+  document: 'um documento',
+  sticker: 'uma figurinha',
+  location: 'uma localização',
+  contacts: 'um contato',
+}
+
+/**
+ * Texto de uma mensagem para o modelo. Mensagem de mídia chega sem texto (content vazio):
+ * a Anthropic recusa bloco de texto vazio ("text content blocks must be non-empty") e a
+ * resposta inteira falhava, jogando a conversa para atendimento humano. Aqui o conteúdo
+ * nunca sai vazio e o modelo fica sabendo que tipo de mídia chegou.
+ */
+export function describeMessageForAI(m: { content?: string | null; message_type?: string | null; direction?: string | null }): string {
+  const text = typeof m.content === 'string' ? m.content.trim() : ''
+  const label = MEDIA_LABEL[String(m.message_type || '')]
+  if (text) return label && m.direction === 'inbound' ? `[O contato enviou ${label}] ${text}` : text
+  if (m.direction === 'inbound') {
+    return `[O contato enviou ${label ?? 'uma mensagem sem texto'} e o conteúdo não pôde ser lido]`
+  }
+  return `[${label ? `Enviamos ${label}` : 'Mensagem enviada sem texto'}]`
 }
 
 
 async function persistAILog(data: {
+  tenantId: string
   conversationId: string
   agentId: string
   messageIds: string[]
@@ -294,6 +321,7 @@ async function persistAILog(data: {
     const { data: log, error } = await supabase
       .from('ai_agent_logs')
       .insert({
+        tenant_id: data.tenantId,
         conversation_id: data.conversationId,
         ai_agent_id: data.agentId,
         input_message: data.input,
@@ -854,6 +882,7 @@ ${buildFunnelPromptSection(config.funnel)}`
   // Success case
   if (response) {
     const logId = await persistAILog({
+      tenantId,
       conversationId: conversation.id,
       agentId: agent.id,
       messageIds,
@@ -895,6 +924,7 @@ ${buildFunnelPromptSection(config.funnel)}`
   }
 
   const logId = await persistAILog({
+    tenantId,
     conversationId: conversation.id,
     agentId: agent.id,
     messageIds,

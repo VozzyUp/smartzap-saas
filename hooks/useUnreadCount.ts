@@ -8,8 +8,6 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
-import { getSupabaseBrowser } from '@/lib/supabase'
 
 const UNREAD_COUNT_KEY = ['inbox-unread-count']
 
@@ -18,29 +16,21 @@ const UNREAD_COUNT_KEY = ['inbox-unread-count']
  * Realtime updates são recebidas via CentralizedRealtimeProvider.
  */
 export function useUnreadCount() {
-  const supabase = useMemo(() => getSupabaseBrowser(), [])
-
   const query = useQuery({
     queryKey: UNREAD_COUNT_KEY,
     queryFn: async () => {
-      if (!supabase) return 0
-
-      const { count, error } = await supabase
-        .from('inbox_conversations')
-        .select('*', { count: 'exact', head: true })
-        .gt('unread_count', 0)
-        .eq('status', 'open')
-
-      if (error) {
-        console.error('[useUnreadCount] Error fetching count:', error)
+      // Contagem no servidor, filtrada pela conta ativa (nunca direto do navegador:
+      // sem tenant_id, um administrador da plataforma via a soma de todas as contas).
+      const res = await fetch('/api/inbox/unread-count')
+      if (!res.ok) {
+        console.error('[useUnreadCount] Error fetching count:', res.status)
         return 0
       }
-
-      return count ?? 0
+      const data = (await res.json()) as { count?: number }
+      return data.count ?? 0
     },
     staleTime: 30_000,
     refetchOnWindowFocus: true,
-    enabled: !!supabase,
   })
 
   return {

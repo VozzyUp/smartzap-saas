@@ -121,6 +121,25 @@ export function ManualTemplateBuilder({
   })
   const hasMetaAppId = !!metaAppQuery.data?.appId
 
+  // Não existe outra tela para informar o ID do Aplicativo: salva daqui mesmo.
+  const saveMetaAppId = React.useCallback(
+    async (appId: string) => {
+      try {
+        const res = await fetch('/api/settings/meta-app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appId }),
+        })
+        if (!res.ok) throw new Error('Não foi possível salvar o ID do Aplicativo.')
+        await metaAppQuery.refetch()
+        toast.success('ID do Aplicativo salvo. Opções de mídia liberadas.')
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Não foi possível salvar o ID do Aplicativo.')
+      }
+    },
+    [metaAppQuery]
+  )
+
   const publishedFlows = React.useMemo(() => {
     const rows = flowsQuery.data || []
     const withMeta = rows.filter((f) => !!f?.meta_flow_id)
@@ -677,6 +696,7 @@ export function ManualTemplateBuilder({
             setNamedVarError={setNamedVarError}
             confirmNamedVariable={confirmNamedVariable}
             hasMetaAppId={hasMetaAppId}
+            onSaveMetaAppId={saveMetaAppId}
           />
         )}
 

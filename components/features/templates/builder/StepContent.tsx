@@ -127,6 +127,8 @@ export interface StepContentProps {
   confirmNamedVariable: () => void
   // Meta App ID (necessário para upload de mídia)
   hasMetaAppId?: boolean
+  /** Salva o ID do Aplicativo da Meta da conta (libera as opções de mídia). */
+  onSaveMetaAppId?: (appId: string) => Promise<void>
 }
 
 export function StepContent({
@@ -195,7 +197,12 @@ export function StepContent({
   setNamedVarError,
   confirmNamedVariable,
   hasMetaAppId = true,
+  onSaveMetaAppId,
 }: StepContentProps) {
+  const [metaAppIdDraft, setMetaAppIdDraft] = React.useState('')
+  const [savingMetaAppId, setSavingMetaAppId] = React.useState(false)
+  const metaAppIdValid = /^\d{5,20}$/.test(metaAppIdDraft.trim())
+
   return (
     <>
       <Container variant="default" padding="lg" className="space-y-2 min-h-140">
@@ -306,9 +313,40 @@ export function StepContent({
                 </Select>
 
                 {!hasMetaAppId ? (
-                  <p className="text-xs text-amber-400/80">
-                    🔒 Opções de mídia requerem o <span className="font-medium">ID do Aplicativo</span>. Configure em Configurações → API.
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-amber-400/80">
+                      🔒 Imagem, vídeo e documento precisam do <span className="font-medium">ID do Aplicativo</span> da Meta.
+                      Ele fica no topo do painel do seu aplicativo em developers.facebook.com.
+                    </p>
+                    {onSaveMetaAppId ? (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Input
+                          value={metaAppIdDraft}
+                          onChange={(e) => setMetaAppIdDraft(e.target.value)}
+                          inputMode="numeric"
+                          placeholder="ID do Aplicativo (só números)"
+                          aria-label="ID do Aplicativo da Meta"
+                          className="sm:max-w-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!metaAppIdValid || savingMetaAppId}
+                          onClick={async () => {
+                            setSavingMetaAppId(true)
+                            try {
+                              await onSaveMetaAppId(metaAppIdDraft.trim())
+                              setMetaAppIdDraft('')
+                            } finally {
+                              setSavingMetaAppId(false)
+                            }
+                          }}
+                        >
+                          {savingMetaAppId ? 'Salvando…' : 'Salvar e liberar mídia'}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </div>

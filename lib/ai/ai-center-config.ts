@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { DEFAULT_ANTHROPIC_MODEL, resolveAnthropicModelId } from './anthropic-support'
 import {
   DEFAULT_AI_DIRECT,
   DEFAULT_AI_PROMPTS,
@@ -15,6 +16,7 @@ const SETTINGS_KEYS = {
   prompts: 'ai_prompts',
   googleApiKey: 'google_api_key',
   openaiApiKey: 'openai_api_key',
+  anthropicApiKey: 'anthropic_api_key',
   // Chaves individuais para prompts de estratégia (fonte única de verdade: banco)
   strategyMarketing: 'strategyMarketing',
   strategyUtility: 'strategyUtility',
@@ -62,22 +64,29 @@ function normalizeDirect(
   input?: Partial<Pick<AiDirectConfig, 'provider' | 'model'>> | null,
   googleApiKey?: string | null,
   openaiApiKey?: string | null,
+  anthropicApiKey?: string | null,
 ): AiDirectConfig {
   const provider: AiProviderType =
-    input?.provider === 'google' || input?.provider === 'openai'
+    input?.provider === 'google' || input?.provider === 'openai' || input?.provider === 'anthropic'
       ? input.provider
       : DEFAULT_AI_DIRECT.provider
 
+  const requestedModel =
+    typeof input?.model === 'string' && input.model.trim() ? input.model.trim() : ''
+
+  // Anthropic: modelo vazio ou de outro provedor (ex.: gemini-*) cai em claude-opus-5-5.
+  // Google/OpenAI mantêm o comportamento original (padrão global).
   const model =
-    typeof input?.model === 'string' && input.model.trim()
-      ? input.model.trim()
-      : DEFAULT_AI_DIRECT.model
+    provider === 'anthropic'
+      ? resolveAnthropicModelId(requestedModel || DEFAULT_ANTHROPIC_MODEL)
+      : requestedModel || DEFAULT_AI_DIRECT.model
 
   return {
     provider,
     model,
     ...(googleApiKey ? { googleApiKey } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
+    ...(anthropicApiKey ? { anthropicApiKey } : {}),
   }
 }
 
@@ -147,15 +156,16 @@ export async function getAiDirectConfig(tenantId: string): Promise<AiDirectConfi
   const cached = readCache(cachedDirectByTenant, tenantId)
   if (cached) return cached
 
-  const [rawDirect, googleApiKey, geminiApiKeyLegacy, openaiApiKey] = await Promise.all([
+  const [rawDirect, googleApiKey, geminiApiKeyLegacy, openaiApiKey, anthropicApiKey] = await Promise.all([
     getSettingValue(tenantId, SETTINGS_KEYS.direct),
     getSettingValue(tenantId, SETTINGS_KEYS.googleApiKey),
     getSettingValue(tenantId, 'gemini_api_key'), // retrocompatibilidade: chave pode estar salva com nome antigo
     getSettingValue(tenantId, SETTINGS_KEYS.openaiApiKey),
+    getSettingValue(tenantId, SETTINGS_KEYS.anthropicApiKey),
   ])
 
   const parsed = parseJsonSetting<Partial<Pick<AiDirectConfig, 'provider' | 'model'>>>(rawDirect, {})
-  const direct = normalizeDirect(parsed, googleApiKey || geminiApiKeyLegacy, openaiApiKey)
+  const direct = normalizeDirect(parsed, googleApiKey || geminiApiKeyLegacy, openaiApiKey, anthropicApiKey)
   writeCache(cachedDirectByTenant, tenantId, direct)
   return direct
 }

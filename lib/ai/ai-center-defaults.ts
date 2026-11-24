@@ -11,13 +11,13 @@ export type AiRoutesConfig = {
 }
 
 /** Provider de IA suportado pelo V-Smart. */
-export type AiProviderType = 'google' | 'openai'
+export type AiProviderType = 'google' | 'openai' | 'anthropic'
 
 /**
  * Configuração de provider direto.
  *
  * O V-Smart usa as chaves do próprio usuário, armazenadas no Supabase.
- * Cada cliente paga diretamente ao provider (Google / OpenAI).
+ * Cada cliente paga diretamente ao provider (Google / OpenAI / Anthropic).
  */
 export type AiDirectConfig = {
   /** Provider ativo. */
@@ -28,6 +28,8 @@ export type AiDirectConfig = {
   googleApiKey?: string
   /** Chave API da OpenAI (lida do Supabase). */
   openaiApiKey?: string
+  /** Chave API da Anthropic (lida do Supabase). */
+  anthropicApiKey?: string
 }
 
 export type AiPromptsConfig = {

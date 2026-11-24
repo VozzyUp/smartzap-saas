@@ -20,12 +20,12 @@ export const TemplateListHeader: React.FC<TemplateListHeaderProps> = ({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-bold text-[var(--ds-text-primary)] tracking-tight mb-2">Templates</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-[var(--ds-text-primary)] tracking-tight mb-2">Templates</h1>
         <p className="text-[var(--ds-text-secondary)]">Gerencie seus modelos de mensagens aprovados pelo WhatsApp</p>
       </div>
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         {/* USAGE LIMIT INDICATOR */}
-        <div className="flex flex-col items-end justify-center mr-4 px-3 py-1 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-subtle)] rounded-lg">
+        <div className="flex flex-col items-end justify-center sm:mr-4 px-3 max-sm:w-full max-sm:items-stretch py-1 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-subtle)] rounded-lg">
           <div className="flex items-center gap-2 text-xs font-medium text-[var(--ds-text-secondary)]">
             <span>Uso da Conta</span>
             <span className={`${templateCount >= 250 ? 'text-amber-300' : 'text-emerald-300'}`}>

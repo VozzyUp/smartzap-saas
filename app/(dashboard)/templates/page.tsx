@@ -236,7 +236,7 @@ export default function TemplatesPage() {
   return (
     <Page>
       <PageHeader>
-        <div>
+        <div className="min-w-0">
           <PageTitle>Templates</PageTitle>
           <PageDescription>
             {activeTab === 'flows'
@@ -246,17 +246,17 @@ export default function TemplatesPage() {
               : 'Gerencie templates e rascunhos.'}
           </PageDescription>
         </div>
-        <PageActions>
+        <PageActions className="w-full sm:w-auto">
           {activeTab === 'meta' && (
-            <div className="flex items-center gap-2">
-              <Button variant="brand" className="min-w-[160px]" onClick={handleCreateManualTemplate}>
+            <div className="flex w-full items-center gap-2 sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
+              <Button variant="brand" className="sm:min-w-[160px]" onClick={handleCreateManualTemplate}>
                 <Plus className="w-4 h-4" />
                 Criar template
               </Button>
 
               <Button
                 variant="outline"
-                className="min-w-[160px]"
+                className="sm:min-w-[160px]"
                 onClick={controller.onSync}
                 disabled={controller.isSyncing}
               >
@@ -267,7 +267,7 @@ export default function TemplatesPage() {
           )}
 
           {activeTab === 'projects' && (
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
               <Button variant="brand" onClick={() => router.push('/templates/new')}>
                 <Plus className="w-4 h-4" />
                 Novo Projeto
@@ -285,7 +285,7 @@ export default function TemplatesPage() {
           )}
 
           {activeTab === 'flows' && (
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
               <Button variant="brand" onClick={handleQuickCreateFlow} disabled={isCreatingFlow}>
                 <Plus className="w-4 h-4" />
                 {isCreatingFlow ? 'Criando...' : 'Criar MiniApp'}
@@ -298,7 +298,7 @@ export default function TemplatesPage() {
           )}
 
           {activeTab === 'forms' && (
-            <Button variant="brand" onClick={() => leadFormsController.setIsCreateOpen(true)}>
+            <Button variant="brand" className="w-full sm:w-auto" onClick={() => leadFormsController.setIsCreateOpen(true)}>
               <Plus className="w-4 h-4" />
               Criar formulário
             </Button>
@@ -310,7 +310,7 @@ export default function TemplatesPage() {
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setTab('meta')}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'meta'
+          className={`rounded-full border px-4 py-2 max-sm:min-h-11 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'meta'
             ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
             : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
             }`}
@@ -321,7 +321,7 @@ export default function TemplatesPage() {
 
         <button
           onClick={() => setTab('flows')}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'flows'
+          className={`rounded-full border px-4 py-2 max-sm:min-h-11 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'flows'
             ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
             : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
             }`}
@@ -335,7 +335,7 @@ export default function TemplatesPage() {
 
         <button
           onClick={() => setTab('forms')}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'forms'
+          className={`rounded-full border px-4 py-2 max-sm:min-h-11 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'forms'
             ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
             : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
             }`}
@@ -349,7 +349,7 @@ export default function TemplatesPage() {
 
         <button
           onClick={() => setTab('projects')}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'projects'
+          className={`rounded-full border px-4 py-2 max-sm:min-h-11 text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'projects'
             ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
             : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
             }`}

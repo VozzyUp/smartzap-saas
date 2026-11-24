@@ -60,7 +60,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
   return (
     <Container variant="default" padding="lg" className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div
-        className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0"
+        className="flex min-w-0 gap-2 overflow-x-auto no-scrollbar pb-2 pr-6 md:pb-0 md:pr-0 max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]"
         role="group"
         aria-label="Filtrar por categoria"
       >
@@ -68,7 +68,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
           <button
             key={cat.value}
             onClick={() => setCategoryFilter(cat.value)}
-            className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-widest transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-emerald-400 focus-visible:outline-offset-2 ${
+            className={`rounded-full border px-3 py-1 max-sm:min-h-11 shrink-0 text-[10px] uppercase tracking-widest transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-emerald-400 focus-visible:outline-offset-2 ${
               categoryFilter === cat.value
                 ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
                 : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
@@ -82,7 +82,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
       </div>
 
       <div
-        className="flex gap-2 overflow-x-auto no-scrollbar"
+        className="flex min-w-0 gap-2 overflow-x-auto no-scrollbar pr-6 md:pr-0 max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]"
         role="group"
         aria-label="Filtrar por status"
       >
@@ -92,7 +92,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
             <button
               key={s.value}
               onClick={() => setStatusFilter(s.value)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-emerald-400 focus-visible:outline-offset-2 ${
+              className={`rounded-full border px-3 py-1 max-sm:min-h-11 shrink-0 text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-emerald-400 focus-visible:outline-offset-2 ${
                 statusFilter === s.value
                   ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ds-status-success-text)]'
                   : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]'
@@ -106,13 +106,13 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
         })}
       </div>
 
-      <div className="flex items-center gap-2 w-full md:w-auto">
-        <div className="flex items-center gap-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl px-4 py-3 w-full md:w-72 transition-all focus-within:border-primary-500/50 focus-within:ring-1 focus-within:ring-primary-500/50">
+      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex items-center gap-3 bg-[var(--ds-bg-elevated)] border border-[var(--ds-border-default)] rounded-xl px-4 py-3 max-sm:min-h-11 w-full md:w-72 transition-all focus-within:border-primary-500/50 focus-within:ring-1 focus-within:ring-primary-500/50">
           <Search size={18} className="text-[var(--ds-text-muted)]" aria-hidden="true" />
           <input
             type="text"
             placeholder="Buscar templates..."
-            className="bg-transparent border-none outline-none text-sm w-full text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]"
+            className="bg-transparent border-none outline-none text-base sm:text-sm w-full min-w-0 text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Buscar templates por nome ou conteudo"
@@ -125,7 +125,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
               type="button"
               onClick={onOpenBulkDeleteDrafts}
               disabled={!hasDraftSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 text-amber-200 border border-amber-500/30 rounded-xl font-medium hover:bg-amber-500/15 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-2 max-sm:min-h-11 bg-amber-500/10 text-amber-200 border border-amber-500/30 rounded-xl font-medium hover:bg-amber-500/15 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               title={
                 hasDraftSelection
                   ? 'Excluir rascunhos selecionados'
@@ -140,7 +140,7 @@ export const TemplateFilters: React.FC<TemplateFiltersProps> = ({
               <button
                 type="button"
                 onClick={onClearDraftSelection}
-                className="px-3 py-2 text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] transition-colors whitespace-nowrap"
+                className="px-3 py-2 max-sm:min-h-11 text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)] transition-colors whitespace-nowrap"
                 title="Limpar selecao de rascunhos"
               >
                 Limpar

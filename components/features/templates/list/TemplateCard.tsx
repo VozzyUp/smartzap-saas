@@ -72,7 +72,7 @@ export const TemplateCard = React.memo(
             e.stopPropagation()
             onToggleSelection()
           }}
-          className={`mt-0.5 w-5 h-5 shrink-0 rounded border flex items-center justify-center transition-colors ${
+          className={`relative mt-0.5 w-5 h-5 shrink-0 rounded border flex items-center justify-center transition-colors max-sm:after:absolute max-sm:after:-inset-3 max-sm:after:content-[''] ${
             isRowSelected
               ? isManualDraft
                 ? 'bg-amber-500 border-amber-500'
@@ -133,19 +133,19 @@ export const TemplateCard = React.memo(
       </div>
 
       {/* Footer: Data e Acoes */}
-      <div className="mt-3 flex items-center justify-between pt-3 border-t border-[var(--ds-border-subtle)]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[var(--ds-border-subtle)]">
         <span className="text-xs text-[var(--ds-text-muted)] font-mono">
           {new Date(template.lastUpdated).toLocaleDateString('pt-BR')}
         </span>
 
         {/* Actions */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {isManualDraft ? (
             <>
               <Button variant="outline" size="sm" asChild>
                 <Link href={draftHref} title="Continuar edicao">
                   <Pencil size={14} />
-                  <span className="hidden xs:inline">Editar</span>
+                  <span>Editar</span>
                 </Link>
               </Button>
               <Button
@@ -163,7 +163,7 @@ export const TemplateCard = React.memo(
                 ) : (
                   <Send size={14} />
                 )}
-                <span className="hidden xs:inline">Enviar</span>
+                <span>Enviar</span>
               </Button>
               <Button
                 variant="ghost-destructive"

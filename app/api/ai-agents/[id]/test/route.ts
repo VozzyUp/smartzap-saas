@@ -6,6 +6,7 @@
  * RAG: LLM decides when to search knowledge base (not eager search)
  */
 
+import { withTenantEmbeddingKey } from '@/lib/ai/embeddings'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
@@ -215,7 +216,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             searchPerformed = true
             const ragStartTime = Date.now()
 
-            const embeddingConfig = buildEmbeddingConfigFromAgent(agent as AIAgent)
+            const embeddingConfig = await withTenantEmbeddingKey(buildEmbeddingConfigFromAgent(agent as AIAgent), tenantId)
 
             const relevantContent = await findRelevantContent({
               agentId: id,

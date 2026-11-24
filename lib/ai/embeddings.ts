@@ -97,6 +97,17 @@ const AI_GATEWAY_BASE_URL = 'https://ai-gateway.vercel.sh/v1'
  * Suporta Google e OpenAI. Voyage e Cohere não são suportados.
  */
 async function getEmbeddingModel(config: EmbeddingConfig) {
+  // Com a chave da própria conta (Central de IA), fala direto com o provedor. É o caminho normal
+  // fora da Vercel: o AI Gateway abaixo só existe lá.
+  if (config.apiKey && config.provider === 'google') {
+    const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
+    return createGoogleGenerativeAI({ apiKey: config.apiKey }).textEmbeddingModel(config.model)
+  }
+  if (config.apiKey && config.provider === 'openai') {
+    const { createOpenAI } = await import('@ai-sdk/openai')
+    return createOpenAI({ apiKey: config.apiKey }).embedding(config.model)
+  }
+
   if (config.provider === 'google' || config.provider === 'openai') {
     const { createOpenAI } = await import('@ai-sdk/openai')
 
@@ -340,4 +351,22 @@ export function getModelDimensions(provider: EmbeddingProvider, model: string): 
   const providerInfo = EMBEDDING_PROVIDERS.find((p) => p.id === provider)
   const modelInfo = providerInfo?.models.find((m) => m.id === model)
   return modelInfo?.dimensions ?? null
+}
+
+/**
+ * Completa a configuração com a chave que a conta salvou na Central de IA para o provedor de
+ * embeddings (google_api_key / openai_api_key). Sem chave, devolve a configuração como veio.
+ */
+export async function withTenantEmbeddingKey(config: EmbeddingConfig, tenantId: string): Promise<EmbeddingConfig> {
+  if (config.apiKey) return config
+  const settingKey = config.provider === 'google' ? 'google_api_key' : config.provider === 'openai' ? 'openai_api_key' : null
+  if (!settingKey) return config
+  try {
+    const { settingsDb } = await import('@/lib/supabase-db')
+    const apiKey = await settingsDb.get(tenantId, settingKey)
+    return apiKey ? { ...config, apiKey } : config
+  } catch (e) {
+    console.error('[embeddings] Falha ao ler a chave do provedor:', e instanceof Error ? e.message : e)
+    return config
+  }
 }

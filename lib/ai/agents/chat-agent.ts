@@ -15,6 +15,7 @@
  * - Evita injetar ruído em conversas simples
  */
 
+import { withTenantEmbeddingKey } from '@/lib/ai/embeddings'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
@@ -565,7 +566,7 @@ ${buildFunnelPromptSection(config.funnel)}`
           const ragStartTime = Date.now()
 
           // Build configs
-          const embeddingConfig = buildEmbeddingConfigFromAgent(agent)
+          const embeddingConfig = await withTenantEmbeddingKey(buildEmbeddingConfigFromAgent(agent), tenantId)
           const rerankConfig = await buildRerankConfigFromAgent(agent)
 
           // Search

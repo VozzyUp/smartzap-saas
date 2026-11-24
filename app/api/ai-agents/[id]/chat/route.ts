@@ -24,6 +24,7 @@
  * }
  */
 
+import { withTenantEmbeddingKey } from '@/lib/ai/embeddings'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
@@ -305,7 +306,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             console.log(`[ai-agents/chat] Knowledge search: "${query.slice(0, 80)}..."`)
             searchPerformed = true
 
-            const embeddingConfig = buildEmbeddingConfigFromAgent(agent as AIAgent)
+            const embeddingConfig = await withTenantEmbeddingKey(buildEmbeddingConfigFromAgent(agent as AIAgent), tenantId)
             const rerankConfig = await buildRerankConfigFromAgent(agent as AIAgent)
 
             const relevantContent = await findRelevantContent({

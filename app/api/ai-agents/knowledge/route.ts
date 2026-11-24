@@ -9,6 +9,7 @@
  * 3. Agent queries use pgvector similarity search
  */
 
+import { withTenantEmbeddingKey } from '@/lib/ai/embeddings'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -229,7 +230,7 @@ export async function POST(request: NextRequest) {
       console.log(`[knowledge] Indexing ${name} in pgvector for agent ${agent_id}`)
 
       // Build embedding config from agent settings
-      const embeddingConfig = buildEmbeddingConfigFromAgent(agent as AIAgent)
+      const embeddingConfig = await withTenantEmbeddingKey(buildEmbeddingConfigFromAgent(agent as AIAgent), ctx.tenantId)
 
       // Index document (chunk → embed → store)
       const result = await indexDocument({

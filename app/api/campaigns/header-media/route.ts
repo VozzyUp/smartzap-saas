@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     filename: fileName,
   })
 
-  if (!uploaded.ok || !uploaded.id) {
+  if (!uploaded.ok) {
     return NextResponse.json(
       { error: `Falha ao enviar a mídia para a Meta: ${uploaded.error || 'erro desconhecido'}` },
       { status: 502 }

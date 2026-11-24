@@ -9,13 +9,14 @@ export async function GET() {
   const ctx = await getTenantContext()
   if (!ctx?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
+  const tenantId = ctx.tenantId
   try {
-    const boards = await listBoards(ctx.tenantId)
+    const boards = await listBoards(tenantId)
     const withStages = await Promise.all(
       boards.map(async (b) => ({
         id: b.id,
         name: b.name,
-        stages: (await listStages(ctx.tenantId, b.id)).map((s) => ({ id: s.id, name: s.name })),
+        stages: (await listStages(tenantId, b.id)).map((s) => ({ id: s.id, name: s.name })),
       }))
     )
     return NextResponse.json({ boards: withStages.filter((b) => b.stages.length > 0) })

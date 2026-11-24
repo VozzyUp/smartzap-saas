@@ -20,7 +20,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { ConversationList } from './ConversationList'
 import { MessagePanel } from './MessagePanel'
-import { RefreshCw, MessageSquare, Users } from 'lucide-react'
+import { RefreshCw, MessageSquare, Users, ArrowLeft } from 'lucide-react'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type {
   InboxConversation,
   InboxMessage,
@@ -182,6 +183,92 @@ export function InboxView({
     </div>
   )
 
+  const isMobile = useIsMobile()
+
+  const conversationList = (
+    <ErrorBoundary fallback={ConversationListFallback}>
+      <ConversationList
+        conversations={conversations}
+        selectedId={selectedConversationId}
+        onSelect={handleSelectConversation}
+        isLoading={isLoadingConversations}
+        totalUnread={totalUnread}
+        hasMore={hasMoreConversations}
+        isLoadingMore={isLoadingMoreConversations}
+        onLoadMore={onLoadMoreConversations}
+        labels={labels}
+        search={search}
+        onSearchChange={onSearchChange}
+        statusFilter={statusFilter}
+        onStatusFilterChange={onStatusFilterChange}
+        modeFilter={modeFilter}
+        onModeFilterChange={onModeFilterChange}
+        labelFilter={labelFilter}
+        onLabelFilterChange={onLabelFilterChange}
+      />
+    </ErrorBoundary>
+  )
+
+  const messagePanel = (
+    <ErrorBoundary fallback={MessagePanelFallback}>
+      <MessagePanel
+        conversation={selectedConversation}
+        messages={messages}
+        labels={labels}
+        quickReplies={quickReplies}
+        isLoadingConversation={isLoadingSelectedConversation}
+        isLoadingMessages={isLoadingMessages}
+        isLoadingMore={isLoadingMoreMessages}
+        isSending={isSending}
+        quickRepliesLoading={quickRepliesLoading}
+        onRefreshQuickReplies={onRefreshQuickReplies}
+        onRefreshMessages={onRefreshMessages}
+        hasMoreMessages={hasMoreMessages}
+        onLoadMore={onLoadMoreMessages}
+        onSendMessage={onSendMessage}
+        onModeToggle={onModeToggle}
+        onClose={onCloseConversation}
+        onReopen={onReopenConversation}
+        onPriorityChange={onPriorityChange}
+        onLabelToggle={onLabelToggle}
+        onHandoff={onHandoff}
+        onReturnToBot={onReturnToBot}
+        onDelete={onDeleteConversation}
+        onConfigureAgent={onConfigureAgent}
+        isUpdating={isUpdatingConversation}
+        isHandingOff={isHandingOff}
+        isReturningToBot={isReturningToBot}
+        isDeleting={isDeletingConversation}
+      />
+    </ErrorBoundary>
+  )
+
+  // Celular: uma coluna por vez. Lista em tela cheia; ao abrir uma conversa, ela ocupa a tela
+  // toda com um botão de voltar. (Dois painéis lado a lado ficam ilegíveis em 390px.)
+  if (isMobile) {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <div className="h-full flex flex-col bg-[var(--ds-bg-base)]">
+          {selectedConversationId ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onSelectConversation(null)}
+                className="flex items-center gap-2 min-h-11 px-4 text-sm font-medium text-[var(--ds-text-secondary)] border-b border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)] shrink-0 active:bg-[var(--ds-bg-hover)]"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                Conversas
+              </button>
+              <div className="flex-1 min-h-0">{messagePanel}</div>
+            </>
+          ) : (
+            <div className="flex-1 min-h-0">{conversationList}</div>
+          )}
+        </div>
+      </TooltipProvider>
+    )
+  }
+
   return (
     <TooltipProvider delayDuration={300}>
       {/* Full height container - uses parent height from PageLayoutScope */}
@@ -196,27 +283,7 @@ export function InboxView({
           >
             {/* Sidebar with subtle right shadow for depth */}
             <div className="h-full shadow-[1px_0_8px_-2px_rgba(0,0,0,0.3)]">
-              <ErrorBoundary fallback={ConversationListFallback}>
-                <ConversationList
-                  conversations={conversations}
-                  selectedId={selectedConversationId}
-                  onSelect={handleSelectConversation}
-                  isLoading={isLoadingConversations}
-                  totalUnread={totalUnread}
-                  hasMore={hasMoreConversations}
-                  isLoadingMore={isLoadingMoreConversations}
-                  onLoadMore={onLoadMoreConversations}
-                  labels={labels}
-                  search={search}
-                  onSearchChange={onSearchChange}
-                  statusFilter={statusFilter}
-                  onStatusFilterChange={onStatusFilterChange}
-                  modeFilter={modeFilter}
-                  onModeFilterChange={onModeFilterChange}
-                  labelFilter={labelFilter}
-                  onLabelFilterChange={onLabelFilterChange}
-                />
-              </ErrorBoundary>
+              {conversationList}
             </div>
           </ResizablePanel>
 
@@ -225,37 +292,7 @@ export function InboxView({
 
           {/* Message panel - main content area */}
           <ResizablePanel defaultSize="72%" minSize="50%">
-            <ErrorBoundary fallback={MessagePanelFallback}>
-              <MessagePanel
-                conversation={selectedConversation}
-                messages={messages}
-                labels={labels}
-                quickReplies={quickReplies}
-                isLoadingConversation={isLoadingSelectedConversation}
-                isLoadingMessages={isLoadingMessages}
-                isLoadingMore={isLoadingMoreMessages}
-                isSending={isSending}
-                quickRepliesLoading={quickRepliesLoading}
-                onRefreshQuickReplies={onRefreshQuickReplies}
-                onRefreshMessages={onRefreshMessages}
-                hasMoreMessages={hasMoreMessages}
-                onLoadMore={onLoadMoreMessages}
-                onSendMessage={onSendMessage}
-                onModeToggle={onModeToggle}
-                onClose={onCloseConversation}
-                onReopen={onReopenConversation}
-                onPriorityChange={onPriorityChange}
-                onLabelToggle={onLabelToggle}
-                onHandoff={onHandoff}
-                onReturnToBot={onReturnToBot}
-                onDelete={onDeleteConversation}
-                onConfigureAgent={onConfigureAgent}
-                isUpdating={isUpdatingConversation}
-                isHandingOff={isHandingOff}
-                isReturningToBot={isReturningToBot}
-                isDeleting={isDeletingConversation}
-              />
-            </ErrorBoundary>
+            {messagePanel}
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>

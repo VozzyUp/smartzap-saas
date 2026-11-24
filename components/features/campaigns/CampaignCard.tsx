@@ -1,5 +1,6 @@
 'use client'
 
+import { getDailyContinuationLabel } from '@/lib/campaign-progress-label';
 import React from 'react'
 import { Copy, Trash2, Calendar, Play, Pause, Loader2, Users, FolderIcon } from 'lucide-react'
 import { Campaign, CampaignStatus } from '../../../types'
@@ -113,6 +114,9 @@ export const CampaignCard = React.memo(
               <p className="text-xs text-purple-400 mt-1 flex items-center gap-1">
                 <Calendar size={10} />
                 {formatDateTimeFull(campaign.scheduledAt)}
+            {getDailyContinuationLabel(campaign) && (
+              <p className="text-xs text-[var(--ds-text-muted)] mt-1">{getDailyContinuationLabel(campaign)}</p>
+            )}
               </p>
             )}
             {/* Tags */}

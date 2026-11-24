@@ -7,6 +7,7 @@ import { getAppUrl } from '@/lib/app-url'
 import { getSupabaseAdmin, supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
+import { isOptOutKeyword } from '@/lib/opt-out-keywords'
 import { maybeAutoSuppressByFailure } from '@/lib/auto-suppression'
 import {
   mapWhatsAppError,
@@ -140,41 +141,6 @@ function extractInboundText(message: any): string {
   if (typeof interactiveListTitle === 'string' && interactiveListTitle.trim()) return interactiveListTitle
 
   return ''
-}
-
-function isOptOutKeyword(textRaw: string): boolean {
-  const t = String(textRaw || '')
-    .trim()
-    .toLowerCase()
-    // normaliza acentos comuns para facilitar matching
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-
-  if (!t) return false
-
-  // Palavras-chave comuns (PT-BR + EN) — agressivo por requisito.
-  const keywords = [
-    'parar',
-    'pare',
-    'stop',
-    'cancelar',
-    'cancele',
-    'sair',
-    'remover',
-    'remove',
-    'descadastrar',
-    'desinscrever',
-    'unsubscribe',
-    'optout',
-    'opt-out',
-    'nao quero',
-    'não quero',
-    'nao receber',
-    'não receber',
-  ]
-
-  // Match por inclusão para cobrir frases (ex.: "por favor parar")
-  return keywords.some((k) => t.includes(k))
 }
 
 async function markContactOptOutAndSuppress(input: {

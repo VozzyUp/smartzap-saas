@@ -211,7 +211,7 @@ export async function findRelevantContent(
     // Se reranking está habilitado, busca mais candidatos
     const searchTopK = rerankConfig ? Math.max(topK * 3, 15) : topK
 
-    const { data, error } = await supabase.rpc('search_embeddings', {
+    const rpc = await supabase.rpc('search_embeddings', {
       query_embedding: toPgVector(queryEmbedding),
       agent_id_filter: agentId,
       p_tenant_id: params.tenantId,
@@ -219,10 +219,21 @@ export async function findRelevantContent(
       match_threshold: threshold,
       match_count: searchTopK,
     })
+    let data = rpc.data as Array<{ content: string; similarity: number; metadata: Record<string, unknown> }> | null
 
-    if (error) {
-      console.error('[rag-store] search_embeddings error:', error)
-      throw error
+    if (rpc.error) {
+      // A função do banco pode falhar (ex.: operador do pgvector fora do search_path, erro 42883).
+      // Para a base de conhecimento não parar, calcula a similaridade aqui, sobre os trechos do
+      // próprio agente (sempre filtrado por conta). Serve bem para bases pequenas.
+      console.error('[rag-store] search_embeddings error (usando busca em memória):', rpc.error.code, rpc.error.message)
+      data = await searchInMemory({
+        tenantId: params.tenantId,
+        agentId,
+        dimensions: embeddingConfig.dimensions,
+        queryEmbedding,
+        threshold,
+        limit: searchTopK,
+      })
     }
 
     if (!data || data.length === 0) {
@@ -390,4 +401,71 @@ export async function hasIndexedContent(agentId: string): Promise<boolean> {
   }
 
   return (count ?? 0) > 0
+}
+
+/** Máximo de trechos lidos na busca em memória (proteção de memória e tempo). */
+const IN_MEMORY_SEARCH_MAX_CHUNKS = 2000
+
+export function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0
+  let na = 0
+  let nb = 0
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i]
+    na += a[i] * a[i]
+    nb += b[i] * b[i]
+  }
+  if (na === 0 || nb === 0) return 0
+  return dot / (Math.sqrt(na) * Math.sqrt(nb))
+}
+
+function parseVector(value: unknown): number[] | null {
+  if (Array.isArray(value)) return value as number[]
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? (parsed as number[]) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Busca por similaridade calculada na aplicação. Alternativa à função `search_embeddings`
+ * do banco quando ela falha. Sempre filtra por conta e por agente.
+ */
+async function searchInMemory(input: {
+  tenantId: string
+  agentId: string
+  dimensions: number
+  queryEmbedding: number[]
+  threshold: number
+  limit: number
+}): Promise<Array<{ content: string; similarity: number; metadata: Record<string, unknown> }>> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('ai_embeddings')
+    .select('content, metadata, embedding')
+    .eq('tenant_id', input.tenantId)
+    .eq('agent_id', input.agentId)
+    .eq('dimensions', input.dimensions)
+    .limit(IN_MEMORY_SEARCH_MAX_CHUNKS)
+  if (error) {
+    console.error('[rag-store] busca em memória falhou:', error.message)
+    throw error
+  }
+  return (data || [])
+    .map((row) => {
+      const vector = parseVector((row as { embedding: unknown }).embedding)
+      return {
+        content: (row as { content: string }).content,
+        metadata: ((row as { metadata: Record<string, unknown> | null }).metadata || {}) as Record<string, unknown>,
+        similarity: vector ? cosineSimilarity(input.queryEmbedding, vector) : 0,
+      }
+    })
+    .filter((r) => r.similarity > input.threshold)
+    .sort((x, y) => y.similarity - x.similarity)
+    .slice(0, input.limit)
 }

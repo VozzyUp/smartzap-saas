@@ -1,11 +1,12 @@
 {
-  "name": "V-Smart Atendimento",
+  "name": "V-Smart",
   "short_name": "V-Smart",
   "description": "Central de atendimento WhatsApp com IA",
-  "start_url": "/atendimento",
-  "scope": "/atendimento",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#18181b",
   "theme_color": "#22c55e",
   "icons": [
@@ -56,10 +57,10 @@
   "prefer_related_applications": false,
   "shortcuts": [
     {
-      "name": "Conversas Urgentes",
-      "short_name": "Urgentes",
-      "description": "Ver conversas que precisam de atenção",
-      "url": "/atendimento?filter=urgent",
+      "name": "Caixa de entrada",
+      "short_name": "Conversas",
+      "description": "Abrir as conversas do WhatsApp",
+      "url": "/inbox",
       "icons": [{ "src": "/icons/shortcut-urgent.png", "sizes": "96x96" }]
     }
   ]

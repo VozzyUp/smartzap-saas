@@ -137,6 +137,29 @@ describe('handleInboundMessage — mídia recebida (Fase 5A / T4)', () => {
     expect(result).toEqual({ conversationId: 'conv_1', messageId: 'msg_1', triggeredAI: false })
   })
 
+  it('mídia: guarda o media_id da Meta no payload da mensagem (para a transcrição do áudio)', async () => {
+    process.env.QSTASH_TOKEN = 'qstash_test_token'
+    await handleInboundMessage({
+      tenantId: 'tenant_1',
+      messageId: 'wamid_a',
+      from: '5511999999999',
+      type: 'audio',
+      text: '',
+      mediaId: 'mid_audio',
+      phoneNumberId: 'pn_1',
+    })
+    expect(rpcMock).toHaveBeenCalledWith(
+      'process_inbound_message',
+      expect.objectContaining({ p_payload: expect.objectContaining({ media_id: 'mid_audio', phone_number_id: 'pn_1' }) })
+    )
+  })
+
+  it('texto: payload não ganha media_id', async () => {
+    await handleInboundMessage({ tenantId: 'tenant_1', messageId: 'wamid_t', from: '5511999999999', type: 'text', text: 'oi', phoneNumberId: 'pn_1' })
+    const call = rpcMock.mock.calls.find((c) => c[0] === 'process_inbound_message')!
+    expect(call[1].p_payload).not.toHaveProperty('media_id')
+  })
+
   it('mensagem de texto (sem mídia): não marca pending nem enfileira', async () => {
     process.env.QSTASH_TOKEN = 'qstash_test_token'
 

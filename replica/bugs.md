@@ -38,6 +38,17 @@ Evidência (arquivo:linha) refere-se ao código ANTES das correções (origin/ma
 - Evidência: `app/api/ai/respond/kanban-automation-hook.ts:11-23`.
 - Correção: commits 3805cdd, c74c726 e 9bd8831.
 
+## BUG-006 — Provedor desconhecido usava a chave da OpenAI (S3, latente)
+- Passos: nas rotas de agente/inbox e nos serviços de IA, o código era `if (provider === 'google') ... else openai`; qualquer terceiro provedor cairia na chave/modelo da OpenAI.
+- Esperado: cada provedor usa a própria chave.
+- Atual (antes): `else` implícito da OpenAI em `app/api/ai-agents/[id]/chat/route.ts`, `[id]/test/route.ts`, `app/api/inbox/chat/route.ts`, `inbox/suggest/route.ts`, `lib/ai/services/ai-judge.ts`, `template-agent.ts`, `lib/ai/unified-ai-service.ts`.
+- Correção: fábrica única `lib/ai/llm-model.ts` (teste `lib/ai/llm-model.test.ts`) e ramo explícito na Anthropic.
+
+## BUG-007 — Gerador de templates UTILITY não rodava o juiz sem chave Google (S3)
+- Passos: conta com Anthropic como provedor e sem `google_api_key`, estratégia `utility`.
+- Atual (antes): o juiz só rodava com `apiKey` Google (`app/api/ai/generate-utility-templates/route.ts`), então o filtro de neutralidade era pulado em silêncio.
+- Correção: usa a chave Anthropic quando esse é o provedor ativo. Sem teste automatizado da rota (marcado como manual).
+
 ## A verificar (suspeitas NÃO reproduzidas em teste)
 1. `app/api/push/subscribe/route.ts` faz upsert em `push_subscriptions` sem `tenant_id`, e a coluna é NOT NULL sem default (`supabase/migrations/20260708000002_multitenancy_add_tenant_id.sql`). Se não houver trigger/default no banco real, nenhuma subscription é salva e o push de handoff nunca chega. Não foi possível consultar o banco; precisa conferir se existem linhas em `push_subscriptions`.
 2. `removeInvalidSubscription` (lib/push-notifications.ts) usa o client de sessão (cookies); em worker QStash pode falhar ao limpar subscription 410 (só loga).
@@ -45,3 +56,8 @@ Evidência (arquivo:linha) refere-se ao código ANTES das correções (origin/ma
 4. `app/api/push/send/route.ts` usa `broadcastPushNotification` sem tenant (broadcast global por sessão); revisar escopo.
 5. Palavras genéricas herdadas ("cancelar", "remover", "nao quero") ainda causam opt-out em frases como "quero cancelar o pedido"; avaliar com o dono.
 6. Compatibilidade do enum `funnelStage` (anyOf com null) com todos os provedores/modelos configuráveis do agente (Gemini/OpenAI); só validado no schema zod, não com modelo real.
+7. Anthropic: nada foi chamado contra a API real. Falta confirmar com chave real: (a) o enum anulável `funnelStage` e `optOut` são aceitos no `input_schema` da tool; (b) `toolChoice: 'auto'` + instrução no prompt faz o Claude chamar `respond` na grande maioria dos casos (senão o texto direto vira a mensagem, com confiança 0.3); (c) 2000 tokens de piso bastam com o raciocínio sempre ligado (se a resposta vier cortada, subir o piso em `lib/ai/anthropic-support.ts`); (d) a lista de modelos é fixa (`claude-*-5-5`): se algum id não existir na conta, a chamada dá 404.
+8. `/api/inbox/chat` (streaming no inbox): a resposta só é enviada ao WhatsApp dentro da execução da tool `respond`. Com a Anthropic (toolChoice `auto`), uma resposta só em texto não envia nada. O chat-agent principal (webhook) trata o texto, esta rota não.
+9. `app/api/ai-agents/llm-providers/route.ts` marca o provedor como disponível também por variável de ambiente (`OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`), mas `getAiDirectConfig` só lê as chaves da conta; o agente aparece com modelo selecionável e falha na hora de responder. Comportamento herdado, vale para os três provedores.
+10. Agente com modelo `claude-*` salvo, mas conta com provedor Google/OpenAI: o id vai para o provedor errado e dá 404 (o contrário, modelo de outro provedor com Anthropic ativa, já cai no padrão). Herdado do desenho (modelo do agente sobrepõe o da conta).
+11. Embeddings (`lib/ai/embeddings.ts`) passam pelo AI Gateway com `VERCEL_OIDC_TOKEN`/`AI_GATEWAY_API_KEY` ou `'dummy'`, não pelas chaves da conta; fora do escopo e igual para qualquer provedor de chat.

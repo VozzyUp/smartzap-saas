@@ -8,6 +8,14 @@ Arquivos de teste:
 - T3 `lib/ai/agents/chat-agent-funnel-optout.test.ts`
 - T4 `lib/push-notifications.handoff.test.ts`
 - T5 `app/api/ai/respond/route.test.ts`
+- T6 `lib/ai/anthropic-support.test.ts`
+- T7 `lib/ai/agents/chat-agent-anthropic.test.ts`
+- T8 `lib/ai/agents/chat-agent-anthropic-schema.test.ts`
+- T9 `lib/ai/ai-center-config.test.ts` (bloco "provedor Anthropic")
+- T10 `app/api/settings/ai/route.anthropic.test.ts`
+- T11 `app/api/ai/models/route.anthropic.test.ts`
+- T12 `lib/ai/llm-model.test.ts`
+- T13 `lib/ai/unified-ai-service-anthropic.test.ts`
 
 ## F01 — Lead responde e a IA classifica no funil
 
@@ -71,3 +79,35 @@ Arquivos de teste:
 | F03-E5 | E | Duas mensagens seguidas gerando dois handoffs | Manual (tag do push `handoff-<conversa>` colapsa no dispositivo) |
 | F03-N1 | N | Falha do push (web-push lança / banco falha) -> só loga, handoff continua | Auto T4, T5 |
 | F03-N2 | N | Subscription expirada (410) -> remoção usa client de sessão e pode falhar no worker | Manual / "a verificar" |
+
+## F04 — Agente respondendo com a Anthropic (Claude)
+
+Restrições dos modelos claude-opus-5-5 / claude-sonnet-5-5 / claude-haiku-5-5 que causam HTTP 400: `temperature`/`topP`/`topK` não padrão e `toolChoice` forçado. O raciocínio (thinking) é sempre ligado e consome `max_tokens`. Nenhum caso abaixo foi executado contra a API real (sem chave).
+
+| ID | Tipo | Caso | Cobertura |
+|----|------|------|-----------|
+| F04-H1 | H | Conta com provedor anthropic e chave: o agente cria o modelo com `createAnthropic({ apiKey })` e responde chamando a tool `respond` | Auto T7 |
+| F04-H2 | H | A chamada NÃO leva `temperature`, `topP`, `topK` nem `providerOptions` (thinking); usa `toolChoice: 'auto'` | Auto T6, T7, T13 |
+| F04-H3 | H | Prompt de sistema recebe a instrução de responder pela tool `respond` | Auto T6, T7 |
+| F04-H4 | H | Salvar chave Anthropic na tela: valida com GET /v1/models (sem gerar tokens), grava `anthropic_api_key` do tenant | Auto T10 (rota); clique na tela: Manual |
+| F04-H5 | H | Escolher Anthropic grava `ai_direct` com `claude-opus-5-5`; lista de modelos traz os 3 ids exatos | Auto T9, T10, T11 |
+| F04-H6 | H | GET da configuração devolve só `tokenPreview` mascarado, nunca a chave | Auto T10 |
+| F04-H7 | H | Resposta real do Claude com a tool `respond` (schema com `funnelStage` enum anulável e `optOut`) | Manual (precisa de chave real) |
+| F04-H8 | H | Busca na base de conhecimento com provedor Anthropic: tool `searchKnowledgeBase` presente e embeddings seguem o provedor do agente (Google/OpenAI), não a Anthropic | Auto T7 (mock); busca real: Manual |
+| F04-E1 | E | Chave Anthropic ausente (provedor anthropic, só outra chave configurada) -> erro "Chave Anthropic não configurada", sem chamar IA | Auto T7, T12, T13 |
+| F04-E2 | E | Nenhuma chave -> mensagem genérica existente | Auto T7 |
+| F04-E3 | E | Chave inválida na tela (401) -> 400 com mensagem, nada é salvo | Auto T6, T10 |
+| F04-E4 | E | Modelo desconhecido/de outro provedor no agente (ex.: `gemini-2.5-flash`) -> cai em `claude-opus-5-5`; id `claude-*` novo é respeitado | Auto T6, T7, T9, T12 |
+| F04-E5 | E | Temperatura configurada no agente (0.3) é ignorada para a Anthropic e continua valendo para Google/OpenAI | Auto T7 |
+| F04-E6 | E | `max_tokens` do agente abaixo de 2000 sobe para 2000 (raciocínio consome o limite); acima é mantido; Google/OpenAI inalterados | Auto T6, T7, T13 |
+| F04-E7 | E | Modelo responde em texto sem chamar a tool -> o texto vira a mensagem (sem handoff, optOut ou funil), sem retries | Auto T7 |
+| F04-E8 | E | Sem texto e sem tool -> auto-handoff existente | Auto T7 |
+| F04-E9 | E | JSON Schema da tool `respond` sem `default`, sem `$ref`, `funnelStage` enum+null opcional, `optOut` boolean opcional | Auto T8 (aceitação pela API: Manual) |
+| F04-E10 | E | Playground do agente, teste do agente e sugestão do inbox: texto direto vira resposta/sugestão | Manual (mesma regra, rotas sem teste automatizado; compiladas por tsc) |
+| F04-E11 | E | Remover chave Anthropic apaga só a do tenant atual | Auto T10 |
+| F04-E12 | E | Chat do inbox (`/api/inbox/chat`) com resposta só em texto: nada é enviado ao WhatsApp (a tool `respond` é quem envia) | Manual; ver "a verificar" |
+| F04-N1 | N | Erro 401 da Anthropic em produção -> auto-handoff com o erro no motivo (mesmo caminho dos outros provedores) | Auto T7 |
+| F04-N2 | N | Erro 429 -> auto-handoff | Auto T7 |
+| F04-N3 | N | Erro 400 (ex.: parâmetro rejeitado) -> auto-handoff | Auto T7 |
+| F04-N4 | N | Rotas de playground/teste mapeiam `statusCode` 401/429 do SDK para 401/429 | Manual (alteração de uma linha; sem teste de rota) |
+| F04-N5 | N | Provedor inválido em `/api/ai/models` e DELETE -> 400 citando anthropic | Auto T10, T11 |

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import type { AIModelInfo } from '@/app/api/ai/models/route';
 
 /**
- * AIGatewayPanel — Configuração de providers de IA (Google Gemini / OpenAI)
+ * AIGatewayPanel — Configuração de providers de IA (Google Gemini / OpenAI / Anthropic)
  *
  * Cada cliente usa sua própria chave de API, paga diretamente ao provider.
  * Sem intermediação do Vercel AI Gateway.
@@ -16,7 +16,15 @@ import type { AIModelInfo } from '@/app/api/ai/models/route';
 // TIPOS
 // =============================================================================
 
-type AiProvider = 'google' | 'openai';
+type AiProvider = 'google' | 'openai' | 'anthropic';
+
+const PROVIDER_LABEL: Record<AiProvider, string> = { google: 'Google', openai: 'OpenAI', anthropic: 'Anthropic' };
+
+const KEY_FIELD: Record<AiProvider, 'google_api_key' | 'openai_api_key' | 'anthropic_api_key'> = {
+  google: 'google_api_key',
+  openai: 'openai_api_key',
+  anthropic: 'anthropic_api_key',
+};
 
 type KeyStatus = 'idle' | 'saving' | 'valid' | 'invalid';
 
@@ -51,16 +59,25 @@ const PROVIDERS: { id: AiProvider; label: string; icon: string; color: string; p
     color: 'emerald',
     placeholder: 'sk-...',
   },
+  {
+    id: 'anthropic',
+    label: 'Anthropic Claude',
+    icon: '🧠',
+    color: 'orange',
+    placeholder: 'sk-ant-...',
+  },
 ];
 
 const COLOR_MAP: Record<string, string> = {
   blue: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
   emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  orange: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
 };
 
 const ACTIVE_COLOR: Record<string, string> = {
   blue: 'border-blue-500/50 bg-blue-500/20 ring-1 ring-blue-500/30',
   emerald: 'border-emerald-500/50 bg-emerald-500/20 ring-1 ring-emerald-500/30',
+  orange: 'border-orange-500/50 bg-orange-500/20 ring-1 ring-orange-500/30',
 };
 
 // =============================================================================
@@ -80,6 +97,11 @@ export function AIGatewayPanel() {
       modelSearch: '', showModelList: false,
     },
     openai: {
+      isConfigured: false, tokenPreview: null, keyStatus: 'idle',
+      keyDraft: '', showKey: false, models: [], modelsLoading: false,
+      modelSearch: '', showModelList: false,
+    },
+    anthropic: {
       isConfigured: false, tokenPreview: null, keyStatus: 'idle',
       keyDraft: '', showKey: false, models: [], modelsLoading: false,
       modelSearch: '', showModelList: false,
@@ -113,6 +135,12 @@ export function AIGatewayPanel() {
         updateProvider('openai', {
           isConfigured: data.keys.openai.isConfigured,
           tokenPreview: data.keys.openai.tokenPreview,
+        });
+      }
+      if (data.keys?.anthropic) {
+        updateProvider('anthropic', {
+          isConfigured: data.keys.anthropic.isConfigured,
+          tokenPreview: data.keys.anthropic.tokenPreview,
         });
       }
     } catch (error) {
@@ -151,7 +179,7 @@ export function AIGatewayPanel() {
 
     updateProvider(id, { keyStatus: 'saving' });
     try {
-      const body = id === 'google' ? { google_api_key: key } : { openai_api_key: key };
+      const body = { [KEY_FIELD[id]]: key };
       const res = await fetch('/api/settings/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -161,7 +189,7 @@ export function AIGatewayPanel() {
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
 
       updateProvider(id, { keyStatus: 'valid', keyDraft: '', isConfigured: true });
-      toast.success(`Chave ${id === 'google' ? 'Google' : 'OpenAI'} salva`);
+      toast.success(`Chave ${PROVIDER_LABEL[id]} salva`);
       await loadConfig();
       // Carrega modelos com a nova chave
       void fetchModels(id);
@@ -177,7 +205,7 @@ export function AIGatewayPanel() {
       const res = await fetch(`/api/settings/ai?provider=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Erro ao remover chave');
       updateProvider(id, { isConfigured: false, tokenPreview: null, models: [], keyStatus: 'idle' });
-      toast.success(`Chave ${id === 'google' ? 'Google' : 'OpenAI'} removida`);
+      toast.success(`Chave ${PROVIDER_LABEL[id]} removida`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao remover chave';
       toast.error(message);
@@ -217,7 +245,9 @@ export function AIGatewayPanel() {
       if (!res.ok) throw new Error('Erro ao salvar provider');
       setActiveProvider(id);
       setActiveModel('');
-      toast.success(`Provider alterado para ${id === 'google' ? 'Google' : 'OpenAI'}`);
+      // Anthropic grava um modelo padrão (claude-opus-5-5) no backend: recarrega para refletir
+      if (id === 'anthropic') void loadConfig();
+      toast.success(`Provider alterado para ${PROVIDER_LABEL[id]}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar provider';
       toast.error(message);

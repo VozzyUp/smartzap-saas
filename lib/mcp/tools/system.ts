@@ -73,11 +73,12 @@ export function registerSystemTools(server: McpServer) {
       if (!res.ok) return err(body.error ?? `HTTP ${res.status}`)
 
       // Remove chaves sensíveis da resposta
-      const { googleApiKey: _g, openaiApiKey: _o, ...safe } = body
+      const { googleApiKey: _g, openaiApiKey: _o, anthropicApiKey: _a, ...safe } = body
       return ok({
         ...safe,
         hasGoogleKey: !!body.googleApiKey,
         hasOpenAIKey: !!body.openaiApiKey,
+        hasAnthropicKey: !!body.anthropicApiKey,
       })
     }
   )

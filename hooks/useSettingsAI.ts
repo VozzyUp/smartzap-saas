@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type { AIProvider } from '@/lib/ai/providers'
+import { defaultModelIdForProvider, type AIProvider } from '@/lib/ai/providers'
 import { useDevMode } from '@/components/providers/DevModeProvider'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
 import {
@@ -35,6 +35,7 @@ type AIConfigResponse = {
   keys: {
     google: { isConfigured: boolean; source: string; tokenPreview: string | null }
     openai: { isConfigured: boolean; source: string; tokenPreview: string | null }
+    anthropic?: { isConfigured: boolean; source: string; tokenPreview: string | null }
   }
   ocr?: OCRConfig
 }
@@ -68,8 +69,10 @@ export const useSettingsAIController = () => {
   // API keys
   const [googleKey, setGoogleKey] = useState<KeyState>(DEFAULT_KEY_STATE)
   const [openaiKey, setOpenaiKey] = useState<KeyState>(DEFAULT_KEY_STATE)
+  const [anthropicKey, setAnthropicKey] = useState<KeyState>(DEFAULT_KEY_STATE)
   const [googleKeyDraft, setGoogleKeyDraft] = useState('')
   const [openaiKeyDraft, setOpenaiKeyDraft] = useState('')
+  const [anthropicKeyDraft, setAnthropicKeyDraft] = useState('')
 
   // Modelos dinâmicos do provider
   const [models, setModels] = useState<AIModelInfo[]>([])
@@ -92,7 +95,7 @@ export const useSettingsAIController = () => {
     try {
       const data = (await settingsService.getAIConfig()) as AIConfigResponse
       const nextProvider: AiProviderType =
-        data.provider === 'openai' ? 'openai' : 'google'
+        data.provider === 'openai' || data.provider === 'anthropic' ? data.provider : 'google'
       const nextModel = data.model?.trim() ? data.model : DEFAULT_MODEL_ID
 
       setProvider(nextProvider)
@@ -108,6 +111,12 @@ export const useSettingsAIController = () => {
       setOpenaiKey({
         isConfigured: data.keys?.openai?.isConfigured ?? false,
         tokenPreview: data.keys?.openai?.tokenPreview ?? null,
+        status: 'unknown',
+      })
+
+      setAnthropicKey({
+        isConfigured: data.keys?.anthropic?.isConfigured ?? false,
+        tokenPreview: data.keys?.anthropic?.tokenPreview ?? null,
         status: 'unknown',
       })
 
@@ -193,10 +202,31 @@ export const useSettingsAIController = () => {
     }
   }
 
-  const handleRemoveKey = async (targetProvider: 'google' | 'openai') => {
+  const handleSaveAnthropicKey = async () => {
+    const apiKey = anthropicKeyDraft.trim()
+    if (!apiKey) {
+      toast.error('Informe a chave da Anthropic')
+      return
+    }
+    setAnthropicKey((k) => ({ ...k, status: 'saving' }))
+    try {
+      await settingsService.saveAIConfig({ anthropic_api_key: apiKey })
+      setAnthropicKeyDraft('')
+      toast.success('Chave Anthropic salva')
+      await loadConfig()
+      void fetchModels('anthropic')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao salvar chave Anthropic'
+      setAnthropicKey((k) => ({ ...k, status: 'invalid' }))
+      toast.error(message)
+    }
+  }
+
+  const handleRemoveKey = async (targetProvider: 'google' | 'openai' | 'anthropic') => {
     try {
       await settingsService.removeAIKey(targetProvider)
-      toast.success(`Chave ${targetProvider === 'google' ? 'Google' : 'OpenAI'} removida`)
+      const label = targetProvider === 'google' ? 'Google' : targetProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'
+      toast.success(`Chave ${label} removida`)
       setModels([])
       await loadConfig()
     } catch (error) {
@@ -211,7 +241,7 @@ export const useSettingsAIController = () => {
 
   const handleProviderSelect = (nextProvider: AiProviderType) => {
     setProvider(nextProvider)
-    setModel(DEFAULT_MODEL_ID)
+    setModel(defaultModelIdForProvider(nextProvider))
     setModels([])
   }
 
@@ -280,8 +310,10 @@ export const useSettingsAIController = () => {
     // API keys
     googleKey,
     openaiKey,
+    anthropicKey,
     googleKeyDraft,
     openaiKeyDraft,
+    anthropicKeyDraft,
 
     // Routes & Prompts
     routes,
@@ -305,6 +337,7 @@ export const useSettingsAIController = () => {
     handleModelChange,
     handleSaveGoogleKey,
     handleSaveOpenAIKey,
+    handleSaveAnthropicKey,
     handleRemoveKey,
     fetchModels,
     handleOcrGeminiModelChange,
@@ -313,6 +346,7 @@ export const useSettingsAIController = () => {
     handleStrategiesToggle,
     setGoogleKeyDraft,
     setOpenaiKeyDraft,
+    setAnthropicKeyDraft,
   }
 }
 

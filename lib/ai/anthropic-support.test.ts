@@ -9,7 +9,8 @@ import {
   buildToolInstruction,
   validateAnthropicKey,
 } from './anthropic-support'
-import { AI_PROVIDERS } from './providers'
+import { AI_PROVIDERS, defaultModelIdForProvider } from './providers'
+import { DEFAULT_MODEL_ID } from './model'
 
 describe('catálogo de modelos Anthropic', () => {
   it('oferece exatamente os 3 modelos, sem sufixo de data', () => {
@@ -24,6 +25,15 @@ describe('catálogo de modelos Anthropic', () => {
     expect(DEFAULT_ANTHROPIC_MODEL).toBe('claude-opus-5-5')
     const p = AI_PROVIDERS.find((x) => x.id === 'anthropic')
     expect(p?.models[0].id).toBe('claude-opus-5-5')
+  })
+})
+
+describe('defaultModelIdForProvider (tela de configuração)', () => {
+  it('anthropic => claude-opus-5-5; google/openai mantêm o padrão global', () => {
+    expect(defaultModelIdForProvider('anthropic')).toBe('claude-opus-5-5')
+    expect(defaultModelIdForProvider('google')).toBe(DEFAULT_MODEL_ID)
+    expect(defaultModelIdForProvider('openai')).toBe(DEFAULT_MODEL_ID)
+    expect(DEFAULT_MODEL_ID).toBe('gemini-2.5-flash')
   })
 })
 

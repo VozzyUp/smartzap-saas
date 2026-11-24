@@ -7,7 +7,7 @@
  * Providers suportados: Google Gemini, OpenAI e Anthropic (Claude).
  */
 
-import { ANTHROPIC_MODELS } from './anthropic-support';
+import { ANTHROPIC_MODELS, DEFAULT_ANTHROPIC_MODEL } from './anthropic-support';
 
 export type AIProvider = 'google' | 'openai' | 'anthropic';
 
@@ -73,4 +73,12 @@ export function getModel(providerId: AIProvider, modelId: string): AIModel | und
 export function getDefaultModel(providerId: AIProvider): AIModel | undefined {
     const provider = getProvider(providerId);
     return provider?.models[0];
+}
+
+/**
+ * Modelo selecionado ao trocar de provedor na tela de configuração.
+ * Anthropic tem padrão próprio; Google/OpenAI mantêm o padrão global do sistema.
+ */
+export function defaultModelIdForProvider(providerId: AIProvider): string {
+    return providerId === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : 'gemini-2.5-flash';
 }

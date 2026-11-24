@@ -1873,9 +1873,13 @@ export const settingsDb = {
         // 1. Tenta buscar do cache Redis
         if (redis) {
             try {
-                const cached = await redis.get<string>(cacheKey)
-                if (cached !== null) {
-                    return cached
+                const cached = await redis.get<unknown>(cacheKey)
+                if (cached !== null && cached !== undefined) {
+                    // O cliente Upstash desserializa JSON sozinho: um valor gravado como
+                    // texto '{"provider":"anthropic"}' volta como OBJETO. Quem chama espera
+                    // texto e faz JSON.parse; com objeto, caía no valor padrão (ex.: provedor
+                    // de IA voltava para Google ao recarregar a página).
+                    return typeof cached === 'string' ? cached : JSON.stringify(cached)
                 }
             } catch (e) {
                 // Redis error - fallback silencioso para DB

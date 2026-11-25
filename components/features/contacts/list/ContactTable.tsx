@@ -10,6 +10,7 @@ import { calculateRelativeTime, getContactInitials } from './utils';
 import { ContactCardList } from './ContactCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatPhoneNumberDisplay } from '@/lib/phone-formatter';
+import { SuppressionBadge } from '@/components/features/suppression/SuppressionBadge';
 
 export interface ContactTableProps {
   contacts: Contact[];
@@ -196,22 +197,11 @@ const ContactTableRow = React.memo(
                contact.status === ContactStatus.OPT_IN ? 'OPT_IN' :
                contact.status === ContactStatus.OPT_OUT ? 'OPT_OUT' : 'DESCONHECIDO'}
             </StatusBadge>
-            {/* Botão de desuprimir aparece quando status é SUPPRESSED */}
-            {contact.status === ContactStatus.SUPPRESSED && onUnsuppress && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                    onClick={() => onUnsuppress(contact.phone)}
-                    aria-label="Remover supressão"
-                  >
-                    <ShieldOff size={14} aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Remover supressão</p></TooltipContent>
-              </Tooltip>
+            {(contact.isSuppressed || contact.status === ContactStatus.SUPPRESSED) && (
+              <SuppressionBadge
+                source={contact.suppressionSource}
+                onRelease={onUnsuppress ? () => onUnsuppress(contact.phone) : undefined}
+              />
             )}
           </div>
         </td>

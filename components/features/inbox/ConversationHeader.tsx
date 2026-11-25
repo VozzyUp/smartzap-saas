@@ -67,6 +67,8 @@ import type {
 } from '@/types'
 import { ContactMemoriesSheet } from './ContactMemoriesSheet'
 import { FunnelStageChip } from './FunnelStageChip'
+import { SuppressionBadge } from '@/components/features/suppression/SuppressionBadge'
+import { usePhoneSuppression } from '@/hooks/usePhoneSuppression'
 import { formatPhoneNumberDisplay } from '@/lib/phone-formatter'
 
 export interface ConversationHeaderProps {
@@ -148,6 +150,8 @@ export function ConversationHeader({
   // Check if AI agents are globally enabled
   const { enabled: aiGlobalEnabled } = useAIAgentsGlobalToggle()
 
+  const { suppression, release: releaseSuppression, isReleasing: isReleasingSuppression } = usePhoneSuppression(phone)
+
   const displayName = contact?.name || phone
   const agentName = ai_agent?.name
   const initials = displayName
@@ -196,7 +200,7 @@ export function ConversationHeader({
   return (
     <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)]">
       {/* Contact info - compact */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 min-w-0">
         {/* Simple avatar */}
         <div className="h-8 w-8 rounded-full bg-[var(--ds-bg-surface)] flex items-center justify-center shrink-0">
           <span className="text-[11px] font-medium text-[var(--ds-text-secondary)]">{initials}</span>
@@ -237,9 +241,17 @@ export function ConversationHeader({
               </Tooltip>
             )}
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
             <span className="text-[10px] text-[var(--ds-text-muted)]">{formatPhoneNumberDisplay(phone, 'e164')}</span>
             <FunnelStageChip contactId={contact_id} />
+            {suppression && (
+              <SuppressionBadge
+                source={suppression.source}
+                onRelease={releaseSuppression}
+                isReleasing={isReleasingSuppression}
+                shortOnNarrow
+              />
+            )}
           </div>
         </div>
       </div>

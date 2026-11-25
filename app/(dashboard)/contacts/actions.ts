@@ -124,6 +124,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
       phone: c.phone,
       email: c.email,
       status: effectiveStatus, // Status visual calculado
+      isSuppressed,
       originalStatus: dbStatus, // Status real do banco (para referência)
       tags: c.tags || [],
       lastActive: c.last_active || c.updated_at || c.created_at,

@@ -141,6 +141,8 @@ export interface Contact {
   suppressionReason?: string | null;
   suppressionSource?: string | null;
   suppressionExpiresAt?: string | null;
+  /** Telefone com supressão ativa (selo "Bloqueado"), independente do filtro de status. */
+  isSuppressed?: boolean;
 }
 
 // =============================================================================

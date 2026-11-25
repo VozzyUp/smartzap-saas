@@ -29,7 +29,8 @@ import {
     UpdateCampaignFolderDTO,
     CreateCampaignTagDTO,
 } from '../types'
-import { isSuppressionActive } from '@/lib/phone-suppressions'
+import { isSuppressionActive, getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
+import { attachSuppressions } from '@/lib/suppression-badge'
 import { canonicalTemplateCategory } from '@/lib/template-category'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 
@@ -621,9 +622,18 @@ export const contactDb = {
 
         if (error) throw error
 
+        // Selo "Bloqueado" em qualquer filtro: busca em lote (uma consulta por página, filtrada por tenant)
+        if (status !== 'SUPPRESSED' && (data || []).length > 0) {
+            const pagePhones = Array.from(new Set((data || []).map(r => normalizePhoneNumber(String(r.phone || '').trim())).filter(Boolean)))
+            const active = await getActiveSuppressionsByPhone(tenantId, pagePhones)
+            for (const [phone, row] of active) {
+                suppressionMap.set(phone, { reason: row.reason, source: row.source, expiresAt: row.expires_at })
+            }
+        }
+
         return {
-            data: (data || []).map(row => {
-                const suppression = suppressionMap.get(String(row.phone || '').trim()) || null
+            data: attachSuppressions((data || []).map(row => {
+                const suppression = suppressionMap.get(normalizePhoneNumber(String(row.phone || '').trim())) || null
                 return ({
                 id: row.id,
                 name: row.name,
@@ -641,7 +651,7 @@ export const contactDb = {
                 suppressionSource: suppression?.source ?? null,
                 suppressionExpiresAt: suppression?.expiresAt ?? null,
             })
-            }),
+            }), suppressionMap),
             total: count || 0,
         }
     },

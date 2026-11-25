@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { getTenantContext } from '@/lib/tenant-context'
+import { isSuppressionActive } from '@/lib/phone-suppressions'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +36,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Erro ao buscar supressão' }, { status: 500 })
   }
 
-  return NextResponse.json({ suppression: data || null })
+  // Só devolve supressão ativa (inativa ou expirada = liberado)
+  const active = data && isSuppressionActive(data) ? data : null
+  return NextResponse.json({ suppression: active })
 }
 
 /**

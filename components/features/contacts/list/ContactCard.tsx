@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Contact, ContactStatus } from './types'
 import { calculateRelativeTime, getContactInitials } from './utils'
 import { formatPhoneNumberDisplay } from '@/lib/phone-formatter'
+import { SuppressionBadge } from '@/components/features/suppression/SuppressionBadge'
 
 // =============================================================================
 // CONTACT CARD
@@ -73,6 +74,13 @@ export const ContactCard = React.memo(
           <div className="flex-1 min-w-0">
             <p className="font-medium text-[var(--ds-text-primary)] truncate">{displayName}</p>
             <p className="text-xs text-[var(--ds-text-muted)] font-mono">{formatPhoneNumberDisplay(contact.phone, 'e164')}</p>
+            {(contact.isSuppressed || contact.status === ContactStatus.SUPPRESSED) && (
+              <SuppressionBadge
+                source={contact.suppressionSource}
+                onRelease={onUnsuppress ? () => onUnsuppress(contact.phone) : undefined}
+                className="mt-1 max-w-full"
+              />
+            )}
           </div>
 
           {/* Status */}
@@ -89,26 +97,6 @@ export const ContactCard = React.memo(
                contact.status === ContactStatus.OPT_IN ? 'OPT_IN' :
                contact.status === ContactStatus.OPT_OUT ? 'OPT_OUT' : 'DESCONHECIDO'}
             </StatusBadge>
-            {/* Botão de desuprimir */}
-            {contact.status === ContactStatus.SUPPRESSED && onUnsuppress && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onUnsuppress(contact.phone)
-                    }}
-                    aria-label="Remover supressão"
-                  >
-                    <ShieldOff size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Remover supressão</p></TooltipContent>
-              </Tooltip>
-            )}
           </div>
         </div>
 

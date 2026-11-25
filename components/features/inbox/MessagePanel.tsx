@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { MessageBubble } from './MessageBubble'
 import { MessageInput } from './MessageInput'
 import { ConversationHeader } from './ConversationHeader'
+import { SuppressionNotice } from './SuppressionNotice'
 import type {
   InboxConversation,
   InboxMessage,
@@ -286,6 +287,9 @@ export function MessagePanel({
           <ChevronDown className="h-4 w-4" />
         </button>
       )}
+
+      {/* Aviso de bloqueio (IA não responde quem pediu para parar) */}
+      <SuppressionNotice phone={conversation?.phone} />
 
       {/* Input area */}
       <MessageInput

@@ -420,7 +420,12 @@ export async function addCardToBoard(
 export async function moveCard(
   tenantId: string,
   cardId: string,
-  params: { stageId: string; position: number }
+  params: {
+    stageId: string
+    position: number
+    /** true = muda de fase sem reiniciar moved_at nem next_followup_index (mesma etapa de espera do follow-up). */
+    preserveFollowupClock?: boolean
+  }
 ): Promise<void> {
   const { data: card } = await db()
     .from('kanban_cards')
@@ -467,11 +472,11 @@ export async function moveCard(
     .update({
       stage_id: params.stageId,
       position: params.position,
-      moved_at: new Date().toISOString(),
+      ...(params.preserveFollowupClock ? {} : { moved_at: new Date().toISOString() }),
       // Sair do estágio cancela a sequência de follow-up daquele estágio —
       // sem isso um card que já avançou (cliente respondeu) ainda recebe
       // "sumiu?" do estágio anterior no próximo sweep.
-      ...(stageChanged ? { next_followup_index: 0 } : {}),
+      ...(stageChanged && !params.preserveFollowupClock ? { next_followup_index: 0 } : {}),
     })
     .eq('tenant_id', tenantId)
     .eq('id', cardId)

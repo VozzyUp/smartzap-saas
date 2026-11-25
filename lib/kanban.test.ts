@@ -246,6 +246,27 @@ describe('kanban', () => {
     )
   })
 
+  it('moveCard com preserveFollowupClock troca de fase SEM reiniciar moved_at nem next_followup_index', async () => {
+    cardsSelectFn.mockReturnValueOnce({
+      data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 },
+      error: null,
+    })
+    stagesSelectFn
+      .mockReturnValueOnce({ data: { id: 's2', tenant_id: 't1', board_id: 'b1', name: 'Mensagem lida', color: '#f59e0b', position: 2 }, error: null })
+      .mockReturnValueOnce({ data: { id: 's1', tenant_id: 't1', board_id: 'b1', name: 'Mensagem enviada', color: '#3b82f6', position: 1 }, error: null })
+    boardsSelectFn.mockReturnValueOnce({ data: { id: 'b1', tenant_id: 't1', name: 'Vendas', position: 0 }, error: null })
+    cardsUpdateFn.mockReturnValueOnce({ error: null })
+    contactsSelectFn.mockReturnValueOnce({ data: { tags: [] }, error: null })
+    contactsUpdateFn.mockReturnValueOnce({ error: null })
+
+    await moveCard('t1', 'c1', { stageId: 's2', position: 0, preserveFollowupClock: true })
+
+    const patch = cardsUpdateFn.mock.calls.at(-1)![0]
+    expect(patch.stage_id).toBe('s2')
+    expect(patch).not.toHaveProperty('moved_at')
+    expect(patch).not.toHaveProperty('next_followup_index')
+  })
+
   it('moveCard NÃO mexe em next_followup_index quando o estágio não muda (position-only move)', async () => {
     cardsSelectFn.mockReturnValueOnce({
       data: { id: 'c1', tenant_id: 't1', board_id: 'b1', stage_id: 's1', contact_id: 'ct1', position: 0 },

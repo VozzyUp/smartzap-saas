@@ -66,6 +66,23 @@ beforeEach(() => {
 })
 
 describe('resolveFunnelContext', () => {
+  it('"Mensagem lida" é fase do sistema: não entra na lista que a IA pode escolher, mas aparece como fase atual', async () => {
+    listBoardsMock.mockResolvedValue([{ id: 'b1', name: 'Vendas' }])
+    listStagesMock.mockResolvedValue([
+      { id: 's1', name: 'Novo', position: 0 },
+      { id: 's2', name: 'Mensagem lida', position: 1 },
+      { id: 's3', name: 'Respondeu', position: 2 },
+    ])
+    cardRow.mockResolvedValue({ data: { id: 'k1', stage_id: 's2' }, error: null })
+    const ctx = await resolveFunnelContext('t1', 'c1')
+    expect(ctx?.stages.map((s) => s.name)).toEqual(['Novo', 'Respondeu'])
+    expect(ctx?.currentStageName).toBe('Mensagem lida')
+
+    const res = await applyFunnelClassification('t1', 'c1', ctx!, 'mensagem LIDA')
+    expect(res).toBe('invalid_stage')
+    expect(moveCardMock).not.toHaveBeenCalled()
+  })
+
   it('tenant com exatamente um quadro e sem setting: usa esse quadro', async () => {
     listBoardsMock.mockResolvedValue([{ id: 'b1', name: 'Vendas' }])
     const ctx = await resolveFunnelContext('t1', 'c1')

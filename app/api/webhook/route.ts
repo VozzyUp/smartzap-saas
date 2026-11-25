@@ -10,6 +10,7 @@ import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
 import { notifyOpsAlert } from '@/lib/ops-alert'
 import { isOptOutKeyword } from '@/lib/opt-out-keywords'
 import { moveContactToNoInterestStageByPhone } from '@/lib/ai/funnel-classifier'
+import { handleReadReceiptForFunnel } from '@/lib/kanban-read-stage'
 import { maybeAutoSuppressByFailure } from '@/lib/auto-suppression'
 import {
   mapWhatsAppError,
@@ -750,6 +751,16 @@ export async function POST(request: NextRequest) {
             } catch (inboxError) {
               // Best-effort: don't fail webhook if inbox update fails
               console.warn('[Webhook] Failed to update inbox delivery status:', inboxError)
+            }
+
+            // Leitura da mensagem: cartão "Mensagem enviada" -> "Mensagem lida" (best-effort, idempotente;
+            // roda antes dos ramos de campanha, que encerram a iteração com `continue`).
+            if (status === 'read') {
+              try {
+                await handleReadReceiptForFunnel(tenantId, messageId)
+              } catch (funnelError) {
+                console.warn('[Webhook] Failed to move funnel card on read receipt:', funnelError)
+              }
             }
 
             if (status === 'failed') {

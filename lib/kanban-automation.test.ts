@@ -243,6 +243,24 @@ describe('triggerAutomationEvent', () => {
     expect(moveCardMock).toHaveBeenCalledWith('tenant_1', 'card_1', { stageId: 'stage_replied', position: 0 })
   })
 
+  it('mensagem recebida: cartão em "Mensagem lida" vai para "Respondeu" (fase entre as duas)', async () => {
+    boardAutomationsSelectFn.mockReturnValueOnce({
+      data: [{ board_id: 'board_1', target_stage_id: 'stage_replied' }],
+      error: null,
+    })
+    kanbanCardsSelectFn.mockReturnValueOnce({
+      data: { id: 'card_1', stage_id: 'stage_read', automation_paused: false },
+      error: null,
+    })
+    kanbanStagesSelectFn
+      .mockReturnValueOnce({ data: { id: 'stage_read', name: 'Mensagem lida', position: 2 }, error: null })
+      .mockReturnValueOnce({ data: { id: 'stage_replied', name: 'Respondeu', position: 3 }, error: null })
+
+    await triggerAutomationEvent('tenant_1', 'contact_1', 'client_replied', 'system')
+
+    expect(moveCardMock).toHaveBeenCalledWith('tenant_1', 'card_1', { stageId: 'stage_replied', position: 0 })
+  })
+
   it('regra anti-cabo-de-guerra: NÃO move o card pra um estágio anterior', async () => {
     boardAutomationsSelectFn.mockReturnValueOnce({
       data: [{ board_id: 'board_1', target_stage_id: 'stage_sent' }],
@@ -561,6 +579,75 @@ describe('runFollowupSweep', () => {
         whatsapp_message_id: 'wamid.1',
       })
     )
+  })
+
+  describe('cartão em "Mensagem lida" herda o follow-up de "Mensagem enviada"', () => {
+    const boardStages = [
+      { id: 'stage_sent', name: 'Mensagem enviada', position: 1 },
+      { id: 'stage_read', name: 'Mensagem lida', position: 2 },
+      { id: 'stage_stale', name: 'Sem resposta', position: 9 },
+    ]
+    const readCard = { ...baseCard, stage_id: 'stage_read', next_followup_index: 0 }
+
+    function queueReadRound(sentRules: any[], settings: any = settingsOk) {
+      kanbanCardsSelectFn.mockReturnValueOnce({ data: [readCard], error: null })
+      followupRulesSelectFn.mockReturnValueOnce({ data: [], error: null }) // regras da própria fase "lida": nenhuma
+      kanbanStagesSelectFn.mockReturnValueOnce({ data: boardStages, error: null })
+      followupRulesSelectFn.mockReturnValueOnce({ data: sentRules, error: null }) // regras de "Mensagem enviada"
+      automationSettingsSelectFn.mockReturnValueOnce({ data: settings, error: null })
+      kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ id: readCard.id }], error: null })
+      automationLogInsertFn.mockReturnValueOnce({ data: [], error: null })
+      kanbanCardsSelectFn.mockReturnValueOnce({ data: { last_inbound_at: null }, error: null })
+      contactsSelectFn.mockReturnValueOnce({ data: { id: 'contact_1', name: 'Maria Silva', phone: '+5511999999999' }, error: null })
+    }
+
+    it('envia o follow-up do dia 3 usando regras e modelo de "Mensagem enviada", contando do moved_at original', async () => {
+      templateMapFn.mockResolvedValue({
+        stage_sent: [{ templateName: 'marcoo_estetica_segundo_contato', language: 'pt_BR', alwaysSend: true }],
+      })
+      queueReadRound([{ id: 'rule_1', day_offset: 3, template_text: 'Oi {{nome}}' }])
+      sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'wamid.2' })
+
+      await runFollowupSweep(now)
+
+      expect(sendWhatsAppMessageMock).toHaveBeenCalledWith(
+        'tenant_1',
+        expect.objectContaining({ type: 'template', templateName: 'marcoo_estetica_segundo_contato' })
+      )
+      expect(kanbanCardsUpdateFn).toHaveBeenCalledWith({ next_followup_index: 1 }, expect.objectContaining({ id: 'card_1' }))
+    })
+
+    it('antes do prazo (moved_at recente) não envia: o relógio não foi reiniciado pela leitura', async () => {
+      kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ ...readCard, moved_at: '2026-07-19T10:00:00.000Z' }], error: null })
+      followupRulesSelectFn.mockReturnValueOnce({ data: [], error: null })
+      kanbanStagesSelectFn.mockReturnValueOnce({ data: boardStages, error: null })
+      followupRulesSelectFn.mockReturnValueOnce({ data: [{ id: 'rule_1', day_offset: 3, template_text: 'x' }], error: null })
+      automationSettingsSelectFn.mockReturnValueOnce({ data: settingsOk, error: null })
+
+      await runFollowupSweep(now)
+      expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+    })
+
+    it('última regra enviada: cartão vai para "Sem resposta" (stale_stage_id do quadro)', async () => {
+      templateMapFn.mockResolvedValue({
+        stage_sent: [{ templateName: 'marcoo_estetica_segundo_contato', language: 'pt_BR', alwaysSend: true }],
+      })
+      queueReadRound([{ id: 'rule_1', day_offset: 3, template_text: 'Oi' }], { ...settingsOk, stale_stage_id: 'stage_stale' })
+      sendWhatsAppMessageMock.mockResolvedValueOnce({ success: true, messageId: 'wamid.3' })
+
+      await runFollowupSweep(now)
+
+      expect(moveCardMock).toHaveBeenCalledWith('tenant_1', 'card_1', { stageId: 'stage_stale', position: 0 })
+    })
+
+    it('fase sem regras e que não é "Mensagem lida": continua sem enviar nada', async () => {
+      kanbanCardsSelectFn.mockReturnValueOnce({ data: [{ ...baseCard, stage_id: 'stage_other' }], error: null })
+      followupRulesSelectFn.mockReturnValueOnce({ data: [], error: null })
+      kanbanStagesSelectFn.mockReturnValueOnce({ data: boardStages, error: null })
+
+      await runFollowupSweep(now)
+      expect(sendWhatsAppMessageMock).not.toHaveBeenCalled()
+    })
   })
 
   it('fora da janela de 24h SEM modelo: não envia e registra o motivo uma única vez', async () => {

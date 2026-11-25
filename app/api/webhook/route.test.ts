@@ -12,6 +12,7 @@ const markEventAttemptMock = vi.fn()
 const enqueueStatusReconcileMock = vi.fn()
 const applyCampaignStatusMock = vi.fn()
 const handleDeliveryStatusMock = vi.fn()
+const readReceiptFunnelMock = vi.fn()
 const campaignContactsUpdateMock = vi.fn()
 const rpcMock = vi.fn()
 const handleOutboundMessageEchoMock = vi.fn()
@@ -99,6 +100,10 @@ vi.mock('@/lib/phone-suppressions', () => ({
 }))
 vi.mock('@/lib/ai/funnel-classifier', () => ({
   moveContactToNoInterestStageByPhone: (...a: any[]) => moveNoInterestMock(...a),
+}))
+
+vi.mock('@/lib/kanban-read-stage', () => ({
+  handleReadReceiptForFunnel: (...a: any[]) => readReceiptFunnelMock(...a),
 }))
 
 import { handleInboundMessage } from '@/lib/inbox/inbox-webhook'
@@ -244,6 +249,44 @@ describe('webhook route - status de entrega do Inbox', () => {
       timestamp: '2023-11-14T22:13:20.000Z',
       errors,
     })
+  })
+
+  const statusReq = (status: string, id = 'wamid.read_1') =>
+    new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [{
+          id: 'waba_1',
+          changes: [{
+            field: 'messages',
+            value: {
+              metadata: { phone_number_id: 'pn_1' },
+              statuses: [{ id, recipient_id: '5511999999999', status, timestamp: '1700000000' }],
+            },
+          }],
+        }],
+      }),
+    })
+
+  it('status read: aciona a movimentação do funil com tenant e id da mensagem', async () => {
+    applyCampaignStatusMock.mockResolvedValue({ reason: 'noop' })
+    const res = await POST(statusReq('read'))
+    expect(res.status).toBe(200)
+    expect(readReceiptFunnelMock).toHaveBeenCalledWith('tenant_1', 'wamid.read_1')
+  })
+
+  it.each(['sent', 'delivered'])('status %s: não aciona a movimentação do funil', async (status) => {
+    applyCampaignStatusMock.mockResolvedValue({ reason: 'noop' })
+    await POST(statusReq(status))
+    expect(readReceiptFunnelMock).not.toHaveBeenCalled()
+  })
+
+  it('falha na movimentação do funil não derruba o webhook', async () => {
+    applyCampaignStatusMock.mockResolvedValue({ reason: 'noop' })
+    readReceiptFunnelMock.mockRejectedValueOnce(new Error('boom'))
+    const res = await POST(statusReq('read'))
+    expect(res.status).toBe(200)
   })
 
   it('retorna 500 para falha de integridade ao persistir o evento', async () => {

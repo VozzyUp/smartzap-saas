@@ -11,6 +11,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { listBoards, listStages, addCardToBoard, moveCard } from '@/lib/kanban'
+import { isReadStageName } from '@/lib/kanban-stage-names'
 
 /** Chave (tabela settings, PK tenant_id+key) do quadro de funil usado pela IA. */
 export const AI_FUNNEL_BOARD_SETTING_KEY = 'ai_funnel_board_id'
@@ -99,7 +100,8 @@ export async function resolveFunnelContext(
     return {
       boardId: board.id,
       boardName: board.name,
-      stages: stages.map((s) => ({ id: s.id, name: s.name })),
+      // "Mensagem lida" é fase do sistema (só o webhook de leitura move para ela): a IA não pode escolhê-la.
+      stages: stages.filter((s) => !isReadStageName(s.name)).map((s) => ({ id: s.id, name: s.name })),
       currentStageName: current?.name ?? null,
     }
   } catch (err) {

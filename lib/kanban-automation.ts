@@ -11,6 +11,7 @@ import {
   saveStageFollowupTemplates,
   type FollowupTemplateConfig,
 } from '@/lib/kanban-followup-config'
+import { resolveFollowupStageId } from '@/lib/kanban-stage-names'
 import { decideFollowupSend, prepareFollowupTemplate } from '@/lib/kanban-followup-send'
 import {
   FOLLOWUP_MAX_ATTEMPTS,
@@ -418,12 +419,32 @@ export async function runFollowupSweep(now: Date = new Date()): Promise<void> {
 }
 
 async function processFollowupCandidate(card: FollowupCandidate, now: Date): Promise<void> {
-  const { data: rules } = await db()
-    .from('kanban_stage_followup_rules')
-    .select('*')
-    .eq('stage_id', card.stage_id)
-    .eq('active', true)
-    .order('position', { ascending: true })
+  // Etapa cujas regras valem para este cartão. Normalmente é a própria fase; "Mensagem lida" é a mesma
+  // etapa de espera de "Mensagem enviada" (o cartão só andou porque a mensagem foi lida), então, sem
+  // regras próprias, herda as de "Mensagem enviada" do mesmo quadro — moved_at e índice foram preservados.
+  const loadRules = async (stageId: string) =>
+    (
+      await db()
+        .from('kanban_stage_followup_rules')
+        .select('*')
+        .eq('stage_id', stageId)
+        .eq('active', true)
+        .order('position', { ascending: true })
+    ).data
+  let ruleStageId = card.stage_id
+  let rules = await loadRules(ruleStageId)
+  if (!rules || rules.length === 0) {
+    const { data: boardStages } = await db()
+      .from('kanban_stages')
+      .select('id, name')
+      .eq('tenant_id', card.tenant_id)
+      .eq('board_id', card.board_id)
+    const aliasStageId = resolveFollowupStageId((boardStages as Array<{ id: string; name: string }>) ?? [], card.stage_id)
+    if (aliasStageId) {
+      ruleStageId = aliasStageId
+      rules = await loadRules(ruleStageId)
+    }
+  }
   const rule = (rules as any[] | null)?.[card.next_followup_index]
   if (!rule) return
 
@@ -492,7 +513,7 @@ async function processFollowupCandidate(card: FollowupCandidate, now: Date): Pro
   }
 
   const stateKey = `${card.id}:${card.moved_at}:${card.next_followup_index}`
-  const templateCfg = (await getFollowupTemplateMap(card.tenant_id))[card.stage_id]?.[card.next_followup_index] ?? null
+  const templateCfg = (await getFollowupTemplateMap(card.tenant_id))[ruleStageId]?.[card.next_followup_index] ?? null
   const decision = decideFollowupSend({
     now,
     lastInboundAt: card.last_inbound_at ? new Date(card.last_inbound_at) : null,

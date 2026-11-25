@@ -10,6 +10,7 @@ import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
 import { getTenantContext } from '@/lib/tenant-context'
+import { buildCampaignContactUpsertRows } from '@/lib/campaigns/resend-skipped-rows'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -566,7 +567,8 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     // 4) Persistir updates (bulk upsert por PK id)
-    const safeUpdates = updates.filter((u) => u && typeof u.id === 'string' && u.id.length > 0)
+    // tenant_id é obrigatório (NOT NULL) e o upsert valida a linha proposta antes do conflito
+    const safeUpdates = buildCampaignContactUpsertRows(updates, ctx.tenantId)
     if (updates.length !== safeUpdates.length) {
       console.warn(
         `[ResendSkipped] Ignorando ${updates.length - safeUpdates.length} update(s) sem id válido (evita inserts acidentais).`

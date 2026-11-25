@@ -9,6 +9,7 @@ import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { upsertPhoneSuppression } from '@/lib/phone-suppressions'
 import { notifyOpsAlert } from '@/lib/ops-alert'
 import { isOptOutKeyword } from '@/lib/opt-out-keywords'
+import { moveContactToNoInterestStageByPhone } from '@/lib/ai/funnel-classifier'
 import { maybeAutoSuppressByFailure } from '@/lib/auto-suppression'
 import {
   mapWhatsAppError,
@@ -167,6 +168,13 @@ async function markContactOptOutAndSuppress(input: {
     })
   } catch (e) {
     console.warn('[Webhook] Falha ao upsert phone_suppressions (best-effort):', e)
+  }
+
+  // Best-effort: leva o cartão do funil para a fase de "sem interesse" (a supressão já foi gravada acima).
+  try {
+    await moveContactToNoInterestStageByPhone(input.tenantId, phone)
+  } catch (e) {
+    console.warn('[Webhook] Falha ao mover cartão do funil para sem interesse (best-effort):', e)
   }
 }
 

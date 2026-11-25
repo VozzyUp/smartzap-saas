@@ -177,3 +177,74 @@ export async function applyFunnelClassification(
     return 'error'
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pedido de saída (opt-out): cartão vai para a fase de "sem interesse"
+// ---------------------------------------------------------------------------
+
+export type NoInterestResult = FunnelApplyResult | 'no_funnel' | 'no_stage'
+
+const NO_INTEREST_PATTERNS = ['sem interesse', 'nao tem interesse', 'perdid', 'nao quer', 'descartad']
+
+/** Acha a fase de desinteresse pelo nome; com várias candidatas prefere a que contém "interesse". */
+export function findNoInterestStage(
+  stages: Array<{ id: string; name: string }>
+): { id: string; name: string } | null {
+  const candidates = stages.filter((s) => {
+    const n = normalizeName(s.name)
+    return NO_INTEREST_PATTERNS.some((p) => n.includes(p))
+  })
+  if (candidates.length === 0) return null
+  return candidates.find((s) => normalizeName(s.name).includes('interesse')) ?? candidates[0]
+}
+
+/**
+ * Move o cartão do contato para a fase de desinteresse do quadro de funil da IA.
+ * Best-effort: nunca lança. Sem fase candidata, não move nem cria fase.
+ */
+export async function moveContactToNoInterestStage(
+  tenantId: string,
+  contactId: string | null | undefined
+): Promise<NoInterestResult> {
+  try {
+    const ctx = await resolveFunnelContext(tenantId, contactId)
+    if (!ctx || !contactId) return 'no_funnel'
+    const stage = findNoInterestStage(ctx.stages)
+    if (!stage) {
+      console.warn(
+        `[funnel-classifier] pedido de saída: o quadro "${ctx.boardName}" não tem fase de "sem interesse" ` +
+          '(nome com "sem interesse", "não tem interesse", "perdido", "não quer" ou "descartado"); cartão não movido.',
+        { tenantId, boardId: ctx.boardId, contactId }
+      )
+      return 'no_stage'
+    }
+    return await applyFunnelClassification(tenantId, contactId, ctx, stage.name)
+  } catch (err) {
+    console.error('[funnel-classifier] falha ao mover cartão para sem interesse (ignorada):', { tenantId, contactId, err })
+    return 'error'
+  }
+}
+
+/** Variante por telefone (webhook): resolve o contato por tenant_id + telefone normalizado. */
+export async function moveContactToNoInterestStageByPhone(
+  tenantId: string,
+  normalizedPhone: string
+): Promise<NoInterestResult> {
+  try {
+    const admin = getSupabaseAdmin()
+    if (!admin) return 'no_funnel'
+    const { data } = await admin
+      .from('contacts')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('phone', normalizedPhone)
+      .limit(1)
+      .maybeSingle()
+    const id = (data as { id?: string } | null)?.id
+    if (!id) return 'no_funnel'
+    return await moveContactToNoInterestStage(tenantId, id)
+  } catch (err) {
+    console.error('[funnel-classifier] falha ao resolver contato por telefone (ignorada):', { tenantId, err })
+    return 'error'
+  }
+}

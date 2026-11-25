@@ -15,6 +15,7 @@ vi.mock('@/lib/kanban', () => ({
 // settings / kanban_cards via supabase admin
 const settingsRow = vi.fn()
 const cardRow = vi.fn()
+const contactRow = vi.fn()
 const seenEqs: Array<{ table: string; eqs: Record<string, unknown> }> = []
 
 vi.mock('@/lib/supabase', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/supabase', () => ({
       const eqs: Record<string, unknown> = {}
       const chain: any = {
         select: () => chain,
+        limit: () => chain,
         eq: (c: string, v: unknown) => {
           eqs[c] = v
           return chain
@@ -31,6 +33,7 @@ vi.mock('@/lib/supabase', () => ({
           seenEqs.push({ table, eqs: { ...eqs } })
           if (table === 'settings') return settingsRow(eqs)
           if (table === 'kanban_cards') return cardRow(eqs)
+          if (table === 'contacts') return contactRow(eqs)
           return { data: null, error: null }
         },
       }
@@ -43,6 +46,8 @@ import {
   resolveFunnelContext,
   buildFunnelPromptSection,
   applyFunnelClassification,
+  moveContactToNoInterestStage,
+  moveContactToNoInterestStageByPhone,
   type FunnelContext,
 } from './funnel-classifier'
 
@@ -204,5 +209,82 @@ describe('applyFunnelClassification', () => {
     expect(await applyFunnelClassification('t1', 'c1', ctx, 'Fechado')).toBe('error')
     expect(spy).toHaveBeenCalled()
     spy.mockRestore()
+  })
+})
+
+describe('moveContactToNoInterestStage', () => {
+  beforeEach(() => {
+    moveCardMock.mockReset().mockResolvedValue({})
+    addCardMock.mockReset().mockResolvedValue({})
+  })
+  const withStages = (names: string[]) => {
+    listBoardsMock.mockResolvedValue([{ id: 'b1', name: 'Vendas' }])
+    listStagesMock.mockResolvedValue(names.map((n, i) => ({ id: `s${i}`, name: n, position: i })))
+  }
+  const card = (paused = false) => ({ data: { id: 'card1', stage_id: 's0', automation_paused: paused }, error: null })
+
+  it.each(['Sem interesse', 'SEM INTERESSE', 'Não tem interesse', 'Perdido', 'Perdidos', 'Não quer', 'Descartado', 'Descartados'])(
+    'acha a fase "%s"',
+    async (name) => {
+      withStages(['Novo', name])
+      cardRow.mockResolvedValue(card())
+      expect(await moveContactToNoInterestStage('t1', 'c1')).toBe('moved')
+      expect(moveCardMock).toHaveBeenCalledWith('t1', 'card1', { stageId: 's1', position: 0 })
+    }
+  )
+
+  it('várias candidatas: prefere a que contém "interesse"', async () => {
+    withStages(['Novo', 'Perdido', 'Sem interesse', 'Descartado'])
+    cardRow.mockResolvedValue(card())
+    await moveContactToNoInterestStage('t1', 'c1')
+    expect(moveCardMock).toHaveBeenCalledWith('t1', 'card1', { stageId: 's2', position: 0 })
+  })
+
+  it('sem fase candidata: não move, não cria, avisa', async () => {
+    withStages(['Novo', 'Respondeu', 'Sem resposta'])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await moveContactToNoInterestStage('t1', 'c1')).toBe('no_stage')
+    expect(warn).toHaveBeenCalled()
+    expect(moveCardMock).not.toHaveBeenCalled()
+    expect(addCardMock).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('sem cartão: cria já na fase', async () => {
+    withStages(['Novo', 'Sem interesse'])
+    cardRow.mockResolvedValue({ data: null, error: null })
+    addCardMock.mockResolvedValue({ id: 'x' })
+    expect(await moveContactToNoInterestStage('t1', 'c1')).toBe('created')
+    expect(addCardMock).toHaveBeenCalledWith('t1', 'b1', 'c1', 's1')
+  })
+
+  it('cartão pausado: não move', async () => {
+    withStages(['Novo', 'Sem interesse'])
+    cardRow.mockResolvedValue(card(true))
+    expect(await moveContactToNoInterestStage('t1', 'c1')).toBe('paused')
+    expect(moveCardMock).not.toHaveBeenCalled()
+  })
+
+  it('falha na movimentação não lança', async () => {
+    withStages(['Novo', 'Sem interesse'])
+    cardRow.mockResolvedValue(card())
+    moveCardMock.mockRejectedValue(new Error('boom'))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await expect(moveContactToNoInterestStage('t1', 'c1')).resolves.toBe('error')
+    spy.mockRestore()
+  })
+
+  it('por telefone: filtra contato por tenant_id e telefone', async () => {
+    withStages(['Novo', 'Sem interesse'])
+    contactRow.mockResolvedValue({ data: { id: 'c9' }, error: null })
+    cardRow.mockResolvedValue(card())
+    expect(await moveContactToNoInterestStageByPhone('t1', '+5511999999999')).toBe('moved')
+    expect(contactRow).toHaveBeenCalledWith({ tenant_id: 't1', phone: '+5511999999999' })
+  })
+
+  it('por telefone: contato inexistente não move', async () => {
+    contactRow.mockResolvedValue({ data: null, error: null })
+    expect(await moveContactToNoInterestStageByPhone('t1', '+5511')).toBe('no_funnel')
+    expect(moveCardMock).not.toHaveBeenCalled()
   })
 })

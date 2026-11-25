@@ -92,6 +92,15 @@ vi.mock('@/lib/ops-alert', () => ({
   notifyOpsAlert: (...a: any[]) => notifyOpsAlertMock(...a),
 }))
 
+const upsertSuppressionMock = vi.fn()
+const moveNoInterestMock = vi.fn()
+vi.mock('@/lib/phone-suppressions', () => ({
+  upsertPhoneSuppression: (...a: any[]) => upsertSuppressionMock(...a),
+}))
+vi.mock('@/lib/ai/funnel-classifier', () => ({
+  moveContactToNoInterestStageByPhone: (...a: any[]) => moveNoInterestMock(...a),
+}))
+
 import { handleInboundMessage } from '@/lib/inbox/inbox-webhook'
 import { POST } from './route'
 
@@ -382,5 +391,52 @@ describe('webhook route — alerta quando a mensagem recebida não é salva (F08
     vi.mocked(handleInboundMessage).mockResolvedValueOnce({ conversationId: 'c', messageId: 'm', triggeredAI: false })
     await POST(inbound())
     expect(notifyOpsAlertMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('webhook route — pedido de saída move o cartão do funil', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.META_APP_SECRET
+    resolveTenantMock.mockResolvedValue('tenant_1')
+    isTenantBlockedMock.mockResolvedValue(false)
+    settingsGetMock.mockResolvedValue(null)
+    workflowVersionsOrderMock.mockResolvedValue({ data: [], error: null })
+    vi.mocked(handleInboundMessage).mockResolvedValue({ conversationId: 'c', messageId: 'm', triggeredAI: false })
+    upsertSuppressionMock.mockResolvedValue(undefined)
+    moveNoInterestMock.mockResolvedValue('moved')
+  })
+
+  const optOut = () =>
+    new NextRequest('http://localhost/api/webhook', {
+      method: 'POST',
+      body: JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [{
+          changes: [{
+            field: 'messages',
+            value: {
+              metadata: { phone_number_id: 'pn_1' },
+              contacts: [{ profile: { name: 'Maria' }, wa_id: '5511999999999' }],
+              messages: [{ from: '5511999999999', id: 'wamid.in2', timestamp: '1700000000', type: 'text', text: { body: 'Não tenho interesse' } }],
+            },
+          }],
+        }],
+      }),
+    })
+
+  it('grava a supressão e depois move o cartão (por telefone, com o tenant)', async () => {
+    const res = await POST(optOut())
+    expect(res.status).toBe(200)
+    expect(upsertSuppressionMock).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant_1', source: 'inbound_keyword' }))
+    expect(moveNoInterestMock).toHaveBeenCalledWith('tenant_1', expect.stringContaining('5511999999999'))
+    expect(upsertSuppressionMock.mock.invocationCallOrder[0]).toBeLessThan(moveNoInterestMock.mock.invocationCallOrder[0])
+  })
+
+  it('falha ao mover o cartão não impede a supressão nem o 200', async () => {
+    moveNoInterestMock.mockRejectedValue(new Error('kanban fora'))
+    const res = await POST(optOut())
+    expect(res.status).toBe(200)
+    expect(upsertSuppressionMock).toHaveBeenCalled()
   })
 })

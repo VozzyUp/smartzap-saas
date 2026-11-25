@@ -22,7 +22,7 @@ import { isTenantBlocked } from '@/lib/trial'
 import { triggerKanbanAutomationForAIReply } from './kanban-automation-hook'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { getActiveSuppressionsByPhone, upsertPhoneSuppression } from '@/lib/phone-suppressions'
-import { resolveFunnelContext, applyFunnelClassification } from '@/lib/ai/funnel-classifier'
+import { resolveFunnelContext, applyFunnelClassification, moveContactToNoInterestStage } from '@/lib/ai/funnel-classifier'
 import { sendHandoffNotification } from '@/lib/push-notifications'
 import { settingsDb } from '@/lib/supabase-db'
 import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
@@ -448,7 +448,15 @@ export async function POST(req: NextRequest) {
 
     // 9.5. Classificação do funil pela IA. Roda DEPOIS da automação por evento
     // (message_sent/quote_detected) para que a decisão da IA prevaleça na rodada.
-    if (funnel && conversation.contact_id && result.response.funnelStage) {
+    // Pedido de saída: a decisão de desinteresse prevalece sobre a fase sugerida pela IA (uma só movimentação).
+    if (result.response.optOut && conversation.contact_id) {
+      try {
+        const applied = await moveContactToNoInterestStage(tenantId, conversation.contact_id)
+        console.log(`🧭 [AI-RESPOND] Funil (optOut) -> ${applied}`)
+      } catch (e) {
+        console.error('[AI-RESPOND] Falha ao mover lead para sem interesse (resposta já enviada):', { tenantId, conversationId, e })
+      }
+    } else if (funnel && conversation.contact_id && result.response.funnelStage) {
       try {
         const applied = await applyFunnelClassification(
           tenantId,

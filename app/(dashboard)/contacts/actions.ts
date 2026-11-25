@@ -76,7 +76,7 @@ export const getContactsInitialData = cache(async (): Promise<ContactsInitialDat
       .select('*')
       .eq('tenant_id', ctx.tenantId)
       .eq('entity_type', 'contact')
-      .order('name'),
+      .order('label'),
 
     // Supressões ativas (para calcular effectiveStatus)
     supabase

@@ -28,6 +28,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
 import { ensureAudioTranscriptions } from '@/lib/inbox/inbox-transcription'
 import { isOptOutSuppressionSource } from '@/lib/suppression-sources'
+import { isOptOutKeyword } from '@/lib/opt-out-keywords'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -169,6 +170,20 @@ export async function POST(req: NextRequest) {
     const optOutSuppressions = Array.from(suppressions.values()).filter(row => isOptOutSuppressionSource(row.source))
     if (optOutSuppressions.length > 0) {
       console.log(`🛑 [AI-RESPOND] Skipping - phone ${conversation.phone} está em phone_suppressions (opt-out) no tenant ${tenantId}; sem resposta`)
+      // Bloqueado que volta a escrever algo que não é um pedido de saída: a IA continua muda, mas a
+      // conversa vai para atendimento humano e o dono é avisado uma vez (em modo humano a rota sai
+      // no passo 3, então não há aviso repetido). Nada é enviado ao contato.
+      try {
+        const recent = await inboxDb.listMessages(tenantId, conversationId, { limit: 10 })
+        const lastRelevant = [...recent.messages].reverse().find((msg) => msg.message_type !== 'internal_note')
+        if (lastRelevant && lastRelevant.direction === 'inbound' && !isOptOutKeyword(String(lastRelevant.content || ''))) {
+          const reason = 'Contato que pediu para parar voltou a escrever'
+          await moveConversationToHumanForOps(tenantId, conversationId, reason)
+          await notifyHandoff(tenantId, conversationId, conversation.phone, reason)
+        }
+      } catch (e) {
+        console.error('[AI-RESPOND] Falha ao encaminhar contato bloqueado para atendimento humano (segue em silêncio):', { tenantId, conversationId, e })
+      }
       return NextResponse.json({ success: true, skipped: 'phone_suppressed' })
     }
 

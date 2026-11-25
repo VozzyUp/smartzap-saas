@@ -350,3 +350,56 @@ describe('POST /api/ai/respond — transcrição de áudio (F16)', () => {
     expect(m.sendWhatsAppMessage).toHaveBeenCalled()
   })
 })
+
+describe('POST /api/ai/respond — bloqueado que volta a escrever vai para humano', () => {
+  const sup = (source: string | null) => new Map([['+5511999999999', { is_active: true, source }]])
+  const inbound = (content: string) =>
+    m.listMessages.mockResolvedValue({ messages: [{ id: 'm1', direction: 'inbound', content, whatsapp_message_id: 'w1' }] })
+
+  it('bloqueado manda "não tenho interesse": pula em silêncio, sem humano nem aviso', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup('inbound_keyword'))
+    inbound('Não tenho interesse')
+    const body = await (await POST(req())).json()
+    expect(body.skipped).toBe('phone_suppressed')
+    expect(m.moveHuman).not.toHaveBeenCalled()
+    expect(m.sendHandoffNotification).not.toHaveBeenCalled()
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+  })
+
+  it('bloqueado manda "Oi": sem resposta da IA, conversa vai para humano e o dono é avisado', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup('inbound_keyword'))
+    inbound('Oi')
+    const body = await (await POST(req())).json()
+    expect(body.skipped).toBe('phone_suppressed')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+    expect(m.moveHuman).toHaveBeenCalledWith('tenant-1', 'conv1', expect.stringContaining('pediu para parar'))
+    expect(m.sendHandoffNotification).toHaveBeenCalledTimes(1)
+    expect(m.sendHandoffNotification).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.objectContaining({ conversationId: 'conv1', reason: expect.stringContaining('pediu para parar') })
+    )
+  })
+
+  it('falha no aviso ou na troca de modo não vira resposta da IA', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup('ai_detected'))
+    inbound('Oi')
+    m.moveHuman.mockRejectedValue(new Error('db'))
+    m.sendHandoffNotification.mockRejectedValue(new Error('push'))
+    const res = await POST(req())
+    expect((await res.json()).skipped).toBe('phone_suppressed')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+  })
+
+  it('supressão auto_failure_policy continua sendo atendida pela IA, sem humano nem aviso', async () => {
+    m.getActiveSuppressionsByPhone.mockResolvedValue(sup('auto_failure_policy'))
+    inbound('Oi')
+    const body = await (await POST(req())).json()
+    expect(body.success).toBe(true)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalled()
+    expect(m.moveHuman).not.toHaveBeenCalled()
+    expect(m.sendHandoffNotification).not.toHaveBeenCalled()
+  })
+})

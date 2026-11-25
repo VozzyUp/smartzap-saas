@@ -158,10 +158,14 @@ export async function POST(_request: Request, { params }: Params) {
       .from('campaigns')
       .select('template_name, template_variables')
       .eq('id', campaignId)
-      .single()
+      .eq('tenant_id', ctx.tenantId)
+      .maybeSingle()
 
     if (campaignError) {
       return NextResponse.json({ error: 'Falha ao carregar campanha', details: campaignError.message }, { status: 500 })
+    }
+    if (!campaignRow) {
+      return NextResponse.json({ error: 'Campanha não encontrada' }, { status: 404 })
     }
 
     const templateName = (campaignRow as any)?.template_name as string | null
@@ -248,6 +252,7 @@ export async function POST(_request: Request, { params }: Params) {
         .from('campaigns')
         .select('template_spec_hash')
         .eq('id', campaignId)
+        .eq('tenant_id', ctx.tenantId)
         .single()
 
       if (!(existing as any)?.template_spec_hash) {
@@ -261,6 +266,7 @@ export async function POST(_request: Request, { params }: Params) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', campaignId)
+          .eq('tenant_id', ctx.tenantId)
       }
     } catch (e) {
       console.warn('[ResendSkipped] Falha ao salvar snapshot do template na campanha (best-effort):', e)
@@ -271,6 +277,7 @@ export async function POST(_request: Request, { params }: Params) {
       .from('campaign_contacts')
       .select('id, phone, name, email, contact_id, custom_fields')
       .eq('campaign_id', campaignId)
+      .eq('tenant_id', ctx.tenantId)
       .eq('status', 'skipped')
 
     if (skippedError) {
@@ -306,6 +313,7 @@ export async function POST(_request: Request, { params }: Params) {
             supabase
               .from('contacts')
               .select('id, name, phone, email, custom_fields')
+              .eq('tenant_id', ctx.tenantId)
               .in('id', ids)
           )
         )))
@@ -359,6 +367,7 @@ export async function POST(_request: Request, { params }: Params) {
             supabase
               .from('contacts')
               .select('id, phone')
+              .eq('tenant_id', ctx.tenantId)
               .in('phone', phones)
           )
         )))
@@ -499,6 +508,7 @@ export async function POST(_request: Request, { params }: Params) {
               .from('campaign_contacts')
               .select('id, phone')
               .eq('campaign_id', campaignId)
+              .eq('tenant_id', ctx.tenantId)
               .in('phone', phones)
           )
         )))
@@ -600,11 +610,13 @@ export async function POST(_request: Request, { params }: Params) {
         supabase
           .from('campaign_contacts')
           .select('id', { count: 'exact', head: true })
-          .eq('campaign_id', campaignId),
+          .eq('campaign_id', campaignId)
+          .eq('tenant_id', ctx.tenantId),
         supabase
           .from('campaign_contacts')
           .select('id', { count: 'exact', head: true })
           .eq('campaign_id', campaignId)
+          .eq('tenant_id', ctx.tenantId)
           .eq('status', 'skipped'),
       ])
 
@@ -622,6 +634,7 @@ export async function POST(_request: Request, { params }: Params) {
         .from('campaigns')
         .update(updateCampaign)
         .eq('id', campaignId)
+        .eq('tenant_id', ctx.tenantId)
     } catch (e) {
       console.warn('[ResendSkipped] Falha ao recalcular total_recipients (best-effort):', e)
     }

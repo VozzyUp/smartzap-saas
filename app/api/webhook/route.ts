@@ -846,6 +846,7 @@ export async function POST(request: NextRequest) {
 
                 if (isCriticalError(errorCode)) {
                   await supabase.from('account_alerts').upsert({
+                    tenant_id: tenantId,
                     id: `alert_${errorCode}_${Date.now()}`,
                     type: mappedError.category,
                     code: errorCode,
@@ -1262,6 +1263,7 @@ export async function POST(request: NextRequest) {
                     .from('flow_submissions')
                     .upsert(
                       {
+                        tenant_id: tenantId,
                         message_id: messageId,
                         from_phone: normalizedFrom,
                         contact_id: contactId,
@@ -1297,6 +1299,7 @@ export async function POST(request: NextRequest) {
                       .from('flow_submissions')
                       .upsert(
                         {
+                          tenant_id: tenantId,
                           message_id: messageId,
                           from_phone: normalizedFrom,
                           contact_id: contactId,

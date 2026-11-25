@@ -2119,6 +2119,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             const upsertRows = writeOps.map((op) => {
               const cid = String(op.contact.contactId)
               const base: any = {
+                tenant_id: tenantId,
                 campaign_id: campaignId,
                 contact_id: cid,
                 phone: op.contact.phone,
@@ -2635,6 +2636,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           .from('campaign_run_metrics')
           .upsert(
             {
+              tenant_id: tenantId,
               campaign_id: campaignId,
               trace_id: traceId,
               template_name: templateName,

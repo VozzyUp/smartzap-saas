@@ -11,6 +11,7 @@ import { getUserFriendlyMessageForMetaError, normalizeMetaErrorTextForStorage } 
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { buildMetaTemplatePayload, renderTemplatePreviewText } from '@/lib/whatsapp/template-payload'
 import { syncCampaignTemplateToInbox } from '@/lib/inbox/inbox-service'
+import { buildBatchMetricsRow } from '@/lib/campaigns/batch-metrics-row'
 import { emitWorkflowTrace, maskPhone, timePhase } from '@/lib/workflow-trace'
 import { createRateLimiter } from '@/lib/rate-limiter'
 import { recordStableBatch, recordThroughputExceeded, getAdaptiveThrottleConfigWithSource, getAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
@@ -2377,26 +2378,28 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           try {
             const { error: batchMetricsErr } = await supabase
               .from('campaign_batch_metrics')
-              .insert({
-                campaign_id: campaignId,
-                trace_id: traceId,
-                batch_index: batchIndex,
-                configured_batch_size: BATCH_SIZE,
-                batch_size: batch.length,
-                concurrency,
-                adaptive_enabled: adaptiveEnabled,
-                target_mps: targetMpsForBatch,
-                floor_delay_ms: Number.isFinite(floorDelayMs) ? floorDelayMs : null,
-                sent_count: sentCount,
-                failed_count: failedCount,
-                skipped_count: skippedCount,
-                meta_requests: sentCount + failedCount,
-                meta_time_ms: metaTimeMs,
-                db_time_ms: dbTimeMs,
-                saw_throughput_429: sawThroughput429,
-                batch_ok: batchOk,
-                error: batchError,
-              })
+              .insert(
+                buildBatchMetricsRow({
+                  tenantId,
+                  campaignId,
+                  traceId,
+                  batchIndex,
+                  configuredBatchSize: BATCH_SIZE,
+                  batchSize: batch.length,
+                  concurrency,
+                  adaptiveEnabled,
+                  targetMps: targetMpsForBatch,
+                  floorDelayMs,
+                  sentCount,
+                  failedCount,
+                  skippedCount,
+                  metaTimeMs,
+                  dbTimeMs,
+                  sawThroughput429,
+                  batchOk,
+                  error: batchError,
+                })
+              )
 
             if (batchMetricsErr) throw batchMetricsErr
           } catch (e) {

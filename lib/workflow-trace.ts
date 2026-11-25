@@ -3,6 +3,8 @@ export type WorkflowTraceEvent = {
   ts: string
   traceId: string
   campaignId?: string
+  /** Tenant dono da campanha. Se ausente, é resolvido a partir do campaignId. */
+  tenantId?: string
   step?: string
   batchIndex?: number
   contactId?: string
@@ -123,6 +125,24 @@ function shouldPersistEvent(e: WorkflowTraceEvent): boolean {
 
 let tracePersistenceDisabled = false
 
+// campaign_trace_events.tenant_id é NOT NULL. Cache campanha -> tenant para não
+// consultar o banco a cada evento do mesmo envio.
+const tenantByCampaign = new Map<string, string>()
+
+async function resolveTraceTenantId(e: WorkflowTraceEvent): Promise<string | null> {
+  if (e.tenantId) return e.tenantId
+  if (!e.campaignId) return null
+  const cached = tenantByCampaign.get(e.campaignId)
+  if (cached) return cached
+  const { data } = await supabase.from('campaigns').select('tenant_id').eq('id', e.campaignId).maybeSingle()
+  const tenantId = (data as { tenant_id?: string } | null)?.tenant_id || null
+  if (tenantId) {
+    if (tenantByCampaign.size > 500) tenantByCampaign.clear()
+    tenantByCampaign.set(e.campaignId, tenantId)
+  }
+  return tenantId
+}
+
 async function persistWorkflowTraceEventBestEffort(e: WorkflowTraceEvent): Promise<void> {
   // Compat: permitir desligar persistência explicitamente.
   if (process.env.WORKFLOW_TRACE_PERSIST === '0') return
@@ -130,7 +150,12 @@ async function persistWorkflowTraceEventBestEffort(e: WorkflowTraceEvent): Promi
   if (!shouldPersistEvent(e)) return
 
   try {
+    const tenantId = await resolveTraceTenantId(e)
+    // Sem tenant não há como gravar (coluna NOT NULL): descarta só este evento, sem desligar a persistência.
+    if (!tenantId) return
+
     await supabase.from(TRACE_TABLE).insert({
+      tenant_id: tenantId,
       trace_id: e.traceId,
       ts: e.ts,
       campaign_id: e.campaignId || null,

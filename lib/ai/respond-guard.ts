@@ -74,6 +74,11 @@ async function readCovered(conversationId: string): Promise<string[]> {
   return []
 }
 
+/** Ids (whatsapp) das mensagens recebidas que as rodadas anteriores já leram. */
+export async function getCoveredIds(conversationId: string): Promise<Set<string>> {
+  return new Set(await readCovered(conversationId))
+}
+
 export async function isMessageCovered(conversationId: string, messageId: string): Promise<boolean> {
   if (!redis) return false
   return (await readCovered(conversationId)).includes(messageId)

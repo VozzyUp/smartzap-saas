@@ -35,6 +35,7 @@ import {
   releaseConversationLock,
   isMessageCovered,
   markCovered,
+  getCoveredIds,
   clearCovered,
   rescheduleRespond,
   MAX_RESCHEDULE_ATTEMPTS,
@@ -266,8 +267,11 @@ export async function POST(req: NextRequest) {
     }
     console.log(`🤖 [AI-RESPOND] Found ${messages.length} messages`)
 
-    // 6.1. Registra até onde esta rodada leu (mensagens recebidas) para jobs concorrentes/atrasados
+    // 6.1. Registra até onde esta rodada leu (mensagens recebidas) para jobs concorrentes/atrasados.
+    // `coveredBefore` = o que as rodadas ANTERIORES já leram (lido antes de gravar a leitura desta).
+    let coveredBefore: Set<string> | null = null
     if (redis && lockToken) {
+      coveredBefore = await getCoveredIds(conversationId)
       const readIds = messages
         .filter((msg) => msg.direction === 'inbound' && msg.whatsapp_message_id)
         .map((msg) => String(msg.whatsapp_message_id))
@@ -280,14 +284,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ skipped: true, reason: 'no-messages' })
     }
 
-    // 6.6. Se a última mensagem da conversa já é nossa, não há nada novo do contato para responder.
-    // Acontece quando chegam duas mensagens seguidas: a primeira execução responde às duas e a
-    // segunda encontraria o histórico terminando em resposta nossa. A Anthropic recusa isso
-    // ("conversation must end with a user message") e a conversa caía para humano sem motivo.
+    // 6.6. Se a última mensagem da conversa já é nossa, normalmente não há nada novo para responder
+    // (a Anthropic recusa histórico terminando em resposta nossa). EXCEÇÃO: mensagem recebida enquanto
+    // a rodada anterior ainda enviava os balões fica ANTES do último balão no histórico, mas não foi lida
+    // por nenhuma rodada (não está em `ai:covered` antes desta leitura). Essa ganha resposta: as
+    // mensagens novas vão para o fim do histórico, que então termina na fala do contato.
     const lastRelevant = [...messages].reverse().find((m) => m.message_type !== 'internal_note')
     if (lastRelevant && lastRelevant.direction !== 'inbound') {
-      console.log(`⏭️ [AI-RESPOND] Skipping - última mensagem já é nossa (contato já foi respondido)`)
-      return NextResponse.json({ skipped: true, reason: 'already-answered' })
+      const fresh = coveredBefore
+        ? messages.filter(
+            (m) =>
+              m.direction === 'inbound' &&
+              m.message_type !== 'internal_note' &&
+              m.whatsapp_message_id &&
+              !coveredBefore.has(String(m.whatsapp_message_id))
+          )
+        : []
+      // Só vale se o próprio job é de uma dessas mensagens novas (evita reprocessar histórico antigo)
+      if (messageId && fresh.some((m) => String(m.whatsapp_message_id) === messageId)) {
+        console.log(`🔁 [AI-RESPOND] ${fresh.length} mensagem(ns) chegaram durante o envio da rodada anterior; respondendo em nova rodada`)
+        const freshSet = new Set(fresh)
+        messages = [...messages.filter((m) => !freshSet.has(m)), ...fresh]
+      } else {
+        console.log(`⏭️ [AI-RESPOND] Skipping - última mensagem já é nossa (contato já foi respondido)`)
+        return NextResponse.json({ skipped: true, reason: 'already-answered' })
+      }
     }
 
     // 7. Busca dados do contato (se existir)

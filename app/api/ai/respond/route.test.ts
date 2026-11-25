@@ -552,3 +552,101 @@ describe('POST /api/ai/respond — uma rodada por conversa (resposta em dobro)',
     expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('POST /api/ai/respond — mensagem recebida durante o envio dos balões', () => {
+  // Histórico real do caso: "Show" (wA) -> balão 1 -> "Vou seguir com teste" (wB) -> balão 2 da rodada de wA
+  const midSend = [
+    { id: 'm1', direction: 'inbound', content: 'Show', whatsapp_message_id: 'wA' },
+    { id: 'm2', direction: 'outbound', content: 'balão 1', whatsapp_message_id: 'o1' },
+    { id: 'm3', direction: 'inbound', content: 'Vou seguir com teste', whatsapp_message_id: 'wB' },
+    { id: 'm4', direction: 'outbound', content: 'balão 2', whatsapp_message_id: 'o2' },
+  ]
+  const lastContents = () => (m.processChatAgent.mock.calls[0][0].messages as any[]).map((x) => x.content)
+
+  it('mensagem que chegou depois da leitura da rodada anterior ganha nova rodada, uma única vez', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA']) // a rodada de wA leu só até aqui
+    m.redis.value = r
+    m.listMessages.mockResolvedValue({ messages: midSend })
+    const res = await POST(req({ messageId: 'wB', debounceMs: 12000 }))
+    expect((await res.json()).success).toBe(true)
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
+    // o modelo precisa receber o histórico terminando na mensagem nova (a Anthropic recusa terminar em assistente)
+    const sent = lastContents()
+    expect(sent[sent.length - 1]).toBe('Vou seguir com teste')
+    expect(sent).toContain('balão 2')
+    // reentrega/reagendamento do mesmo job: já coberta, sem segunda resposta
+    const again = await POST(req({ messageId: 'wB', attempt: 1 }))
+    expect((await again.json()).reason).toBe('already-covered')
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+  })
+
+  it('mensagem já lida pela rodada anterior não gera segunda resposta (sem duplicidade)', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA', 'wB'])
+    m.redis.value = r
+    m.listMessages.mockResolvedValue({ messages: midSend })
+    const res = await POST(req({ messageId: 'wB', debounceMs: 12000 }))
+    expect((await res.json()).reason).toBe('already-covered')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+  })
+
+  it('histórico termina em resposta nossa e nada novo foi recebido: segue pulando (already-answered)', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA', 'wB'])
+    m.redis.value = r
+    m.listMessages.mockResolvedValue({ messages: midSend })
+    // job de outra mensagem sem id coberto, mas cujo conteúdo novo não existe no histórico
+    const res = await POST(req({ messageId: 'wZ' }))
+    expect((await res.json()).reason).toBe('already-answered')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+  })
+
+  it('três mensagens seguidas durante o envio geram UMA rodada extra', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA'])
+    m.redis.value = r
+    const msgs = [
+      midSend[0], midSend[1],
+      { id: 'm3', direction: 'inbound', content: 'b', whatsapp_message_id: 'wB' },
+      { id: 'm3c', direction: 'inbound', content: 'c', whatsapp_message_id: 'wC' },
+      { id: 'm3d', direction: 'inbound', content: 'd', whatsapp_message_id: 'wD' },
+      midSend[3],
+    ]
+    m.listMessages.mockResolvedValue({ messages: msgs })
+    await POST(req({ messageId: 'wB', debounceMs: 12000 }))
+    await POST(req({ messageId: 'wC', debounceMs: 12000 }))
+    await POST(req({ messageId: 'wD', debounceMs: 12000 }))
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
+    expect(lastContents().slice(-3)).toEqual(['b', 'c', 'd'])
+  })
+
+  it('mensagem que chega durante a rodada extra também é respondida', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA'])
+    m.redis.value = r
+    m.listMessages.mockResolvedValue({ messages: midSend })
+    await POST(req({ messageId: 'wB' }))
+    expect(r.store.get('ai:covered:conv1')).toEqual(['wA', 'wB'])
+    // wE chegou enquanto a rodada de wB enviava; histórico termina em balão da rodada extra
+    m.listMessages.mockResolvedValue({
+      messages: [...midSend, { id: 'm5', direction: 'inbound', content: 'e', whatsapp_message_id: 'wE' }, { id: 'm6', direction: 'outbound', content: 'balão 3', whatsapp_message_id: 'o3' }],
+    })
+    await POST(req({ messageId: 'wE' }))
+    expect(m.processChatAgent).toHaveBeenCalledTimes(2)
+  })
+
+  it('conversa em modo humano não é respondida', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['wA'])
+    m.redis.value = r
+    m.getConversation.mockResolvedValue({ id: 'conv1', mode: 'human', phone: '5511999999999', contact_id: 'c1', ai_agent_id: 'ag1', automation_paused_until: null })
+    m.listMessages.mockResolvedValue({ messages: midSend })
+    const res = await POST(req({ messageId: 'wB' }))
+    expect((await res.json()).reason).toBe('not-in-bot-mode')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+  })
+})
+

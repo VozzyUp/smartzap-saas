@@ -21,6 +21,8 @@ const m = vi.hoisted(() => ({
   ensureAudio: vi.fn(),
   agentRow: { value: null as any },
   order: [] as string[],
+  redis: { value: null as any },
+  publish: vi.fn(),
 }))
 
 vi.mock('@/lib/inbox/inbox-db', () => ({
@@ -39,7 +41,19 @@ vi.mock('@/lib/whatsapp-send', () => ({
   sendWhatsAppMessage: (...a: unknown[]) => m.sendWhatsAppMessage(...a),
   sendTypingIndicator: (...a: unknown[]) => m.sendTypingIndicator(...a),
 }))
-vi.mock('@/lib/redis', () => ({ redis: null }))
+vi.mock('@/lib/redis', () => ({
+  get redis() {
+    return m.redis.value
+  },
+}))
+vi.mock('@upstash/qstash', () => ({
+  Client: class {
+    publishJSON(...a: unknown[]) {
+      return m.publish(...a)
+    }
+  },
+}))
+vi.mock('@/lib/app-url', () => ({ getAppUrl: () => 'http://app.test' }))
 vi.mock('@/lib/trial', () => ({ isTenantBlocked: async () => false }))
 vi.mock('@/lib/phone-formatter', () => ({ normalizePhoneNumber: (p: string) => (p.startsWith('+') ? p : `+${p}`) }))
 vi.mock('@/lib/phone-suppressions', () => ({
@@ -85,11 +99,34 @@ vi.mock('@/lib/supabase', () => ({
 
 import { POST } from './route'
 
-function req() {
+function req(extra: Record<string, unknown> = {}) {
   return new NextRequest('http://localhost/api/ai/respond', {
     method: 'POST',
-    body: JSON.stringify({ conversationId: 'conv1' }),
+    body: JSON.stringify({ conversationId: 'conv1', ...extra }),
   })
+}
+
+/** Redis em memória com o subconjunto usado pela rota (SET NX/EX, GET, DEL, EVAL de compare-and-delete). */
+function fakeRedis() {
+  const store = new Map<string, unknown>()
+  return {
+    store,
+    get: async (k: string) => (store.has(k) ? store.get(k) : null),
+    set: async (k: string, v: unknown, opts?: { nx?: boolean }) => {
+      if (opts?.nx && store.has(k)) return null
+      store.set(k, v)
+      return 'OK'
+    },
+    setex: async (k: string, _t: number, v: unknown) => {
+      store.set(k, v)
+      return 'OK'
+    },
+    del: async (k: string) => (store.delete(k) ? 1 : 0),
+    eval: async (_script: string, keys: string[], args: string[]) => {
+      if (store.get(keys[0]) === args[0]) return store.delete(keys[0]) ? 1 : 0
+      return 0
+    },
+  }
 }
 
 const aiOk = (over: Record<string, unknown> = {}) => ({
@@ -123,6 +160,9 @@ beforeEach(() => {
   m.moveHuman.mockResolvedValue(undefined)
   m.ensureAudio.mockImplementation(async (_t: string, msgs: unknown[]) => msgs)
   m.agentRow.value = { id: 'ag1', name: 'Bot', model: 'x', is_active: true }
+  m.redis.value = null
+  m.publish.mockResolvedValue({ messageId: 'q1' })
+  process.env.QSTASH_TOKEN = 'tok'
 })
 
 describe('POST /api/ai/respond — telefone suprimido (F02)', () => {
@@ -401,5 +441,114 @@ describe('POST /api/ai/respond — bloqueado que volta a escrever vai para human
     expect(m.sendWhatsAppMessage).toHaveBeenCalled()
     expect(m.moveHuman).not.toHaveBeenCalled()
     expect(m.sendHandoffNotification).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('POST /api/ai/respond — uma rodada por conversa (resposta em dobro)', () => {
+  const inboundBoth = [
+    { id: 'm1', direction: 'inbound', content: 'saudação automática', whatsapp_message_id: 'w1' },
+    { id: 'm2', direction: 'inbound', content: 'ausência automática', whatsapp_message_id: 'w2' },
+  ]
+
+  it('(a) dois jobs concorrentes da mesma conversa (mensagens diferentes juntas): agente 1x, uma resposta', async () => {
+    m.redis.value = fakeRedis()
+    m.listMessages.mockResolvedValue({ messages: inboundBoth })
+    let release!: () => void
+    m.processChatAgent.mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve(aiOk()) })
+    )
+    const p1 = POST(req({ messageId: 'w1', debounceMs: 12000 }))
+    const p2 = POST(req({ messageId: 'w2', debounceMs: 12000 }))
+    await new Promise((r) => setTimeout(r, 50))
+    release()
+    await Promise.all([p1, p2])
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('(a2) chave ai:lastmsg ausente com dois jobs: continua uma rodada só', async () => {
+    m.redis.value = fakeRedis()
+    m.listMessages.mockResolvedValue({ messages: inboundBoth })
+    // dois jobs sequenciais depois do atraso, sem ai:lastmsg (expirou ou foi apagada)
+    await POST(req({ messageId: 'w1', debounceMs: 12000 }))
+    await POST(req({ messageId: 'w2', debounceMs: 12000 }))
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('(b) job cuja mensagem já foi coberta por rodada anterior não chama o agente', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:covered:conv1', ['w1', 'w2'])
+    m.redis.value = r
+    const res = await POST(req({ messageId: 'w2' }))
+    expect((await res.json()).reason).toBe('already-covered')
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.sendWhatsAppMessage).not.toHaveBeenCalled()
+  })
+
+  it('(c) mensagem nova durante rodada em andamento não se perde: é reagendada sem deduplicationId', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:lock:conv1', 'outra-rodada')
+    m.redis.value = r
+    const res = await POST(req({ messageId: 'w3', debounceMs: 12000 }))
+    expect((await res.json()).rescheduled).toBe(true)
+    expect(m.processChatAgent).not.toHaveBeenCalled()
+    expect(m.publish).toHaveBeenCalledTimes(1)
+    const arg = m.publish.mock.calls[0][0]
+    expect(arg.body).toMatchObject({ conversationId: 'conv1', messageId: 'w3', attempt: 1 })
+    expect(arg.delay).toBeGreaterThan(0)
+    expect(arg.deduplicationId).toBeUndefined()
+    expect(r.store.get('ai:lock:conv1')).toBe('outra-rodada') // não liberou trava alheia
+  })
+
+  it('(c2) reagendamento esgotado: para de insistir', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:lock:conv1', 'outra-rodada')
+    m.redis.value = r
+    const res = await POST(req({ messageId: 'w3', attempt: 99 }))
+    expect((await res.json()).reason).toBe('lock-timeout')
+    expect(m.publish).not.toHaveBeenCalled()
+  })
+
+  it('(c3) job reagendado (attempt>0) com mesmo messageId passa pela trava de mensagem e processa', async () => {
+    const r = fakeRedis()
+    r.store.set('ai:processed:w3', 'antes')
+    m.redis.value = r
+    m.listMessages.mockResolvedValue({ messages: [{ id: 'm3', direction: 'inbound', content: 'x', whatsapp_message_id: 'w3' }] })
+    await POST(req({ messageId: 'w3', attempt: 1 }))
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+  })
+
+  it('(d) a trava é liberada (e o marcador desfeito) quando a rodada falha com exceção', async () => {
+    const r = fakeRedis()
+    m.redis.value = r
+    m.processChatAgent.mockRejectedValue(new Error('boom'))
+    const res = await POST(req({ messageId: 'w1' }))
+    expect(res.status).toBe(500)
+    expect(r.store.has('ai:lock:conv1')).toBe(false)
+    expect(r.store.has('ai:covered:conv1')).toBe(false)
+  })
+
+  it('trava liberada também no caminho feliz', async () => {
+    const r = fakeRedis()
+    m.redis.value = r
+    await POST(req({ messageId: 'w1' }))
+    expect(r.store.has('ai:lock:conv1')).toBe(false)
+    expect(r.store.get('ai:covered:conv1')).toEqual(['w1'])
+  })
+
+  it('mesma mensagem entregue duas vezes em paralelo: trava por messageId atômica, 1 rodada', async () => {
+    m.redis.value = fakeRedis()
+    await Promise.all([POST(req({ messageId: 'w1' })), POST(req({ messageId: 'w1' }))])
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+  })
+
+  it('(e) sem Redis, uma mensagem única continua sendo respondida', async () => {
+    m.redis.value = null
+    const res = await POST(req({ messageId: 'w1', debounceMs: 12000 }))
+    expect((await res.json()).success).toBe(true)
+    expect(m.processChatAgent).toHaveBeenCalledTimes(1)
+    expect(m.sendWhatsAppMessage).toHaveBeenCalledTimes(1)
   })
 })

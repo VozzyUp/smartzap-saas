@@ -29,6 +29,16 @@ import { notifyOpsAlert, moveConversationToHumanForOps } from '@/lib/ops-alert'
 import { ensureAudioTranscriptions } from '@/lib/inbox/inbox-transcription'
 import { isOptOutSuppressionSource } from '@/lib/suppression-sources'
 import { isOptOutKeyword } from '@/lib/opt-out-keywords'
+import {
+  claimMessage,
+  acquireConversationLock,
+  releaseConversationLock,
+  isMessageCovered,
+  markCovered,
+  clearCovered,
+  rescheduleRespond,
+  MAX_RESCHEDULE_ATTEMPTS,
+} from '@/lib/ai/respond-guard'
 
 // Fluid Compute: 5 minutos de timeout (suficiente para IA)
 export const maxDuration = 300
@@ -46,6 +56,8 @@ interface AIRespondRequest {
   debounceMs?: number
   /** ID da mensagem WhatsApp que disparou o processamento (para deduplicação) */
   messageId?: string
+  /** Quantas vezes este job já foi reagendado por ter perdido a trava da conversa (0/ausente = original) */
+  attempt?: number
 }
 
 // =============================================================================
@@ -58,10 +70,15 @@ export async function POST(req: NextRequest) {
   console.log(`🤖 [AI-RESPOND] ========================================`)
   console.log(`🤖 [AI-RESPOND] Request received at ${new Date().toISOString()}`)
 
+  // Trava por conversa desta rodada (só quem a adquiriu a libera, no finally)
+  let lockConversationId: string | null = null
+  let lockToken: string | null = null
+
   try {
     // 1. Parse request
     const body = (await req.json()) as AIRespondRequest
     const { conversationId, debounceMs, messageId } = body
+    const attempt = Math.max(0, Number(body.attempt) || 0)
 
     if (!conversationId) {
       console.log(`❌ [AI-RESPOND] Missing conversationId`)
@@ -70,14 +87,13 @@ export async function POST(req: NextRequest) {
 
     console.log(`🤖 [AI-RESPOND] Processing conversation: ${conversationId}, debounceMs: ${debounceMs}, messageId: ${messageId}`)
 
-    // 1.2. DEDUPLICAÇÃO: Verifica se essa mensagem já foi processada
-    // Última linha de defesa contra duplicatas (QStash retry, race conditions, etc.)
-    if (messageId && redis) {
-      const dedupKey = `ai:processed:${messageId}`
-      const alreadyProcessed = await redis.get(dedupKey)
-
-      if (alreadyProcessed) {
-        console.log(`⏭️ [AI-RESPOND] Duplicate detected - message ${messageId} already processed at ${alreadyProcessed}`)
+    // 1.2. DEDUPLICAÇÃO: a mesma mensagem não gera duas rodadas (QStash retry, entrega dupla).
+    // SET NX atômico (get+setex deixava duas entregas simultâneas passarem). Job reagendado
+    // (attempt > 0) reaproveita o messageId de propósito: pula esta trava; quem protege é a trava
+    // da conversa + o marcador de mensagens cobertas.
+    if (messageId && redis && attempt === 0) {
+      if (!(await claimMessage(messageId))) {
+        console.log(`⏭️ [AI-RESPOND] Duplicate detected - message ${messageId} already processed`)
         return NextResponse.json({
           success: true,
           deduplicated: true,
@@ -85,10 +101,6 @@ export async function POST(req: NextRequest) {
           reason: 'already-processed',
         })
       }
-
-      // Marca como "processando" ANTES de iniciar (evita race condition)
-      // TTL de 30 minutos - tempo suficiente para qualquer processamento
-      await redis.setex(dedupKey, 1800, new Date().toISOString())
       console.log(`🔒 [AI-RESPOND] Dedup lock acquired for message ${messageId}`)
     }
 
@@ -109,10 +121,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ skipped: true, reason: 'user-still-typing' })
         }
 
-        // Passou tempo suficiente - usuário parou de digitar
-        // Limpa a chave e processa
-        await redis.del(redisKey)
+        // Passou tempo suficiente - usuário parou de digitar. A chave NÃO é apagada: apagar fazia o
+        // segundo job da mesma leva ler "ausente" e abrir uma segunda rodada. Ela expira por TTL, e
+        // a exclusão entre rodadas é feita pela trava da conversa (abaixo).
         console.log(`🤖 [AI-RESPOND] User stopped typing (${timeSinceLastMsg}ms >= ${debounceMs}ms) - processing`)
+      } else {
+        // Chave ausente (expirou ou não foi gravada): segue; a trava da conversa impede rodada dupla.
+        console.log(`🤖 [AI-RESPOND] ai:lastmsg ausente - seguindo para a trava da conversa`)
       }
     }
 
@@ -206,6 +221,40 @@ export async function POST(req: NextRequest) {
 
     console.log(`🤖 [AI-RESPOND] Using agent: ${agent.name} (${agent.model})`)
 
+    // 5.5. Uma rodada por conversa. Depois das checagens baratas e antes de montar contexto/chamar o modelo.
+    if (redis) {
+      // Mensagem já lida por uma rodada anterior: nada a fazer (sai em silêncio)
+      if (messageId && (await isMessageCovered(conversationId, messageId))) {
+        console.log(`⏭️ [AI-RESPOND] Message ${messageId} já coberta por rodada anterior`)
+        return NextResponse.json({ skipped: true, reason: 'already-covered' })
+      }
+
+      const token = await acquireConversationLock(conversationId)
+      if (!token) {
+        // Há uma rodada em andamento nesta conversa. Se ela ainda não leu esta mensagem, não podemos
+        // sumir: reagenda com atraso curto (a rodada em andamento pode cobri-la; aí o reagendado sai em silêncio).
+        if (attempt >= MAX_RESCHEDULE_ATTEMPTS) {
+          console.error(`⚠️ [AI-RESPOND] Trava da conversa ocupada após ${attempt} reagendamentos; desistindo`, { conversationId, messageId })
+          return NextResponse.json({ skipped: true, reason: 'lock-timeout' }, { status: 200 })
+        }
+        const ok = await rescheduleRespond({ conversationId, debounceMs, messageId, attempt: attempt + 1 })
+        if (!ok) {
+          // Sem como reagendar: devolve 500 para o QStash tentar este mesmo job de novo
+          return NextResponse.json({ success: false, error: 'conversation-busy-reschedule-failed' }, { status: 500 })
+        }
+        console.log(`⏳ [AI-RESPOND] Rodada em andamento na conversa; reagendado (tentativa ${attempt + 1})`)
+        return NextResponse.json({ skipped: true, rescheduled: true, attempt: attempt + 1 })
+      }
+      lockConversationId = conversationId
+      lockToken = token
+
+      // A rodada anterior pode ter acabado entre a checagem acima e a trava
+      if (messageId && (await isMessageCovered(conversationId, messageId))) {
+        console.log(`⏭️ [AI-RESPOND] Message ${messageId} coberta (rodada anterior terminou agora)`)
+        return NextResponse.json({ skipped: true, reason: 'already-covered' })
+      }
+    }
+
     // 6. Busca mensagens recentes
     const listed = await inboxDb.listMessages(tenantId, conversationId, { limit: 60 })
     // 6.5. Áudios recebidos sem transcrição: transcreve agora (idempotente, nunca bloqueia a resposta)
@@ -216,6 +265,15 @@ export async function POST(req: NextRequest) {
       console.error('[AI-RESPOND] Falha ao transcrever áudios (segue sem transcrição):', e instanceof Error ? e.message : e)
     }
     console.log(`🤖 [AI-RESPOND] Found ${messages.length} messages`)
+
+    // 6.1. Registra até onde esta rodada leu (mensagens recebidas) para jobs concorrentes/atrasados
+    if (redis && lockToken) {
+      const readIds = messages
+        .filter((msg) => msg.direction === 'inbound' && msg.whatsapp_message_id)
+        .map((msg) => String(msg.whatsapp_message_id))
+      if (messageId && !readIds.includes(messageId)) readIds.push(messageId)
+      await markCovered(conversationId, readIds)
+    }
 
     if (messages.length === 0) {
       console.log(`⏭️ [AI-RESPOND] Skipping - no messages found`)
@@ -453,6 +511,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const elapsed = Date.now() - startTime
 
+    // Rodada falhou: desfaz o marcador para o retry do QStash não ser tratado como "já coberto"
+    if (lockConversationId && lockToken) await clearCovered(lockConversationId)
+
     console.error(`💥 [AI-RESPOND] ========================================`)
     console.error(`💥 [AI-RESPOND] EXCEPTION after ${elapsed}ms`)
     console.error(`💥 [AI-RESPOND] Error:`, error)
@@ -462,6 +523,8 @@ export async function POST(req: NextRequest) {
       { success: false, error: error instanceof Error ? error.message : 'Internal error' },
       { status: 500 }
     )
+  } finally {
+    if (lockConversationId && lockToken) await releaseConversationLock(lockConversationId, lockToken)
   }
 }
 

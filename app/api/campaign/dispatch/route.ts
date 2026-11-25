@@ -13,6 +13,7 @@ import { getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 import { CampaignStatus, ContactStatus } from '@/types'
+import { finalizeCampaignWithNoRecipients } from '@/lib/campaigns/finalize-empty-dispatch'
 import { unauthorizedResponse, verifyApiKey } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { getAppUrl } from '@/lib/app-url'
@@ -866,6 +867,9 @@ export async function POST(request: NextRequest) {
 
   // Se não há ninguém válido, não faz sentido enfileirar workflow
   if (validContacts.length === 0) {
+    // Sem workflow, ninguém mais finalizaria a campanha: ela ficaria "Enviando" para sempre.
+    const { error: finalizeErr } = await finalizeCampaignWithNoRecipients(supabase as any, tenantId, campaignId)
+    if (finalizeErr) console.warn('[Dispatch] Falha ao finalizar campanha sem destinatários válidos:', finalizeErr)
     return NextResponse.json(
       {
         status: 'skipped',

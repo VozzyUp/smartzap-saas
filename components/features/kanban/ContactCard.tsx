@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Phone, GripVertical, History, PauseCircle } from 'lucide-react'
@@ -16,7 +18,9 @@ interface ContactCardProps {
 }
 
 export function ContactCard({ card, overlay }: ContactCardProps) {
+  const router = useRouter()
   const [isAutomationOpen, setIsAutomationOpen] = useState(false)
+  const draggedRef = useRef(false)
   const sortable = useSortable({
     id: card.id,
     data: { type: 'card', card },
@@ -24,6 +28,27 @@ export function ContactCard({ card, overlay }: ContactCardProps) {
   })
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
+
+  // Um arrasto nunca pode terminar em navegação: marca enquanto arrasta e solta logo depois.
+  useEffect(() => {
+    if (isDragging) {
+      draggedRef.current = true
+      return
+    }
+    const t = setTimeout(() => {
+      draggedRef.current = false
+    }, 150)
+    return () => clearTimeout(t)
+  }, [isDragging])
+
+  const openConversation = () => {
+    if (draggedRef.current) return
+    if (!card.conversation_id) {
+      toast.info('Este contato ainda não tem conversa.')
+      return
+    }
+    router.push(`/inbox/${card.conversation_id}`)
+  }
 
   const style = overlay
     ? undefined
@@ -41,9 +66,28 @@ export function ContactCard({ card, overlay }: ContactCardProps) {
       style={style}
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
+      {...(overlay
+        ? {}
+        : {
+            'aria-label': `Abrir conversa de ${card.contact?.name?.trim() || card.contact?.phone || 'contato'}`,
+            onClick: (e: MouseEvent<HTMLDivElement>) => {
+              // Cliques vindos do diálogo (portal) ou de controles internos não abrem a conversa.
+              if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('button,a,input')) return
+              if (!e.currentTarget.contains(e.target as Node)) return
+              openConversation()
+            },
+            onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+              ;(listeners as any)?.onKeyDown?.(e)
+              if (e.target !== e.currentTarget) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                openConversation()
+              }
+            },
+          })}
       className={cn(
         'group rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)] p-3 shadow-sm',
-        'hover:border-[var(--ds-border-default)] hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing',
+        'hover:border-[var(--ds-border-default)] hover:shadow-md transition-shadow cursor-pointer active:cursor-grabbing',
         isDragging && !overlay && 'opacity-40',
         overlay && 'shadow-lg rotate-2 cursor-grabbing'
       )}

@@ -4,6 +4,8 @@ export type { KanbanBoard, KanbanStage, KanbanCard }
 
 export type KanbanCardWithContact = KanbanCard & {
   contact: { id: string; name: string | null; phone: string | null }
+  /** Conversa mais recente do contato no Inbox (null = sem conversa). */
+  conversation_id?: string | null
 }
 
 export type KanbanStageWithCards = KanbanStage & {

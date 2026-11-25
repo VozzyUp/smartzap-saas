@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { resolveConversationIdsForContacts } from '@/lib/kanban-conversations'
 
 // ============================================================================
 // TYPES
@@ -320,8 +321,20 @@ export async function getBoardData(tenantId: string, boardId: string): Promise<K
     .eq('board_id', boardId)
     .order('position', { ascending: true })
 
+  // Conversa mais recente de cada contato do quadro (1 consulta em lote, filtrada pela conta).
+  let conversationByContact = new Map<string, string>()
+  try {
+    conversationByContact = await resolveConversationIdsForContacts(
+      tenantId,
+      ((cards ?? []) as any[]).map((c) => ({ id: c.contact_id, phone: c.contact?.phone }))
+    )
+  } catch {
+    // Sem conversa resolvida o cartão apenas avisa ao tocar; não derruba o quadro.
+  }
+
   const cardsByStage = new Map<string, any[]>()
   for (const card of (cards ?? []) as any[]) {
+    card.conversation_id = conversationByContact.get(card.contact_id) ?? null
     const list = cardsByStage.get(card.stage_id) ?? []
     list.push(card)
     cardsByStage.set(card.stage_id, list)
